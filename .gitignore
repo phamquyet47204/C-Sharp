@@ -1,8 +1,25 @@
+# Build outputs
 bin/
 obj/
-.vs/
-*.user
-*.suo
+out/
+
+# SQLite databases
+*.db
 *.db-shm
 *.db-wal
 build.log
+
+# User-specific files
+.vs/
+*.user
+*.suo
+
+# Rider
+.idea/
+
+# macOS
+.DS_Store
+
+# Environment
+.env
+appsettings.Development.json

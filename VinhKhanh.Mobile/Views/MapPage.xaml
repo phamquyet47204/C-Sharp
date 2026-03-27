@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:maps="clr-namespace:Microsoft.Maui.Controls.Maps;assembly=Microsoft.Maui.Controls.Maps"
+             xmlns:vm="clr-namespace:VinhKhanh.Mobile.ViewModels"
+             x:Class="VinhKhanh.Mobile.Views.MapPage"
+             Title="Phố Vĩnh Khánh">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="🔓 Mở khóa" Command="{Binding UnlockCommand}"
+                     IsVisible="{Binding IsUnlocked, Converter={StaticResource InvertBool}}"/>
+    </ContentPage.ToolbarItems>
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- Language Picker -->
+        <Picker Grid.Row="0" ItemsSource="{Binding Languages}"
+                SelectedItem="{Binding SelectedLanguage}"
+                Title="Ngôn ngữ"
+                Margin="8,4"
+                HorizontalOptions="End"
+                WidthRequest="140"/>
+
+        <!-- Map -->
+        <maps:Map Grid.Row="1" x:Name="MainMap"
+                  MapType="Street"
+                  IsShowingUser="True"/>
+
+    </Grid>
+</ContentPage>
