@@ -153,3 +153,23 @@ Kết quả:
 
 ## 10. Kết luận
 Dự án đã đạt nền tảng kỹ thuật tốt cho lõi Mobile: dữ liệu cục bộ, geofence, và phát thuyết minh theo vị trí. Phần tải danh sách quán ăn từ POI đã được nâng cấp theo hướng có fallback ngôn ngữ và đồng bộ lại khi đổi ngôn ngữ. Bước tiếp theo nên tập trung hoàn thiện trải nghiệm UI/UX chuyên nghiệp và triển khai Web Admin để đưa hệ thống vào vận hành thực tế.
+
+## 11. Cập nhật lỗi thực tế (2026-03-28)
+### 11.1 Mô tả lỗi
+- Người dùng bấm phát audio tại danh sách quán và nhận thông báo:
+  - `Không thể phát âm thanh: Không thể phát xong file âm thanh: lau-nuong.mp3`
+
+### 11.2 Nguyên nhân gốc
+- Trong `NarrationService`, hàm chuẩn hóa đường dẫn audio đã cắt mất thư mục con.
+- Ví dụ đường dẫn đúng từ dữ liệu POI: `audio/vi/lau-nuong.mp3`
+- Sau chuẩn hóa cũ, app chỉ còn `lau-nuong.mp3` -> MediaElement không tìm đúng asset trong `Resources/Raw/audio/vi`.
+
+### 11.3 Bản vá đã áp dụng
+1. Giữ nguyên đường dẫn logic audio theo cấu trúc thư mục trong app package.
+2. Thêm bước kiểm tra file audio tồn tại trước khi phát để fail sớm, tránh timeout dài.
+3. Giảm timeout chờ phát từ 30s xuống 12s để phản hồi lỗi nhanh hơn.
+4. Bổ sung fallback TTS ở nút phát audio trong danh sách nếu phát file thất bại.
+
+### 11.4 Kết quả mong đợi sau bản vá
+- Với POI có đường dẫn đúng (`audio/vi/...`, `audio/en/...`, `audio/ja/...`): phát file thành công.
+- Nếu file thiếu/hỏng: app không kẹt lâu, tự chuyển qua TTS thay vì dừng hẳn chức năng nghe nội dung.

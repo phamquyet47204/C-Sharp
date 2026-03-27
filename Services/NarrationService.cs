@@ -67,6 +67,7 @@ public partial class NarrationService : INarrationService
             }
 
             var normalizedPath = NormalizeAudioPath(filePath);
+            await EnsureAudioAssetExistsAsync(normalizedPath, ct);
             Debug.WriteLine($"[NarrationService] Bat dau phat MP3: {normalizedPath}");
 
             Task playbackTask = Task.CompletedTask;
@@ -138,15 +139,33 @@ public partial class NarrationService : INarrationService
 
     private static string NormalizeAudioPath(string filePath)
     {
-        // MauiAsset trong Resources/Raw duoc truy cap bang logical name,
-        // nen uu tien ten file de de phat tren nhieu nen tang.
+        // Giu nguyen duong dan logic trong Resources/Raw (vi du: audio/vi/file.mp3).
+        // Neu cat ve ten file thuong se mat folder va gay khong tim thay asset.
         var path = filePath.Replace("\\", "/").Trim();
         if (path.StartsWith("Resources/Raw/", StringComparison.OrdinalIgnoreCase))
         {
             path = path["Resources/Raw/".Length..];
         }
 
-        return path.Contains('/') ? path[(path.LastIndexOf('/') + 1)..] : path;
+        return path.TrimStart('/');
+    }
+
+    private static async Task EnsureAudioAssetExistsAsync(string assetPath, CancellationToken ct)
+    {
+        try
+        {
+            using var stream = await FileSystem.OpenAppPackageFileAsync(assetPath);
+            if (stream is null)
+            {
+                throw new FileNotFoundException($"Khong tim thay file am thanh trong app package: {assetPath}");
+            }
+
+            ct.ThrowIfCancellationRequested();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new FileNotFoundException($"Khong tim thay file am thanh: {assetPath}", ex);
+        }
     }
 
     private static async Task<Locale?> ResolveLocaleAsync(string lang)
@@ -223,7 +242,7 @@ public partial class NarrationService : INarrationService
             tcs.TrySetCanceled(ct);
         });
 
-        var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30), ct));
+        var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(12), ct));
         if (completed != tcs.Task)
         {
             mediaElement.Stop();

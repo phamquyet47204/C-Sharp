@@ -49,7 +49,7 @@ public class DatabaseService : IDatabaseService
 
             _database = new SQLiteAsyncConnection(_databasePath);
             await _database.CreateTableAsync<POI>();
-            await SeedDefaultPoiIfEmptyAsync();
+            await EnsureDefaultPoisAsync();
             _isInitialized = true;
 
             // Ghi log de de dang kiem tra qua trinh khoi tao DB khi debug/chay app.
@@ -216,17 +216,11 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Neu bang POI chua co du lieu, them san it nhat 1 quan an mau.
-    /// Muc tieu: dam bao app co du lieu co ban de test geofence/thuyet minh.
+    /// Dam bao bo du lieu mau mac dinh luon day du.
+    /// Truong hop DB cu da co 1 vai ban ghi, ham van bo sung cac POI con thieu.
     /// </summary>
-    private async Task SeedDefaultPoiIfEmptyAsync()
+    private async Task EnsureDefaultPoisAsync()
     {
-        var existingCount = await _database!.Table<POI>().CountAsync();
-        if (existingCount > 0)
-        {
-            return;
-        }
-
         var samplePois = new List<POI>
         {
             // ========== OYSTER RESTAURANTS ==========
@@ -362,12 +356,26 @@ public class DatabaseService : IDatabaseService
             }
         };
 
+        var existingPois = await _database!.Table<POI>().ToListAsync();
+        var inserted = 0;
+
         foreach (var poi in samplePois)
         {
+            var isExisting = existingPois.Any(x =>
+                string.Equals(x.Name, poi.Name, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(x.LanguageCode, poi.LanguageCode, StringComparison.OrdinalIgnoreCase));
+
+            if (isExisting)
+            {
+                continue;
+            }
+
             await _database.InsertAsync(poi);
+            inserted++;
         }
 
-        Debug.WriteLine($"[DatabaseService] Seed {samplePois.Count} POIs thành công");
-        Console.WriteLine($"[DatabaseService] Seed {samplePois.Count} POIs thành công");
+        var totalAfter = await _database.Table<POI>().CountAsync();
+        Debug.WriteLine($"[DatabaseService] Bo sung {inserted} POI mau, tong hien tai: {totalAfter}");
+        Console.WriteLine($"[DatabaseService] Bo sung {inserted} POI mau, tong hien tai: {totalAfter}");
     }
 }

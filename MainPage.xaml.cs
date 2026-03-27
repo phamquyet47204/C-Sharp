@@ -422,8 +422,15 @@ public partial class MainPage : ContentPage
 				{
 					if (!string.IsNullOrWhiteSpace(poi.AudioPath))
 					{
-						await _narrationService.PlayAudioAsync(poi.AudioPath);
-						return;
+						try
+						{
+							await _narrationService.PlayAudioAsync(poi.AudioPath);
+							return;
+						}
+						catch (Exception audioEx)
+						{
+							Debug.WriteLine($"[MainPage] Loi phat file audio, fallback TTS: {audioEx.Message}");
+						}
 					}
 					
 					var text = poi.Description ?? $"Đây là {poi.Name}";
