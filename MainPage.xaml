@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:maps="http://schemas.microsoft.com/dotnet/2021/maui/maps"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             x:Class="VinhKhanhFoodStreet.MainPage"
+             BackgroundColor="#FFFFFF">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <Color x:Key="PrimaryCoralColor">#FF7F50</Color>
+            <Color x:Key="PrimaryDarkColor">#6B4C8A</Color>
+            <Color x:Key="SecondaryBgColor">#F8F8F8</Color>
+            <Color x:Key="TextDarkColor">#1A1A1A</Color>
+            <Color x:Key="TextLightColor">#666666</Color>
+            <Color x:Key="BorderLightColor">#E0E0E0</Color>
+
+            <Style x:Key="TitleLabelStyle" TargetType="Label">
+                <Setter Property="FontSize" Value="20" />
+                <Setter Property="FontAttributes" Value="Bold" />
+                <Setter Property="TextColor" Value="{StaticResource TextDarkColor}" />
+                <Setter Property="FontFamily" Value="Roboto" />
+            </Style>
+
+            <Style x:Key="SubtitleLabelStyle" TargetType="Label">
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontAttributes" Value="Bold" />
+                <Setter Property="TextColor" Value="{StaticResource TextDarkColor}" />
+                <Setter Property="FontFamily" Value="Roboto" />
+            </Style>
+
+            <Style x:Key="BodyLabelStyle" TargetType="Label">
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="TextColor" Value="{StaticResource TextLightColor}" />
+                <Setter Property="FontFamily" Value="Roboto" />
+            </Style>
+
+            <Style x:Key="SmallLabelStyle" TargetType="Label">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="TextColor" Value="{StaticResource TextLightColor}" />
+                <Setter Property="FontFamily" Value="Roboto" />
+            </Style>
+
+            <Style x:Key="ChipButtonStyle" TargetType="Button">
+                <Setter Property="Padding" Value="14,6" />
+                <Setter Property="CornerRadius" Value="20" />
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="FontFamily" Value="Roboto" />
+                <Setter Property="BorderWidth" Value="0" />
+            </Style>
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*" Padding="0" RowSpacing="0" ColumnSpacing="0">
+        <Grid Grid.Row="0"
+              ColumnDefinitions="*,Auto"
+              BackgroundColor="{StaticResource PrimaryCoralColor}"
+              Padding="16,12,16,12"
+              HeightRequest="56">
+            <Label Grid.Column="0"
+                   Text="🍴 Vĩnh Khánh Food Street"
+                   Style="{StaticResource TitleLabelStyle}"
+                   TextColor="White"
+                   VerticalOptions="Center"
+                   FontSize="18" />
+
+            <Button Grid.Column="1"
+                    Text="🌐 VN"
+                    FontSize="11"
+                    Padding="10,6"
+                    CornerRadius="16"
+                    BackgroundColor="rgba(255,255,255,0.25)"
+                    TextColor="White"
+                    Clicked="OnToggleLanguage"
+                    x:Name="LanguageButton"
+                    BorderWidth="0"
+                    FontAttributes="Bold" />
+        </Grid>
+
+        <Grid Grid.Row="1" ColumnDefinitions="*,*" Padding="12,10,12,10" BackgroundColor="{StaticResource SecondaryBgColor}">
+            <Button Grid.Column="0"
+                    x:Name="MapTabButton"
+                    Text="🗺️ Bản đồ"
+                    Clicked="OnSwitchToMapTab"
+                    CornerRadius="18"
+                    HeightRequest="36"
+                    FontAttributes="Bold"
+                    BackgroundColor="{StaticResource PrimaryCoralColor}"
+                    TextColor="White"
+                    Margin="0,0,6,0" />
+            <Button Grid.Column="1"
+                    x:Name="ListTabButton"
+                    Text="📍 Danh sách quán"
+                    Clicked="OnSwitchToListTab"
+                    CornerRadius="18"
+                    HeightRequest="36"
+                    FontAttributes="Bold"
+                    BackgroundColor="White"
+                    TextColor="{StaticResource TextLightColor}"
+                    Margin="6,0,0,0" />
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <Grid x:Name="MapPanel" RowDefinitions="*,Auto" BackgroundColor="White">
+                <maps:Map Grid.Row="0"
+                          x:Name="PoiMap"
+                          IsShowingUser="True"
+                          IsTrafficEnabled="False" />
+
+                <VerticalStackLayout Grid.Row="0"
+                                     Spacing="12"
+                                     Padding="12,12,12,0"
+                                     VerticalOptions="Start">
+                    <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
+                        <FlexLayout Direction="Row" Wrap="NoWrap" Padding="0,0,12,0">
+                            <Button Text="∀ Tất cả"
+                                    x:Name="ChipAll"
+                                    Style="{StaticResource ChipButtonStyle}"
+                                    BackgroundColor="{StaticResource PrimaryCoralColor}"
+                                    TextColor="White"
+                                    Clicked="OnFilterAll"
+                                    FontAttributes="Bold"
+                                    Margin="0,0,8,0" />
+                            <Button Text="🦪 Quán Ốc"
+                                    x:Name="ChipOyster"
+                                    Style="{StaticResource ChipButtonStyle}"
+                                    BackgroundColor="White"
+                                    TextColor="{StaticResource TextDarkColor}"
+                                    Clicked="OnFilterOyster"
+                                    Margin="0,0,8,0" />
+                            <Button Text="🔥 BBQ/Lẩu"
+                                    x:Name="ChipBbq"
+                                    Style="{StaticResource ChipButtonStyle}"
+                                    BackgroundColor="White"
+                                    TextColor="{StaticResource TextDarkColor}"
+                                    Clicked="OnFilterBbq"
+                                    Margin="0,0,8,0" />
+                            <Button Text="☕ Đồ uống"
+                                    x:Name="ChipBeverage"
+                                    Style="{StaticResource ChipButtonStyle}"
+                                    BackgroundColor="White"
+                                    TextColor="{StaticResource TextDarkColor}"
+                                    Clicked="OnFilterBeverage" />
+                        </FlexLayout>
+                    </ScrollView>
+                </VerticalStackLayout>
+
+                <Border Grid.Row="1"
+                        Padding="8"
+                        Margin="8,0,8,8"
+                        BackgroundColor="#FFFFFF"
+                        Stroke="{StaticResource BorderLightColor}"
+                        StrokeThickness="1"
+                        VerticalOptions="End"
+                        HorizontalOptions="End">
+                    <VerticalStackLayout Spacing="2">
+                        <Label x:Name="LocationStatusLabel"
+                               Text="🛰️ Đang kiểm tra GPS..."
+                               Style="{StaticResource SmallLabelStyle}"
+                               FontAttributes="Bold" />
+                        <Label x:Name="LocationLabel"
+                               Text=""
+                               IsVisible="False"
+                               Style="{StaticResource SmallLabelStyle}" />
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+
+            <Grid x:Name="ListPanel" IsVisible="False" RowDefinitions="Auto,Auto,*" BackgroundColor="{StaticResource SecondaryBgColor}">
+                <Grid Grid.Row="0" Padding="16,12,16,8" ColumnDefinitions="*,Auto">
+                    <Label Grid.Column="0"
+                           Text="📍 Danh Sách Quán Ăn"
+                           Style="{StaticResource SubtitleLabelStyle}"
+                           VerticalOptions="Center" />
+                    <Label Grid.Column="1"
+                           x:Name="PoisCountLabel"
+                           Text="(0)"
+                           Style="{StaticResource BodyLabelStyle}"
+                           VerticalOptions="Center" />
+                </Grid>
+
+                <Grid Grid.Row="1" Padding="16,0,16,8" ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <Button Grid.Column="0"
+                            x:Name="SearchToggleButton"
+                            Text="🔍"
+                            WidthRequest="40"
+                            HeightRequest="40"
+                            CornerRadius="20"
+                            Clicked="OnToggleSearch"
+                            BackgroundColor="{StaticResource PrimaryCoralColor}"
+                            TextColor="White"
+                            FontSize="16"
+                            Padding="0" />
+
+                    <Border Grid.Column="1"
+                            x:Name="SearchContainer"
+                            IsVisible="False"
+                            BackgroundColor="White"
+                            Stroke="{StaticResource BorderLightColor}"
+                            StrokeThickness="1"
+                            Padding="10,2"
+                            StrokeShape="RoundRectangle 20">
+                        <SearchBar x:Name="SearchBarPoi"
+                                   Placeholder="Tìm quán ăn..."
+                                   FontSize="13"
+                                   SearchButtonPressed="OnSearchPoi"
+                                   PlaceholderColor="{StaticResource TextLightColor}"
+                                   TextColor="{StaticResource TextDarkColor}"
+                                   CancelButtonColor="{StaticResource PrimaryCoralColor}"
+                                   BackgroundColor="Transparent" />
+                    </Border>
+                </Grid>
+
+                <CollectionView Grid.Row="2"
+                                x:Name="PoiCollectionView"
+                                SelectionMode="None"
+                                Margin="0,0,0,8">
+                    <CollectionView.ItemsLayout>
+                        <LinearItemsLayout Orientation="Vertical" ItemSpacing="10" />
+                    </CollectionView.ItemsLayout>
+
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="12,0,12,0"
+                                    Padding="0"
+                                    Stroke="{Binding IsNearestCardStroke, Mode=OneWay}"
+                                    StrokeThickness="{Binding IsNearestBorderWidth, Mode=OneWay}"
+                                    BackgroundColor="White">
+                                <Grid RowDefinitions="*" ColumnDefinitions="100,*,50" ColumnSpacing="12" Padding="12">
+                                    <Frame Grid.Column="0"
+                                           CornerRadius="12"
+                                           BorderColor="Transparent"
+                                           HasShadow="False"
+                                           Padding="0"
+                                           IsClippedToBounds="True">
+                                        <Image Source="{Binding ImagePath, StringFormat='res://dotnet_bot.png' }"
+                                               Aspect="AspectFill"
+                                               WidthRequest="100"
+                                               HeightRequest="75" />
+                                    </Frame>
+
+                                    <VerticalStackLayout Grid.Column="1" Spacing="6" VerticalOptions="Center">
+                                        <Label Text="{Binding Name}"
+                                               Style="{StaticResource SubtitleLabelStyle}"
+                                               FontSize="13"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="1" />
+                                        <Label Text="{Binding Description}"
+                                               Style="{StaticResource BodyLabelStyle}"
+                                               FontSize="11"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="1"
+                                               Opacity="0.8" />
+                                        <HorizontalStackLayout Spacing="12">
+                                            <Label Text="{Binding Distance, StringFormat='↔ {0}m'}"
+                                                   Style="{StaticResource SmallLabelStyle}"
+                                                   TextColor="{StaticResource PrimaryCoralColor}"
+                                                   FontAttributes="Bold" />
+                                            <Label Text="{Binding Rating, StringFormat='★ {0:F1}'}"
+                                                   Style="{StaticResource SmallLabelStyle}"
+                                                   TextColor="{StaticResource PrimaryCoralColor}"
+                                                   FontAttributes="Bold" />
+                                        </HorizontalStackLayout>
+                                    </VerticalStackLayout>
+
+                                    <VerticalStackLayout Grid.Column="2"
+                                                         Spacing="6"
+                                                         VerticalOptions="Center"
+                                                         HorizontalOptions="Center">
+                                        <Button Text="🔊"
+                                                WidthRequest="40"
+                                                HeightRequest="40"
+                                                CornerRadius="20"
+                                                BackgroundColor="{StaticResource PrimaryCoralColor}"
+                                                TextColor="White"
+                                                FontSize="16"
+                                                Padding="0"
+                                                Clicked="OnPlayPoi"
+                                                BorderWidth="0" />
+                                        <Button Text="📍"
+                                                WidthRequest="40"
+                                                HeightRequest="40"
+                                                CornerRadius="20"
+                                                BackgroundColor="{StaticResource PrimaryDarkColor}"
+                                                TextColor="White"
+                                                FontSize="16"
+                                                Padding="0"
+                                                Clicked="OnNavigatePoi"
+                                                BorderWidth="0" />
+                                    </VerticalStackLayout>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
+        </Grid>
+
+        <toolkit:MediaElement x:Name="NarrationPlayer"
+                              HeightRequest="1"
+                              WidthRequest="1"
+                              IsVisible="False"
+                              ShouldAutoPlay="False"
+                              ShouldShowPlaybackControls="False" />
+    </Grid>
+
+</ContentPage>

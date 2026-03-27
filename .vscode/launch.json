@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": ".NET MAUI (Windows)",
+      "type": "dotnet",
+      "request": "launch",
+      "projectPath": "${workspaceFolder}/VinhKhanhFoodStreet.csproj",
+      "preLaunchTask": "maui: build windows"
+    },
+    {
+      "name": ".NET MAUI (Android)",
+      "type": "dotnet",
+      "request": "launch",
+      "projectPath": "${workspaceFolder}/VinhKhanhFoodStreet.csproj",
+      "preLaunchTask": "maui: build android"
+    }
+  ]
+}
