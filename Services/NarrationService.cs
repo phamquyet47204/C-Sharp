@@ -7,6 +7,7 @@ using CommunityToolkit.Maui.Views;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Media;
+using Microsoft.Maui.Networking;
 
 namespace VinhKhanhFoodStreet.Services;
 
@@ -19,9 +20,15 @@ namespace VinhKhanhFoodStreet.Services;
 /// </summary>
 public partial class NarrationService : INarrationService
 {
-    private readonly SemaphoreSlim _playbackLock = new(1, 1);
-    private CancellationTokenSource? _currentNarrationCts;
+    private readonly IAppLanguageService _appLanguageService;
+    private readonly IAudioQueueManager _audioQueueManager;
     private WeakReference<MediaElement>? _registeredMediaElement;
+
+    public NarrationService(IAppLanguageService appLanguageService, IAudioQueueManager audioQueueManager)
+    {
+        _appLanguageService = appLanguageService;
+        _audioQueueManager = audioQueueManager;
+    }
 
     public void RegisterMediaElement(MediaElement? mediaElement)
     {
@@ -39,7 +46,16 @@ public partial class NarrationService : INarrationService
 
         await RunExclusiveNarrationAsync(async ct =>
         {
-            var locale = await ResolveLocaleAsync(lang);
+            // Uu tien ngon ngu user chon trong app; neu chua co moi dung ngon ngu truyen vao/he thong.
+            var effectiveLang = _appLanguageService.GetEffectiveLanguage(lang);
+            var locale = await ResolveBestLocaleAsync(effectiveLang);
+
+            // Offline-first: TTS van uu tien engine noi bo cua may.
+            if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
+            {
+                Debug.WriteLine("[NarrationService] Dang o che do offline, su dung TTS noi bo cua thiet bi");
+            }
+
             Debug.WriteLine($"[NarrationService] Bat dau TTS ({locale?.Language}:{locale?.Country})");
 
             await TextToSpeech.Default.SpeakAsync(text, new SpeechOptions
@@ -86,7 +102,7 @@ public partial class NarrationService : INarrationService
     {
         try
         {
-            _currentNarrationCts?.Cancel();
+            _audioQueueManager.CancelCurrent();
 
             _ = MainThread.InvokeOnMainThreadAsync(async () =>
             {
@@ -105,36 +121,18 @@ public partial class NarrationService : INarrationService
 
     private async Task RunExclusiveNarrationAsync(Func<CancellationToken, Task> work)
     {
-        // Preempt narration cu de uu tien narration moi khi vao vung moi.
-        _currentNarrationCts?.Cancel();
-
-        var localCts = new CancellationTokenSource();
-        _currentNarrationCts = localCts;
-
-        await _playbackLock.WaitAsync();
-        try
+        await _audioQueueManager.RunExclusiveAsync(async ct =>
         {
-            localCts.Token.ThrowIfCancellationRequested();
-
-            await BeginAudioDuckingAsync();
-            await work(localCts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            Debug.WriteLine("[NarrationService] Narration bi huy do co yeu cau moi");
-        }
-        finally
-        {
-            EndAudioDucking();
-
-            if (ReferenceEquals(_currentNarrationCts, localCts))
+            try
             {
-                _currentNarrationCts = null;
+                await BeginAudioDuckingAsync();
+                await work(ct);
             }
-
-            localCts.Dispose();
-            _playbackLock.Release();
-        }
+            finally
+            {
+                EndAudioDucking();
+            }
+        });
     }
 
     private static string NormalizeAudioPath(string filePath)
@@ -168,36 +166,51 @@ public partial class NarrationService : INarrationService
         }
     }
 
-    private static async Task<Locale?> ResolveLocaleAsync(string lang)
+    private async Task<Locale?> ResolveBestLocaleAsync(string languageCode)
     {
-        if (string.IsNullOrWhiteSpace(lang))
-        {
-            return null;
-        }
-
         try
         {
             var locales = await TextToSpeech.Default.GetLocalesAsync();
-            var normalized = lang.Trim();
 
-            // Ho tro nhap day du locale nhu ja-JP, vi-VN...
-            var exact = locales.FirstOrDefault(l =>
-                string.Equals($"{l.Language}-{l.Country}", normalized, StringComparison.OrdinalIgnoreCase));
-            if (exact is not null)
+            foreach (var candidate in _appLanguageService.GetLanguageFallbackChain(languageCode))
             {
-                return exact;
+                var locale = ResolveLocaleCandidate(locales, candidate);
+                if (locale is not null)
+                {
+                    return locale;
+                }
             }
 
-            // Fallback theo ma ngon ngu 2 ky tu: vi, en, ja...
-            var shortCode = normalized.Split('-')[0];
-            return locales.FirstOrDefault(l =>
-                string.Equals(l.Language, shortCode, StringComparison.OrdinalIgnoreCase));
+            return locales.FirstOrDefault();
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[NarrationService] Loi ResolveLocaleAsync: {ex.Message}");
+            Debug.WriteLine($"[NarrationService] Loi ResolveBestLocaleAsync: {ex.Message}");
             return null;
         }
+    }
+
+    private static Locale? ResolveLocaleCandidate(System.Collections.Generic.IEnumerable<Locale> locales, string candidate)
+    {
+        var normalized = candidate.Trim();
+
+        // Ho tro ma day du locale nhu vi-VN, ja-JP...
+        var exact = locales.FirstOrDefault(l =>
+            string.Equals($"{l.Language}-{l.Country}", normalized, StringComparison.OrdinalIgnoreCase));
+        if (exact is not null)
+        {
+            return exact;
+        }
+
+        // Ho tro ma 2 ky tu va alias jp -> ja.
+        var shortCode = normalized.Split('-')[0].ToLowerInvariant();
+        if (shortCode == "jp")
+        {
+            shortCode = "ja";
+        }
+
+        return locales.FirstOrDefault(l =>
+            string.Equals(l.Language, shortCode, StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task<MediaElement?> ResolveNarrationMediaElementAsync()

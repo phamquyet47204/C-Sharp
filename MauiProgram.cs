@@ -37,6 +37,8 @@ public static class MauiProgram
 			.AddDatabaseServices(databasePath)
 			.AddLocationServices()
 			.AddGeofenceEngine()
+			.AddSingleton<IAppLanguageService, AppLanguageService>()
+			.AddSingleton<IAudioQueueManager, AudioQueueManager>()
 			.AddSingleton<INarrationService, NarrationService>()
 			.AddSingleton<MainPage>();
 

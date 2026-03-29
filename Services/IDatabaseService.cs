@@ -15,5 +15,4 @@ public interface IDatabaseService
     Task<int> UpdatePoiAsync(POI poi);
     Task<int> DeletePoiAsync(int poiId);
     Task<List<POI>> GetAllPoisAsync();
-    Task<List<POI>> GetPoisByLanguage(string lang);
 }

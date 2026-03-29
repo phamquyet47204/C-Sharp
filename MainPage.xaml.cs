@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Maui.ApplicationModel;
@@ -29,33 +30,39 @@ public partial class MainPage : ContentPage
 	private readonly ILocationService _locationService;
 	private readonly INarrationService _narrationService;
 	private readonly IDatabaseService _databaseService;
+	private readonly IAppLanguageService _appLanguageService;
 	
 	private ObservableCollection<PoiDisplayItem> _displayItems = new();
 	private Dictionary<int, Pin> _poiPins = new();
 	private List<POI> _allPois = new();
+	private Dictionary<string, List<POI>> _poiVariantsByGroup = new(StringComparer.OrdinalIgnoreCase);
 	private Location? _currentLocation;
 	private bool _eventsAttached;
 	private string _currentLanguage = "vi";
 	private string _currentFilter = "All";
 	private bool _isSearchExpanded;
 	private bool _isListTabActive;
+	private bool _isSystemLanguageInitialized;
 
 	public MainPage(
 		IGeofenceEngine geofenceEngine,
 		ILocationService locationService,
 		INarrationService narrationService,
-		IDatabaseService databaseService)
+		IDatabaseService databaseService,
+		IAppLanguageService appLanguageService)
 	{
 		InitializeComponent();
 		_geofenceEngine = geofenceEngine;
 		_locationService = locationService;
 		_narrationService = narrationService;
 		_databaseService = databaseService;
+		_appLanguageService = appLanguageService;
 		_narrationService.RegisterMediaElement(NarrationPlayer);
 		
 		// Bind CollectionView to observable collection
 		PoiCollectionView.ItemsSource = _displayItems;
 		SearchContainer.IsVisible = false;
+		ApplyLanguageUi();
 		SetActiveTab(false);
 	}
 
@@ -67,6 +74,8 @@ public partial class MainPage : ContentPage
 
 		try
 		{
+			InitializeLanguageFromSystemIfNeeded();
+
 			var canUseLocation = await EnsureLocationReadyAsync();
 			if (!canUseLocation)
 				return;
@@ -96,10 +105,22 @@ public partial class MainPage : ContentPage
 		}
 	}
 
-	private async Task LoadMapPinsAndListAsync()
+	private async Task LoadMapPinsAndListAsync(bool reloadFromDatabase = false)
 	{
-		_allPois = await LoadDisplayPoisForCurrentLanguageAsync();
+		if (reloadFromDatabase || _poiVariantsByGroup.Count == 0)
+		{
+			await EnsurePoiCacheLoadedAsync();
+		}
+
+		ApplyLocalizedPoisFromCache();
 		Debug.WriteLine($"[MainPage] Loaded {_allPois.Count} POIs for language {_currentLanguage}");
+
+		await RefreshMapPinsAsync();
+		await RefreshCollectionViewAsync();
+	}
+
+	private async Task RefreshMapPinsAsync()
+	{
 		PoiMap.Pins.Clear();
 		_poiPins.Clear();
 
@@ -120,32 +141,75 @@ public partial class MainPage : ContentPage
 				_poiPins[poi.Id] = pin;
 			}
 		});
-
-		await RefreshCollectionViewAsync();
 	}
 
-	private async Task<List<POI>> LoadDisplayPoisForCurrentLanguageAsync()
+	private async Task EnsurePoiCacheLoadedAsync()
 	{
 		var allPois = await _databaseService.GetAllPoisAsync();
-		if (allPois.Count == 0)
-		{
-			return new List<POI>();
-		}
+		_poiVariantsByGroup = allPois
+			.GroupBy(GetGroupKey)
+			.ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
-		var selected = allPois
-			.GroupBy(p => (Math.Round(p.Latitude, 5), Math.Round(p.Longitude, 5), p.Category ?? string.Empty))
-			.Select(group =>
-			{
-				var ordered = group.OrderByDescending(p => p.Priority).ToList();
-				return ordered.FirstOrDefault(p => string.Equals(p.LanguageCode, _currentLanguage, StringComparison.OrdinalIgnoreCase))
-					?? ordered.FirstOrDefault(p => string.Equals(p.LanguageCode, "en", StringComparison.OrdinalIgnoreCase))
-					?? ordered.FirstOrDefault(p => string.Equals(p.LanguageCode, "vi", StringComparison.OrdinalIgnoreCase))
-					?? ordered.First();
-			})
+		Debug.WriteLine($"[MainPage] Loaded all POI variants: {allPois.Count}, groups: {_poiVariantsByGroup.Count}");
+	}
+
+	private void ApplyLocalizedPoisFromCache()
+	{
+		_allPois = _poiVariantsByGroup
+			.Values
+			.Select(variants => SelectLocalizedPoi(variants, _currentLanguage))
+			.Where(p => p is not null)
+			.Cast<POI>()
 			.OrderByDescending(p => p.Priority)
 			.ToList();
+	}
 
-		return selected;
+	private POI? SelectLocalizedPoi(IReadOnlyList<POI> variants, string languageCode)
+	{
+		var fallbackChain = _appLanguageService.GetLanguageFallbackChain(languageCode);
+
+		foreach (var candidateLanguage in fallbackChain)
+		{
+			var match = variants.FirstOrDefault(p =>
+				string.Equals(NormalizeLanguage(p.LanguageCode), NormalizeLanguage(candidateLanguage), StringComparison.OrdinalIgnoreCase));
+
+			if (match is not null)
+			{
+				return match;
+			}
+		}
+
+		return variants
+			.OrderByDescending(p => p.Priority)
+			.FirstOrDefault();
+	}
+
+	private static string GetGroupKey(POI poi)
+	{
+		if (!string.IsNullOrWhiteSpace(poi.Category))
+		{
+			return poi.Category.Trim().ToLowerInvariant();
+		}
+
+		var roundedLat = Math.Round(poi.Latitude, 4);
+		var roundedLng = Math.Round(poi.Longitude, 4);
+		return $"{roundedLat}:{roundedLng}";
+	}
+
+	private static string NormalizeLanguage(string? languageCode)
+	{
+		if (string.IsNullOrWhiteSpace(languageCode))
+		{
+			return "vi";
+		}
+
+		var normalized = languageCode.Trim().ToLowerInvariant();
+		if (normalized == "jp")
+		{
+			return "ja";
+		}
+
+		return normalized.Split('-')[0];
 	}
 
 	private async Task HighlightNearestPoiAsync()
@@ -228,7 +292,7 @@ public partial class MainPage : ContentPage
 				}
 
 				var text = poi.Description ?? $"Đây là {poi.Name}";
-				await _narrationService.SpeakAsync(text, poi.LanguageCode);
+				await _narrationService.SpeakAsync(text, _currentLanguage);
 			}
 			catch (Exception ex)
 			{
@@ -262,7 +326,7 @@ public partial class MainPage : ContentPage
 	}
 
 	/// <summary>
-	/// Filter: BBQ & Hotpot places
+	/// Filter: BBQ &amp; Hotpot places
 	/// </summary>
 	private async void OnFilterBbq(object? sender, EventArgs e)
 	{
@@ -272,7 +336,7 @@ public partial class MainPage : ContentPage
 	}
 
 	/// <summary>
-	/// Filter: Beverages & coffee
+	/// Filter: Beverages &amp; coffee
 	/// </summary>
 	private async void OnFilterBeverage(object? sender, EventArgs e)
 	{
@@ -434,7 +498,7 @@ public partial class MainPage : ContentPage
 					}
 					
 					var text = poi.Description ?? $"Đây là {poi.Name}";
-					await _narrationService.SpeakAsync(text, poi.LanguageCode);
+					await _narrationService.SpeakAsync(text, _currentLanguage);
 				}
 			}
 		}
@@ -479,6 +543,41 @@ public partial class MainPage : ContentPage
 			_ => "vi"
 		};
 
+		_appLanguageService.SetPreferredLanguage(_currentLanguage);
+
+		ApplyLanguageUi();
+
+		Debug.WriteLine($"[MainPage] Switched language to: {_currentLanguage}");
+
+		try
+		{
+			await _geofenceEngine.SetLanguageAsync(_currentLanguage);
+			await LoadMapPinsAndListAsync(reloadFromDatabase: false);
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"[MainPage] Loi doi ngon ngu: {ex.Message}");
+			await DisplayAlertAsync("Lỗi", "Không thể tải lại dữ liệu theo ngôn ngữ mới.", "OK");
+		}
+	}
+
+	private void InitializeLanguageFromSystemIfNeeded()
+	{
+		if (_isSystemLanguageInitialized)
+		{
+			return;
+		}
+
+		_currentLanguage = _appLanguageService.GetEffectiveLanguage();
+		_appLanguageService.SetPreferredLanguage(_currentLanguage);
+		ApplyLanguageUi();
+		_isSystemLanguageInitialized = true;
+
+		Debug.WriteLine($"[MainPage] Initial language from system: {_currentLanguage}");
+	}
+
+	private void ApplyLanguageUi()
+	{
 		LanguageButton.Text = _currentLanguage switch
 		{
 			"vi" => "🌐 VN",
@@ -486,19 +585,6 @@ public partial class MainPage : ContentPage
 			"ja" => "🌐 JP",
 			_ => "🌐 VN"
 		};
-
-		Debug.WriteLine($"[MainPage] Switched language to: {_currentLanguage}");
-
-		try
-		{
-			await _geofenceEngine.SetLanguageAsync(_currentLanguage);
-			await LoadMapPinsAndListAsync();
-		}
-		catch (Exception ex)
-		{
-			Debug.WriteLine($"[MainPage] Loi doi ngon ngu: {ex.Message}");
-			await DisplayAlertAsync("Lỗi", "Không thể tải lại dữ liệu theo ngôn ngữ mới.", "OK");
-		}
 	}
 
 	private void MoveCameraToVinhKhanh()

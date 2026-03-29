@@ -127,33 +127,6 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Lấy danh sách POI theo mã ngôn ngữ người dùng chọn.
-    /// Kết quả được sắp xếp theo Priority giảm dần để ưu tiên điểm quan trọng.
-    /// </summary>
-    public async Task<List<POI>> GetPoisByLanguage(string lang)
-    {
-        try
-        {
-            await EnsureInitializedAsync();
-
-            if (string.IsNullOrWhiteSpace(lang))
-            {
-                throw new ArgumentException("Ngon ngu khong duoc de trong.", nameof(lang));
-            }
-
-            return await _database!
-                .Table<POI>()
-                .Where(x => x.LanguageCode == lang)
-                .OrderByDescending(x => x.Priority)
-                .ToListAsync();
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException("Khong the lay danh sach POI theo ngon ngu.", ex);
-        }
-    }
-
-    /// <summary>
     /// Lấy toàn bộ POI để hiển thị đầy đủ trên bản đồ.
     /// </summary>
     public async Task<List<POI>> GetAllPoisAsync()
