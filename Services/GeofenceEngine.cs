@@ -26,7 +26,6 @@ public class GeofenceEngine : IGeofenceEngine
 
     private readonly ILocationService _locationService;
     private readonly IDatabaseService _databaseService;
-    private readonly IAppLanguageService _appLanguageService;
     private readonly SemaphoreSlim _engineLock = new(1, 1);
     private readonly SemaphoreSlim _processLock = new(1, 1);
 
@@ -44,12 +43,10 @@ public class GeofenceEngine : IGeofenceEngine
 
     public GeofenceEngine(
         ILocationService locationService,
-        IDatabaseService databaseService,
-        IAppLanguageService appLanguageService)
+        IDatabaseService databaseService)
     {
         _locationService = locationService;
         _databaseService = databaseService;
-        _appLanguageService = appLanguageService;
     }
 
     /// <summary>
@@ -320,13 +317,9 @@ public class GeofenceEngine : IGeofenceEngine
     /// </summary>
     private async Task RefreshPoisCoreAsync()
     {
-        var allPois = await _databaseService.GetAllPoisAsync();
-        var groupedPois = allPois.GroupBy(GetGroupKey).ToList();
+        var localizedPois = await _databaseService.GetLocalizedPoisAsync(_currentLanguageCode);
 
-        _cachedPois = groupedPois
-            .Select(group => SelectLocalizedPoi(group.ToList(), _currentLanguageCode))
-            .Where(p => p is not null)
-            .Cast<POI>()
+        _cachedPois = localizedPois
             .OrderByDescending(p => p.Priority)
             .ToList();
 
@@ -358,50 +351,7 @@ public class GeofenceEngine : IGeofenceEngine
             _cooldownUntilUtc.Remove(id);
         }
 
-        Debug.WriteLine($"[GeofenceEngine] Refresh cache all={allPois.Count}, localized={_cachedPois.Count}, language={_currentLanguageCode}");
-    }
-
-    private POI? SelectLocalizedPoi(IReadOnlyList<POI> variants, string languageCode)
-    {
-        var fallbackChain = _appLanguageService.GetLanguageFallbackChain(languageCode);
-        foreach (var candidateLanguage in fallbackChain)
-        {
-            var match = variants.FirstOrDefault(p =>
-                string.Equals(NormalizeLanguageCode(p.LanguageCode), NormalizeLanguageCode(candidateLanguage), StringComparison.OrdinalIgnoreCase));
-
-            if (match is not null)
-            {
-                return match;
-            }
-        }
-
-        return variants
-            .OrderByDescending(p => p.Priority)
-            .FirstOrDefault();
-    }
-
-    private static string GetGroupKey(POI poi)
-    {
-        if (!string.IsNullOrWhiteSpace(poi.Category))
-        {
-            return poi.Category.Trim().ToLowerInvariant();
-        }
-
-        var roundedLat = Math.Round(poi.Latitude, 4);
-        var roundedLng = Math.Round(poi.Longitude, 4);
-        return $"{roundedLat}:{roundedLng}";
-    }
-
-    private static string NormalizeLanguageCode(string? languageCode)
-    {
-        if (string.IsNullOrWhiteSpace(languageCode))
-        {
-            return "vi";
-        }
-
-        var normalized = languageCode.Trim().Replace('_', '-').ToLowerInvariant();
-        var shortCode = normalized.Split('-')[0];
-        return shortCode == "jp" ? "ja" : shortCode;
+        Debug.WriteLine($"[GeofenceEngine] Refresh cache localized={_cachedPois.Count}, language={_currentLanguageCode}");
     }
 
     /// <summary>

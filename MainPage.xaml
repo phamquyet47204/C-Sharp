@@ -145,6 +145,23 @@
                     </ScrollView>
                 </VerticalStackLayout>
 
+                <Button Grid.Row="0"
+                        x:Name="MyLocationButton"
+                        Text="📍"
+                        WidthRequest="46"
+                        HeightRequest="46"
+                        CornerRadius="23"
+                        BackgroundColor="White"
+                        TextColor="{StaticResource PrimaryCoralColor}"
+                        BorderWidth="1"
+                        BorderColor="{StaticResource BorderLightColor}"
+                        VerticalOptions="End"
+                        HorizontalOptions="End"
+                        Margin="0,0,12,90"
+                        Clicked="OnCenterToUserLocation"
+                        FontSize="18"
+                        ZIndex="10" />
+
                 <Border Grid.Row="1"
                         Padding="8"
                         Margin="8,0,8,8"
@@ -159,8 +176,8 @@
                                Style="{StaticResource SmallLabelStyle}"
                                FontAttributes="Bold" />
                         <Label x:Name="LocationLabel"
-                               Text=""
-                               IsVisible="False"
+                               Text="📍 --, --"
+                               IsVisible="True"
                                Style="{StaticResource SmallLabelStyle}" />
                     </VerticalStackLayout>
                 </Border>

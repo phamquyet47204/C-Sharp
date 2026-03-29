@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SQLite;
@@ -49,7 +50,9 @@ public class DatabaseService : IDatabaseService
 
             _database = new SQLiteAsyncConnection(_databasePath);
             await _database.CreateTableAsync<POI>();
+            await EnsureSchemaCompatibilityAsync();
             await EnsureDefaultPoisAsync();
+            await NormalizeBasePoiIdsAsync();
             _isInitialized = true;
 
             // Ghi log de de dang kiem tra qua trinh khoi tao DB khi debug/chay app.
@@ -147,6 +150,53 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
+    /// Lay danh sach POI da duoc gom theo BasePoiId va localize theo 3-tier fallback.
+    /// Tier 1: ngon ngu duoc yeu cau.
+    /// Tier 2: tieng Anh.
+    /// Tier 3: tieng Viet.
+    /// </summary>
+    public async Task<List<POI>> GetLocalizedPoisAsync(string langCode)
+    {
+        try
+        {
+            await EnsureInitializedAsync();
+
+            var targetLang = NormalizeLanguageCode(langCode);
+            var allPois = await _database!
+                .Table<POI>()
+                .OrderByDescending(x => x.Priority)
+                .ToListAsync();
+
+            var grouped = allPois
+                .GroupBy(p => p.BasePoiId > 0 ? p.BasePoiId : p.Id)
+                .ToList();
+
+            var localized = new List<POI>();
+
+            foreach (var group in grouped)
+            {
+                var variants = group.ToList();
+                var selected = SelectByFallback(variants, targetLang);
+
+                if (selected is null)
+                {
+                    continue;
+                }
+
+                localized.Add(CloneForDisplay(selected));
+            }
+
+            return localized
+                .OrderByDescending(x => x.Priority)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Khong the lay danh sach POI da localize.", ex);
+        }
+    }
+
+    /// <summary>
     /// Đảm bảo database đã được khởi tạo trước khi thao tác CRUD.
     /// </summary>
     private async Task EnsureInitializedAsync()
@@ -199,6 +249,7 @@ public class DatabaseService : IDatabaseService
             // ========== OYSTER RESTAURANTS ==========
             new POI
             {
+                BasePoiId = 1001,
                 Name = "Quán Ốc Oanh",
                 Latitude = 10.756895449216689,
                 Longitude = 106.6740947680869,
@@ -213,6 +264,7 @@ public class DatabaseService : IDatabaseService
             },
             new POI
             {
+                BasePoiId = 1001,
                 Name = "Sea Snail Restaurant",
                 Latitude = 10.756895449216689,
                 Longitude = 106.6740947680869,
@@ -227,6 +279,7 @@ public class DatabaseService : IDatabaseService
             },
             new POI
             {
+                BasePoiId = 1001,
                 Name = "カキのレストラン",
                 Latitude = 10.7569,
                 Longitude = 106.6741,
@@ -243,6 +296,7 @@ public class DatabaseService : IDatabaseService
             // ========== BBQ & HOTPOT ==========
             new POI
             {
+                BasePoiId = 1002,
                 Name = "Lẩu & Nướng Sài Gòn",
                 Latitude = 10.758,
                 Longitude = 106.675,
@@ -257,6 +311,7 @@ public class DatabaseService : IDatabaseService
             },
             new POI
             {
+                BasePoiId = 1002,
                 Name = "Hotpot Hanoi",
                 Latitude = 10.7585,
                 Longitude = 106.6755,
@@ -271,6 +326,7 @@ public class DatabaseService : IDatabaseService
             },
             new POI
             {
+                BasePoiId = 1002,
                 Name = "焼肉屋トウキョウ",
                 Latitude = 10.759,
                 Longitude = 106.676,
@@ -287,6 +343,7 @@ public class DatabaseService : IDatabaseService
             // ========== BEVERAGES & COFFEE ==========
             new POI
             {
+                BasePoiId = 1003,
                 Name = "Cà Phê Vĩnh Khánh",
                 Latitude = 10.757,
                 Longitude = 106.674,
@@ -301,6 +358,7 @@ public class DatabaseService : IDatabaseService
             },
             new POI
             {
+                BasePoiId = 1003,
                 Name = "Sweet Dreams Coffee",
                 Latitude = 10.7575,
                 Longitude = 106.6745,
@@ -315,6 +373,7 @@ public class DatabaseService : IDatabaseService
             },
             new POI
             {
+                BasePoiId = 1003,
                 Name = "ドリームカフェ",
                 Latitude = 10.758,
                 Longitude = 106.6763,
@@ -350,5 +409,127 @@ public class DatabaseService : IDatabaseService
         var totalAfter = await _database.Table<POI>().CountAsync();
         Debug.WriteLine($"[DatabaseService] Bo sung {inserted} POI mau, tong hien tai: {totalAfter}");
         Console.WriteLine($"[DatabaseService] Bo sung {inserted} POI mau, tong hien tai: {totalAfter}");
+    }
+
+    /// <summary>
+    /// Dam bao schema co du cot can thiet cho gom nhom da ngon ngu.
+    /// </summary>
+    private async Task EnsureSchemaCompatibilityAsync()
+    {
+        try
+        {
+            await _database!.ExecuteAsync("ALTER TABLE POI ADD COLUMN BasePoiId INTEGER NOT NULL DEFAULT 0");
+            Debug.WriteLine("[DatabaseService] Da bo sung cot BasePoiId");
+        }
+        catch (Exception ex)
+        {
+            // Neu cot da ton tai thi bo qua, tranh lam fail qua trinh khoi tao.
+            Debug.WriteLine($"[DatabaseService] Skip migrate BasePoiId: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Chuan hoa BasePoiId cho du lieu cu de cac ban dich cung quan duoc gom nhom dung.
+    /// </summary>
+    private async Task NormalizeBasePoiIdsAsync()
+    {
+        var allPois = await _database!.Table<POI>().ToListAsync();
+        var grouped = allPois.GroupBy(BuildLegacyGroupKey);
+
+        foreach (var group in grouped)
+        {
+            var groupList = group.ToList();
+            var existingBase = groupList
+                .Select(p => p.BasePoiId)
+                .FirstOrDefault(x => x > 0);
+
+            var effectiveBaseId = existingBase > 0
+                ? existingBase
+                : groupList.Min(p => p.Id);
+
+            foreach (var poi in groupList)
+            {
+                if (poi.BasePoiId == effectiveBaseId)
+                {
+                    continue;
+                }
+
+                poi.BasePoiId = effectiveBaseId;
+                await _database.UpdateAsync(poi);
+            }
+        }
+    }
+
+    private static string BuildLegacyGroupKey(POI poi)
+    {
+        if (poi.BasePoiId > 0)
+        {
+            return $"base:{poi.BasePoiId}";
+        }
+
+        var category = poi.Category?.Trim().ToLowerInvariant() ?? "all";
+        var roundedLat = Math.Round(poi.Latitude, 4);
+        var roundedLng = Math.Round(poi.Longitude, 4);
+        return $"{category}:{roundedLat}:{roundedLng}";
+    }
+
+    private static POI? SelectByFallback(List<POI> variants, string targetLang)
+    {
+        var primary = variants.FirstOrDefault(p =>
+            string.Equals(NormalizeLanguageCode(p.LanguageCode), targetLang, StringComparison.OrdinalIgnoreCase));
+        if (primary is not null)
+        {
+            return primary;
+        }
+
+        var english = variants.FirstOrDefault(p =>
+            string.Equals(NormalizeLanguageCode(p.LanguageCode), "en", StringComparison.OrdinalIgnoreCase));
+        if (english is not null)
+        {
+            return english;
+        }
+
+        var vietnamese = variants.FirstOrDefault(p =>
+            string.Equals(NormalizeLanguageCode(p.LanguageCode), "vi", StringComparison.OrdinalIgnoreCase));
+        if (vietnamese is not null)
+        {
+            return vietnamese;
+        }
+
+        return variants
+            .OrderByDescending(p => p.Priority)
+            .FirstOrDefault();
+    }
+
+    private static POI CloneForDisplay(POI source)
+    {
+        return new POI
+        {
+            Id = source.Id,
+            BasePoiId = source.BasePoiId,
+            Name = source.Name,
+            Latitude = source.Latitude,
+            Longitude = source.Longitude,
+            Radius = source.Radius,
+            Description = source.Description,
+            AudioPath = source.AudioPath,
+            ImagePath = source.ImagePath,
+            LanguageCode = source.LanguageCode,
+            Category = source.Category,
+            Priority = source.Priority,
+            IsDownloaded = source.IsDownloaded
+        };
+    }
+
+    private static string NormalizeLanguageCode(string? languageCode)
+    {
+        if (string.IsNullOrWhiteSpace(languageCode))
+        {
+            return "vi";
+        }
+
+        var normalized = languageCode.Trim().Replace('_', '-').ToLowerInvariant();
+        var shortCode = normalized.Split('-')[0];
+        return shortCode == "jp" ? "ja" : shortCode;
     }
 }

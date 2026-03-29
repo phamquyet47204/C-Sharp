@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
@@ -13,6 +12,7 @@ using Microsoft.Maui.Devices.Sensors;
 using Microsoft.Maui.Maps;
 using VinhKhanhFoodStreet.Models;
 using VinhKhanhFoodStreet.Services;
+using VinhKhanhFoodStreet.ViewModels;
 
 namespace VinhKhanhFoodStreet;
 
@@ -31,11 +31,12 @@ public partial class MainPage : ContentPage
 	private readonly INarrationService _narrationService;
 	private readonly IDatabaseService _databaseService;
 	private readonly IAppLanguageService _appLanguageService;
+	private readonly MainPageViewModel _viewModel;
 	
-	private ObservableCollection<PoiDisplayItem> _displayItems = new();
+	private ObservableCollection<POI> _displayItems = new();
 	private Dictionary<int, Pin> _poiPins = new();
 	private List<POI> _allPois = new();
-	private Dictionary<string, List<POI>> _poiVariantsByGroup = new(StringComparer.OrdinalIgnoreCase);
+	private Dictionary<int, List<POI>> _poiVariantsByGroup = new();
 	private Location? _currentLocation;
 	private bool _eventsAttached;
 	private string _currentLanguage = "vi";
@@ -57,10 +58,13 @@ public partial class MainPage : ContentPage
 		_narrationService = narrationService;
 		_databaseService = databaseService;
 		_appLanguageService = appLanguageService;
+		_viewModel = new MainPageViewModel();
 		_narrationService.RegisterMediaElement(NarrationPlayer);
 		
-		// Bind CollectionView to observable collection
-		PoiCollectionView.ItemsSource = _displayItems;
+		// Gan BindingContext theo MVVM de UI doc du lieu tu ViewModel.
+		BindingContext = _viewModel;
+		_displayItems = _viewModel.DisplayPois;
+		PoiCollectionView.ItemsSource = _viewModel.DisplayPois;
 		SearchContainer.IsVisible = false;
 		ApplyLanguageUi();
 		SetActiveTab(false);
@@ -112,22 +116,41 @@ public partial class MainPage : ContentPage
 			await EnsurePoiCacheLoadedAsync();
 		}
 
-		ApplyLocalizedPoisFromCache();
+		try
+		{
+			_allPois = await _databaseService.GetLocalizedPoisAsync(_currentLanguage);
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"[MainPage] Loi lay POI localize: {ex.Message}");
+			ApplyLocalizedPoisFromCache();
+		}
+
 		Debug.WriteLine($"[MainPage] Loaded {_allPois.Count} POIs for language {_currentLanguage}");
 
-		await RefreshMapPinsAsync();
+		if (_poiPins.Count == 0 || reloadFromDatabase)
+		{
+			await RebuildMapPinsAsync();
+		}
+		else
+		{
+			await RefreshMapPinTextsAsync();
+		}
+
 		await RefreshCollectionViewAsync();
 	}
 
-	private async Task RefreshMapPinsAsync()
+	private async Task RebuildMapPinsAsync()
 	{
 		PoiMap.Pins.Clear();
 		_poiPins.Clear();
+		var filteredPois = GetFilteredPoisForCurrentFilter();
 
 		await MainThread.InvokeOnMainThreadAsync(() =>
 		{
-			foreach (var poi in _allPois)
+			foreach (var poi in filteredPois)
 			{
+				var aggregateId = GetAggregateId(poi);
 				// Add to map
 				var pin = new Pin
 				{
@@ -136,21 +159,62 @@ public partial class MainPage : ContentPage
 					Location = new Location(poi.Latitude, poi.Longitude),
 					Type = PinType.Place
 				};
+				pin.InfoWindowClicked += (s, e) =>
+				{
+					var latestPoi = _allPois.FirstOrDefault(x => GetAggregateId(x) == aggregateId);
+					if (latestPoi is not null)
+					{
+						OnPinClicked(latestPoi);
+					}
+				};
+				PoiMap.Pins.Add(pin);
+				_poiPins[aggregateId] = pin;
+			}
+		});
+	}
+
+	private async Task RefreshMapPinTextsAsync()
+	{
+		var filteredPois = GetFilteredPoisForCurrentFilter();
+
+		await MainThread.InvokeOnMainThreadAsync(() =>
+		{
+			PoiMap.Pins.Clear();
+			_poiPins.Clear();
+
+			foreach (var poi in filteredPois)
+			{
+				var aggregateId = GetAggregateId(poi);
+				var pin = new Pin
+				{
+					Label = poi.Name,
+					Address = poi.Description ?? string.Empty,
+					Location = new Location(poi.Latitude, poi.Longitude),
+					Type = PinType.Place
+				};
 				pin.InfoWindowClicked += (s, e) => OnPinClicked(poi);
 				PoiMap.Pins.Add(pin);
-				_poiPins[poi.Id] = pin;
+				_poiPins[aggregateId] = pin;
 			}
 		});
 	}
 
 	private async Task EnsurePoiCacheLoadedAsync()
 	{
-		var allPois = await _databaseService.GetAllPoisAsync();
-		_poiVariantsByGroup = allPois
-			.GroupBy(GetGroupKey)
-			.ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+		try
+		{
+			var allPois = await _databaseService.GetAllPoisAsync();
+			_poiVariantsByGroup = allPois
+				.GroupBy(GetAggregateId)
+				.ToDictionary(g => g.Key, g => g.ToList());
 
-		Debug.WriteLine($"[MainPage] Loaded all POI variants: {allPois.Count}, groups: {_poiVariantsByGroup.Count}");
+			Debug.WriteLine($"[MainPage] Loaded all POI variants: {allPois.Count}, groups: {_poiVariantsByGroup.Count}");
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"[MainPage] Loi load toan bo POI: {ex.Message}");
+			_poiVariantsByGroup = new Dictionary<int, List<POI>>();
+		}
 	}
 
 	private void ApplyLocalizedPoisFromCache()
@@ -184,16 +248,14 @@ public partial class MainPage : ContentPage
 			.FirstOrDefault();
 	}
 
-	private static string GetGroupKey(POI poi)
+	private static int GetAggregateId(POI poi)
 	{
-		if (!string.IsNullOrWhiteSpace(poi.Category))
+		if (poi.BasePoiId > 0)
 		{
-			return poi.Category.Trim().ToLowerInvariant();
+			return poi.BasePoiId;
 		}
 
-		var roundedLat = Math.Round(poi.Latitude, 4);
-		var roundedLng = Math.Round(poi.Longitude, 4);
-		return $"{roundedLat}:{roundedLng}";
+		return poi.Id;
 	}
 
 	private static string NormalizeLanguage(string? languageCode)
@@ -226,17 +288,19 @@ public partial class MainPage : ContentPage
 
 		await MainThread.InvokeOnMainThreadAsync(async () =>
 		{
+			var nearestAggregateId = GetAggregateId(nearest);
+
 			// Update distances for all items
 			foreach (var item in _displayItems)
 			{
 				item.Distance = (int)CalculateDistance(
 					_currentLocation.Latitude, _currentLocation.Longitude, 
 					item.Latitude, item.Longitude);
-				item.IsNearest = (item.Id == nearest.Id);
+				item.IsNearest = (GetAggregateId(item) == nearestAggregateId);
 			}
 
 			// Scroll to nearest
-			var nearestPoi = _displayItems.FirstOrDefault(x => x.Id == nearest.Id);
+			var nearestPoi = _displayItems.FirstOrDefault(x => GetAggregateId(x) == nearestAggregateId);
 			if (nearestPoi != null)
 			{
 				PoiCollectionView.ScrollTo(nearestPoi);
@@ -263,8 +327,9 @@ public partial class MainPage : ContentPage
 		_currentLocation = location;
 		_ = MainThread.InvokeOnMainThreadAsync(() =>
 		{
-			LocationLabel.Text = string.Empty;
-			LocationStatusLabel.Text = $"Cập nhật: {DateTime.Now:HH:mm}";
+			LocationLabel.Text = $"📍 {location.Latitude:F6}, {location.Longitude:F6}";
+			LocationLabel.IsVisible = true;
+			LocationStatusLabel.Text = $"Cập nhật: {DateTime.Now:HH:mm:ss}";
 		});
 		
 		_ = HighlightNearestPoiAsync();
@@ -312,6 +377,7 @@ public partial class MainPage : ContentPage
 	{
 		_currentFilter = "All";
 		await UpdateFilterUIAsync();
+		await RefreshMapPinTextsAsync();
 		await RefreshCollectionViewAsync();
 	}
 
@@ -322,6 +388,7 @@ public partial class MainPage : ContentPage
 	{
 		_currentFilter = "Oyster";
 		await UpdateFilterUIAsync();
+		await RefreshMapPinTextsAsync();
 		await RefreshCollectionViewAsync();
 	}
 
@@ -332,6 +399,7 @@ public partial class MainPage : ContentPage
 	{
 		_currentFilter = "Bbq";
 		await UpdateFilterUIAsync();
+		await RefreshMapPinTextsAsync();
 		await RefreshCollectionViewAsync();
 	}
 
@@ -342,6 +410,7 @@ public partial class MainPage : ContentPage
 	{
 		_currentFilter = "Beverage";
 		await UpdateFilterUIAsync();
+		await RefreshMapPinTextsAsync();
 		await RefreshCollectionViewAsync();
 	}
 
@@ -373,22 +442,7 @@ public partial class MainPage : ContentPage
 
 		foreach (var poi in filtered)
 		{
-			var item = new PoiDisplayItem
-			{
-				Id = poi.Id,
-				Name = poi.Name,
-				Description = poi.Description ?? "Chưa có mô tả",
-				ImagePath = poi.ImagePath ?? "dotnet_bot.png",
-				Latitude = poi.Latitude,
-				Longitude = poi.Longitude,
-				AudioPath = poi.AudioPath,
-				LanguageCode = poi.LanguageCode,
-				Distance = _currentLocation != null ? (int)CalculateDistance(
-					_currentLocation.Latitude, _currentLocation.Longitude, 
-					poi.Latitude, poi.Longitude) : 0,
-				Rating = 4.5f,
-				IsNearest = false
-			};
+			var item = CreateDisplayPoi(poi);
 			_displayItems.Add(item);
 		}
 
@@ -434,34 +488,9 @@ public partial class MainPage : ContentPage
 		_displayItems.Clear();
 		
 		// Filter POIs based on _currentFilter
-		var filteredPois = _currentFilter switch
-		{
-			"Oyster" => _allPois.Where(p => p.Category == "Oyster").ToList(),
-			"Bbq" => _allPois.Where(p => p.Category == "Bbq").ToList(),
-			"Beverage" => _allPois.Where(p => p.Category == "Beverage").ToList(),
-			_ => _allPois // "All"
-		};
+		var filteredPois = GetFilteredPoisForCurrentFilter();
 
-		foreach (var poi in filteredPois)
-		{
-			var item = new PoiDisplayItem
-			{
-				Id = poi.Id,
-				Name = poi.Name,
-				Description = poi.Description ?? "Chưa có mô tả",
-				ImagePath = poi.ImagePath ?? "dotnet_bot.png",
-				Latitude = poi.Latitude,
-				Longitude = poi.Longitude,
-				AudioPath = poi.AudioPath,
-				LanguageCode = poi.LanguageCode,
-				Distance = _currentLocation != null ? (int)CalculateDistance(
-					_currentLocation.Latitude, _currentLocation.Longitude, 
-					poi.Latitude, poi.Longitude) : 0,
-				Rating = 4.5f,
-				IsNearest = false
-			};
-			_displayItems.Add(item);
-		}
+		_viewModel.ReplaceDisplayPois(filteredPois.Select(CreateDisplayPoi));
 
 		PoisCountLabel.Text = $"({_displayItems.Count})";
 		await HighlightNearestPoiAsync();
@@ -478,10 +507,10 @@ public partial class MainPage : ContentPage
 		{
 			// Get PoiDisplayItem from button's binding context
 			var button = sender as Button;
-			if (button?.BindingContext is PoiDisplayItem displayItem)
+			if (button?.BindingContext is POI displayItem)
 			{
-				// Find the actual POI from _allPois
-				var poi = _allPois.FirstOrDefault(p => p.Id == displayItem.Id);
+				// Tim POI da localize theo aggregate id tu cache hien tai.
+				var poi = _allPois.FirstOrDefault(p => GetAggregateId(p) == GetAggregateId(displayItem));
 				if (poi != null)
 				{
 					if (!string.IsNullOrWhiteSpace(poi.AudioPath))
@@ -515,10 +544,10 @@ public partial class MainPage : ContentPage
 		{
 			// Get PoiDisplayItem from button's binding context
 			var button = sender as Button;
-			if (button?.BindingContext is PoiDisplayItem displayItem)
+			if (button?.BindingContext is POI displayItem)
 			{
-				// Find the actual POI from _allPois
-				var poi = _allPois.FirstOrDefault(p => p.Id == displayItem.Id);
+				// Tim POI da localize theo aggregate id tu cache hien tai.
+				var poi = _allPois.FirstOrDefault(p => GetAggregateId(p) == GetAggregateId(displayItem));
 				if (poi != null)
 				{
 					SetActiveTab(false);
@@ -530,6 +559,24 @@ public partial class MainPage : ContentPage
 		catch (Exception ex)
 		{
 			Debug.WriteLine($"[MainPage] Loi navigate: {ex.Message}");
+		}
+	}
+
+	/// <summary>
+	/// Chi cap nhat text tren danh sach dang hien thi theo ngon ngu moi, khong load lai DB.
+	/// </summary>
+	private async Task RefreshDisplayItemTextsAsync()
+	{
+		try
+		{
+			await MainThread.InvokeOnMainThreadAsync(() =>
+			{
+				_viewModel.UpdateLocalizedTextsInPlace(_allPois);
+			});
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"[MainPage] Loi refresh text item: {ex.Message}");
 		}
 	}
 
@@ -552,7 +599,11 @@ public partial class MainPage : ContentPage
 		try
 		{
 			await _geofenceEngine.SetLanguageAsync(_currentLanguage);
-			await LoadMapPinsAndListAsync(reloadFromDatabase: false);
+			_allPois = await _databaseService.GetLocalizedPoisAsync(_currentLanguage);
+			await RefreshDisplayItemTextsAsync();
+			await RefreshMapPinTextsAsync();
+			await RefreshCollectionViewAsync();
+			await HighlightNearestPoiAsync();
 		}
 		catch (Exception ex)
 		{
@@ -606,7 +657,8 @@ public partial class MainPage : ContentPage
 		if (status != PermissionStatus.Granted)
 		{
 			LocationStatusLabel.Text = "Cần cấp quyền vị trí";
-			LocationLabel.Text = string.Empty;
+			LocationLabel.Text = "📍 Chưa có quyền truy cập vị trí";
+			LocationLabel.IsVisible = true;
 			await DisplayAlertAsync("Lỗi", "App cần quyền vị trí để hoạt động", "OK");
 			AppInfo.Current.ShowSettingsUI();
 			return false;
@@ -617,14 +669,65 @@ public partial class MainPage : ContentPage
 			var loc = await Geolocation.Default.GetLocationAsync(
 				new GeolocationRequest(GeolocationAccuracy.Low, TimeSpan.FromSeconds(3)));
 			if (loc != null)
+			{
 				_currentLocation = loc;
+				LocationLabel.Text = $"📍 {loc.Latitude:F6}, {loc.Longitude:F6}";
+				LocationLabel.IsVisible = true;
+				LocationStatusLabel.Text = "Đã lấy vị trí hiện tại";
+			}
 		}
 		catch (Exception ex)
 		{
 			Debug.WriteLine($"[MainPage] Loi GPS: {ex.Message}");
+			LocationStatusLabel.Text = "GPS chưa sẵn sàng";
+			LocationLabel.Text = "📍 Không lấy được vị trí hiện tại";
+			LocationLabel.IsVisible = true;
 		}
 
 		return true;
+	}
+
+	/// <summary>
+	/// Dua camera ve vi tri hien tai cua nguoi dung, uu tien toa do moi nhat.
+	/// </summary>
+	private async void OnCenterToUserLocation(object? sender, EventArgs e)
+	{
+		try
+		{
+			var status = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+			if (status != PermissionStatus.Granted)
+			{
+				status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+			}
+
+			if (status != PermissionStatus.Granted)
+			{
+				await DisplayAlertAsync("Lỗi", "Chưa có quyền vị trí để định vị người dùng.", "OK");
+				return;
+			}
+
+			var location = await Geolocation.Default.GetLocationAsync(
+				new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(5)));
+
+			if (location is null)
+			{
+				await DisplayAlertAsync("Thông báo", "Không lấy được vị trí hiện tại.", "OK");
+				return;
+			}
+
+			_currentLocation = location;
+			LocationLabel.Text = $"📍 {location.Latitude:F6}, {location.Longitude:F6}";
+			LocationLabel.IsVisible = true;
+			LocationStatusLabel.Text = "Đã căn giữa vị trí của bạn";
+			PoiMap.MoveToRegion(MapSpan.FromCenterAndRadius(
+				new Location(location.Latitude, location.Longitude),
+				Distance.FromMeters(250)));
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"[MainPage] Loi center to user location: {ex.Message}");
+			await DisplayAlertAsync("Lỗi", "Không thể định vị vị trí hiện tại.", "OK");
+		}
 	}
 
 	private async void OnToggleSearch(object? sender, EventArgs e)
@@ -682,53 +785,46 @@ public partial class MainPage : ContentPage
 		_locationService.LocationChanged -= HandleLocationChanged;
 		_eventsAttached = false;
 	}
-}
 
-/// <summary>
-/// Display model cho CollectionView binding
-/// </summary>
-public class PoiDisplayItem : INotifyPropertyChanged
-{
-	public int Id { get; set; }
-	public string Name { get; set; } = string.Empty;
-	public string Description { get; set; } = string.Empty;
-	public string ImagePath { get; set; } = string.Empty;
-	public double Latitude { get; set; }
-	public double Longitude { get; set; }
-	public string AudioPath { get; set; } = string.Empty;
-	public string LanguageCode { get; set; } = "vi";
-	public int Distance { get; set; }
-	public float Rating { get; set; }
-	
-	private bool _isNearest;
-	public bool IsNearest
+	/// <summary>
+	/// Tao doi tuong POI phuc vu hien thi UI, tach biet voi entity goc trong cache.
+	/// </summary>
+	private POI CreateDisplayPoi(POI source)
 	{
-		get => _isNearest;
-		set
+		return new POI
 		{
-			if (_isNearest != value)
-			{
-				_isNearest = value;
-				OnPropertyChanged(nameof(IsNearest));
-				OnPropertyChanged(nameof(IsNearestBorderWidth));
-			}
-		}
+			Id = source.Id,
+			BasePoiId = source.BasePoiId,
+			Name = source.Name,
+			Description = source.Description,
+			Latitude = source.Latitude,
+			Longitude = source.Longitude,
+			ImagePath = source.ImagePath ?? "dotnet_bot.png",
+			AudioPath = source.AudioPath,
+			LanguageCode = source.LanguageCode,
+			Category = source.Category,
+			Priority = source.Priority,
+			Radius = source.Radius,
+			Distance = _currentLocation != null
+				? (int)CalculateDistance(_currentLocation.Latitude, _currentLocation.Longitude, source.Latitude, source.Longitude)
+				: 0,
+			Rating = 4.5f,
+			IsNearest = false
+		};
 	}
 
-	public int IsNearestBorderWidth => IsNearest ? 3 : 1;
-
-	public Color IsNearestCardStroke => IsNearest 
-		? Color.FromArgb("#FF7F50")  // Coral for nearest
-		: Color.FromArgb("#E0E0E0"); // Light border for others
-
-	public event PropertyChangedEventHandler? PropertyChanged;
-
-	protected void OnPropertyChanged(string propertyName)
+	/// <summary>
+	/// Lay tap POI theo filter dang chon de dong bo map va list.
+	/// </summary>
+	private List<POI> GetFilteredPoisForCurrentFilter()
 	{
-		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+		return _currentFilter switch
+		{
+			"Oyster" => _allPois.Where(p => p.Category == "Oyster").ToList(),
+			"Bbq" => _allPois.Where(p => p.Category == "Bbq").ToList(),
+			"Beverage" => _allPois.Where(p => p.Category == "Beverage").ToList(),
+			_ => _allPois
+		};
 	}
 }
-
-
-
 
