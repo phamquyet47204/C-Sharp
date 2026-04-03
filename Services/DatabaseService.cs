@@ -1,9 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using VinhKhanhFoodStreet.Configuration;
+using Microsoft.Maui.Storage;
+using Microsoft.Maui.Devices;
 using SQLite;
 using VinhKhanhFoodStreet.Models;
 
@@ -16,9 +22,13 @@ namespace VinhKhanhFoodStreet.Services;
 public class DatabaseService : IDatabaseService
 {
     private readonly string _databasePath;
+    private readonly HttpClient _httpClient;
     private SQLiteAsyncConnection? _database;
     private readonly SemaphoreSlim _initLock = new(1, 1);
+    private readonly SemaphoreSlim _syncLock = new(1, 1);
     private bool _isInitialized;
+    private const string UpdatesEndpoint = "api/pois/updates";
+    private const string LastSyncPreferenceKey = "root_last_sync_utc";
 
     /// <summary>
     /// Nhận đường dẫn database từ DI để dễ cấu hình theo từng môi trường.
@@ -27,6 +37,11 @@ public class DatabaseService : IDatabaseService
     public DatabaseService(string databasePath)
     {
         _databasePath = databasePath;
+        _httpClient = new HttpClient
+        {
+            BaseAddress = new Uri(AppConfig.BaseApiUrl),
+            Timeout = TimeSpan.FromSeconds(15)
+        };
     }
 
     /// <summary>
@@ -51,7 +66,7 @@ public class DatabaseService : IDatabaseService
             _database = new SQLiteAsyncConnection(_databasePath);
             await _database.CreateTableAsync<POI>();
             await EnsureSchemaCompatibilityAsync();
-            await EnsureDefaultPoisAsync();
+            await RemoveSeedPoisAsync();
             await NormalizeBasePoiIdsAsync();
             _isInitialized = true;
 
@@ -126,6 +141,66 @@ public class DatabaseService : IDatabaseService
         catch (Exception ex)
         {
             throw new InvalidOperationException("Khong the xoa POI khoi database.", ex);
+        }
+    }
+
+    /// <summary>
+    /// Đồng bộ POI từ backend SQL Server về SQLite local theo cơ chế delta-sync.
+    /// </summary>
+    public async Task<bool> SyncPoisFromServerAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await EnsureInitializedAsync();
+
+            if (Connectivity.NetworkAccess != NetworkAccess.Internet)
+            {
+                Debug.WriteLine("[DatabaseService] Skip sync: khong co Internet");
+                return false;
+            }
+
+            await _syncLock.WaitAsync(cancellationToken);
+            try
+            {
+                var lastSync = GetLastSyncTime();
+                var requestUrl =
+                    $"{UpdatesEndpoint}?lastSync={Uri.EscapeDataString(lastSync.ToString("O", CultureInfo.InvariantCulture))}&includeAudio=true";
+
+                using var response = await _httpClient.GetAsync(requestUrl, cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"[DatabaseService] Sync that bai: {(int)response.StatusCode}");
+                    return false;
+                }
+
+                var payload = await response.Content.ReadFromJsonAsync<RemoteSyncResponse>(cancellationToken: cancellationToken);
+                if (payload is null)
+                {
+                    Debug.WriteLine("[DatabaseService] Sync that bai: payload null");
+                    return false;
+                }
+
+                await ApplyServerChangesAsync(payload, cancellationToken);
+                SaveLastSyncTime(payload.ServerTime);
+
+                Debug.WriteLine(
+                    $"[DatabaseService] Sync OK. Updated={payload.UpdatedPois.Count}, Deleted={payload.DeletedIds.Count}, ServerTime={payload.ServerTime:O}");
+                return true;
+            }
+            finally
+            {
+                _syncLock.Release();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Debug.WriteLine("[DatabaseService] Sync bi huy boi cancellation token.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[DatabaseService] Loi SyncPoisFromServerAsync: {ex.Message}");
+            return false;
         }
     }
 
@@ -212,6 +287,150 @@ public class DatabaseService : IDatabaseService
         }
     }
 
+    private async Task ApplyServerChangesAsync(RemoteSyncResponse payload, CancellationToken cancellationToken)
+    {
+        var existingPois = await _database!.Table<POI>().ToListAsync();
+
+        foreach (var remotePoi in payload.UpdatedPois)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var basePoiId = ParseBasePoiId(remotePoi);
+            var localizations = remotePoi.Localizations ?? [];
+
+            foreach (var localization in localizations)
+            {
+                var normalizedLang = NormalizeLanguageCode(localization.LanguageCode);
+                var matched = existingPois.FirstOrDefault(x =>
+                    x.BasePoiId == basePoiId &&
+                    string.Equals(NormalizeLanguageCode(x.LanguageCode), normalizedLang, StringComparison.OrdinalIgnoreCase));
+
+                if (matched is null)
+                {
+                    matched = new POI();
+                    existingPois.Add(matched);
+                }
+
+                matched.BasePoiId = basePoiId;
+                matched.Name = localization.Name?.Trim() ?? string.Empty;
+                matched.Description = localization.Description?.Trim() ?? string.Empty;
+                matched.Latitude = remotePoi.Latitude;
+                matched.Longitude = remotePoi.Longitude;
+                matched.Radius = remotePoi.Radius;
+                matched.AudioPath = localization.AudioFile ?? string.Empty;
+                matched.ImagePath = ResolveRemoteMediaPath(remotePoi.ImageUrl)
+                    ?? (string.IsNullOrWhiteSpace(matched.ImagePath) ? "dotnet_bot.png" : matched.ImagePath);
+                matched.LanguageCode = normalizedLang;
+                matched.Priority = remotePoi.Priority;
+                matched.Category = string.IsNullOrWhiteSpace(matched.Category)
+                    ? InferCategory(localization.Name, localization.Description)
+                    : matched.Category;
+                matched.IsDownloaded = !string.IsNullOrWhiteSpace(matched.AudioPath);
+
+                if (matched.Id > 0)
+                {
+                    await _database.UpdateAsync(matched);
+                }
+                else
+                {
+                    await _database.InsertAsync(matched);
+                }
+            }
+        }
+
+        foreach (var deletedId in payload.DeletedIds)
+        {
+            await _database.ExecuteAsync("DELETE FROM POI WHERE BasePoiId = ?", deletedId);
+            await _database.ExecuteAsync("DELETE FROM POI WHERE Id = ?", deletedId);
+        }
+    }
+
+    private static int ParseBasePoiId(RemotePoi remotePoi)
+    {
+        if (int.TryParse(remotePoi.BasePoiId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedBasePoiId) &&
+            parsedBasePoiId > 0)
+        {
+            return parsedBasePoiId;
+        }
+
+        return remotePoi.Id > 0 ? remotePoi.Id : 0;
+    }
+
+    private static string InferCategory(string? name, string? description)
+    {
+        var source = $"{name} {description}".ToLowerInvariant();
+        if (source.Contains("oc") || source.Contains("oyster") || source.Contains("snail"))
+        {
+            return "Oyster";
+        }
+
+        if (source.Contains("bbq") || source.Contains("nuong") || source.Contains("lau") || source.Contains("hotpot"))
+        {
+            return "Bbq";
+        }
+
+        if (source.Contains("coffee") || source.Contains("ca phe") || source.Contains("drink") || source.Contains("beverage"))
+        {
+            return "Beverage";
+        }
+
+        return "All";
+    }
+
+    private static string? ResolveRemoteMediaPath(string? mediaPath)
+    {
+        if (string.IsNullOrWhiteSpace(mediaPath))
+        {
+            return null;
+        }
+
+        if (Uri.TryCreate(mediaPath, UriKind.Absolute, out var absoluteUri))
+        {
+            return NormalizeAndroidLoopbackUri(absoluteUri).ToString();
+        }
+
+        var baseUri = new Uri(AppConfig.BaseApiUrl, UriKind.Absolute);
+        return new Uri(baseUri, mediaPath).ToString();
+    }
+
+    private static Uri NormalizeAndroidLoopbackUri(Uri uri)
+    {
+        if (DeviceInfo.Current.Platform != DevicePlatform.Android)
+        {
+            return uri;
+        }
+
+        if (!string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(uri.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(uri.Host, "::1", StringComparison.OrdinalIgnoreCase))
+        {
+            return uri;
+        }
+
+        var builder = new UriBuilder(uri)
+        {
+            Host = "10.0.2.2"
+        };
+
+        return builder.Uri;
+    }
+
+    private static DateTime GetLastSyncTime()
+    {
+        var stored = Preferences.Get(LastSyncPreferenceKey, string.Empty);
+        if (DateTime.TryParse(stored, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed))
+        {
+            return parsed.ToUniversalTime();
+        }
+
+        return DateTime.MinValue;
+    }
+
+    private static void SaveLastSyncTime(DateTime serverTime)
+    {
+        Preferences.Set(LastSyncPreferenceKey, serverTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
+    }
+
     /// <summary>
     /// Kiểm tra dữ liệu đầu vào POI để tránh lưu dữ liệu không hợp lệ.
     /// </summary>
@@ -239,176 +458,11 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Dam bao bo du lieu mau mac dinh luon day du.
-    /// Truong hop DB cu da co 1 vai ban ghi, ham van bo sung cac POI con thieu.
+    /// Xoa du lieu mau co san trong cac ban build cu de app chi hien thi du lieu dong bo tu backend.
     /// </summary>
-    private async Task EnsureDefaultPoisAsync()
+    private async Task RemoveSeedPoisAsync()
     {
-        var samplePois = new List<POI>
-        {
-            // ========== OYSTER RESTAURANTS ==========
-            new POI
-            {
-                BasePoiId = 1001,
-                Name = "Quán Ốc Oanh",
-                Latitude = 10.756895449216689,
-                Longitude = 106.6740947680869,
-                Radius = 30,
-                Description = "Quán ốc nổi tiếng khu phố ẩm thực Vĩnh Khánh. Ốc tươi ngon, giá cả hợp lý.",
-                ImagePath = "dotnet_bot.png",
-                AudioPath = "audio/vi/quan-oc-oanh.mp3",
-                LanguageCode = "vi",
-                Category = "Oyster",
-                Priority = 100,
-                IsDownloaded = false
-            },
-            new POI
-            {
-                BasePoiId = 1001,
-                Name = "Sea Snail Restaurant",
-                Latitude = 10.756895449216689,
-                Longitude = 106.6740947680869,
-                Radius = 30,
-                Description = "Fresh oysters and snails from the sea. Best restaurant in the area.",
-                ImagePath = "dotnet_bot.png",
-                AudioPath = "audio/en/sea-snail.mp3",
-                LanguageCode = "en",
-                Category = "Oyster",
-                Priority = 95,
-                IsDownloaded = false
-            },
-            new POI
-            {
-                BasePoiId = 1001,
-                Name = "カキのレストラン",
-                Latitude = 10.7569,
-                Longitude = 106.6741,
-                Radius = 30,
-                Description = "新鮮でおいしいカキとニシン。地域で最高のレストラン。",
-                ImagePath = "dotnet_bot.png",
-                AudioPath = "audio/ja/kaki-restaurant.mp3",
-                LanguageCode = "ja",
-                Category = "Oyster",
-                Priority = 90,
-                IsDownloaded = false
-            },
-
-            // ========== BBQ & HOTPOT ==========
-            new POI
-            {
-                BasePoiId = 1002,
-                Name = "Lẩu & Nướng Sài Gòn",
-                Latitude = 10.758,
-                Longitude = 106.675,
-                Radius = 25,
-                Description = "Lẩu và nướng chất lượng cao. Tươi ngon mỗi ngày. Đặc biệt là thịt bò Úc.",
-                ImagePath = "dotnet_bot.png",
-                AudioPath = "audio/vi/lau-nuong.mp3",
-                LanguageCode = "vi",
-                Category = "Bbq",
-                Priority = 85,
-                IsDownloaded = false
-            },
-            new POI
-            {
-                BasePoiId = 1002,
-                Name = "Hotpot Hanoi",
-                Latitude = 10.7585,
-                Longitude = 106.6755,
-                Radius = 25,
-                Description = "Traditional Vietnamese hotpot with premium imported beef and seafood.",
-                ImagePath = "dotnet_bot.png",
-                AudioPath = "audio/en/hotpot-hanoi.mp3",
-                LanguageCode = "en",
-                Category = "Bbq",
-                Priority = 80,
-                IsDownloaded = false
-            },
-            new POI
-            {
-                BasePoiId = 1002,
-                Name = "焼肉屋トウキョウ",
-                Latitude = 10.759,
-                Longitude = 106.676,
-                Radius = 25,
-                Description = "日本式焼肉としゃぶしゃぶ。高品質な和牛を使用しています。",
-                ImagePath = "dotnet_bot.png",
-                AudioPath = "audio/ja/yakiniku-tokyo.mp3",
-                LanguageCode = "ja",
-                Category = "Bbq",
-                Priority = 75,
-                IsDownloaded = false
-            },
-
-            // ========== BEVERAGES & COFFEE ==========
-            new POI
-            {
-                BasePoiId = 1003,
-                Name = "Cà Phê Vĩnh Khánh",
-                Latitude = 10.757,
-                Longitude = 106.674,
-                Radius = 20,
-                Description = "Cà phê truyền thống Việt với không gian yên tĩnh, ổn định.",
-                ImagePath = "dotnet_bot.png",
-                AudioPath = "audio/vi/ca-phe-vinh-khanh.mp3",
-                LanguageCode = "vi",
-                Category = "Beverage",
-                Priority = 70,
-                IsDownloaded = false
-            },
-            new POI
-            {
-                BasePoiId = 1003,
-                Name = "Sweet Dreams Coffee",
-                Latitude = 10.7575,
-                Longitude = 106.6745,
-                Radius = 20,
-                Description = "Premium coffee and tropical drinks. Perfect for relaxing and studying.",
-                ImagePath = "dotnet_bot.png",
-                AudioPath = "audio/en/sweet-dreams.mp3",
-                LanguageCode = "en",
-                Category = "Beverage",
-                Priority = 65,
-                IsDownloaded = false
-            },
-            new POI
-            {
-                BasePoiId = 1003,
-                Name = "ドリームカフェ",
-                Latitude = 10.758,
-                Longitude = 106.6763,
-                Radius = 20,
-                Description = "最高の日本式コーヒーと地元の飲料。居心地の良い雰囲気。",
-                ImagePath = "dotnet_bot.png",
-                AudioPath = "audio/ja/dream-cafe.mp3",
-                LanguageCode = "ja",
-                Category = "Beverage",
-                Priority = 60,
-                IsDownloaded = false
-            }
-        };
-
-        var existingPois = await _database!.Table<POI>().ToListAsync();
-        var inserted = 0;
-
-        foreach (var poi in samplePois)
-        {
-            var isExisting = existingPois.Any(x =>
-                string.Equals(x.Name, poi.Name, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(x.LanguageCode, poi.LanguageCode, StringComparison.OrdinalIgnoreCase));
-
-            if (isExisting)
-            {
-                continue;
-            }
-
-            await _database.InsertAsync(poi);
-            inserted++;
-        }
-
-        var totalAfter = await _database.Table<POI>().CountAsync();
-        Debug.WriteLine($"[DatabaseService] Bo sung {inserted} POI mau, tong hien tai: {totalAfter}");
-        Console.WriteLine($"[DatabaseService] Bo sung {inserted} POI mau, tong hien tai: {totalAfter}");
+        await _database!.ExecuteAsync("DELETE FROM POI WHERE BasePoiId IN (1001, 1002, 1003)");
     }
 
     /// <summary>
@@ -531,5 +585,32 @@ public class DatabaseService : IDatabaseService
         var normalized = languageCode.Trim().Replace('_', '-').ToLowerInvariant();
         var shortCode = normalized.Split('-')[0];
         return shortCode == "jp" ? "ja" : shortCode;
+    }
+
+    private sealed class RemoteSyncResponse
+    {
+        public List<RemotePoi> UpdatedPois { get; set; } = new();
+        public List<int> DeletedIds { get; set; } = new();
+        public DateTime ServerTime { get; set; } = DateTime.UtcNow;
+    }
+
+    private sealed class RemotePoi
+    {
+        public int Id { get; set; }
+        public string BasePoiId { get; set; } = string.Empty;
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public double Radius { get; set; } = 50;
+        public int Priority { get; set; }
+        public string? ImageUrl { get; set; }
+        public List<RemotePoiLocalization> Localizations { get; set; } = new();
+    }
+
+    private sealed class RemotePoiLocalization
+    {
+        public string LanguageCode { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string? AudioFile { get; set; }
     }
 }
