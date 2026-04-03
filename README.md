@@ -1,175 +1,383 @@
-# Báo Cáo Tiến Độ Dự Án VinhKhanhFoodStreet
+# VinhKhanh Food Street — Tài liệu dự án
 
-## 1. Mục tiêu sản phẩm
-Dự án xây dựng hệ sinh thái du lịch ẩm thực Vĩnh Khánh gồm 2 khối chính:
-1. Ứng dụng Mobile bằng .NET MAUI:
-- Theo dõi vị trí thời gian thực.
-- Kích hoạt thuyết minh theo vùng địa lý (geofence).
-- Phát nội dung bằng file thu sẵn hoặc TTS.
-2. Hệ thống Web Admin bằng ASP.NET Core:
-- Quản trị POI, nội dung, bán kính, ưu tiên.
-- Hỗ trợ vận hành và phân tích hành vi người dùng ẩn danh.
+## Mục lục
+1. [Tổng quan](#1-tổng-quan)
+2. [Kiến trúc hệ thống](#2-kiến-trúc-hệ-thống)
+3. [Cách chạy app](#3-cách-chạy-app)
+4. [Luồng hoạt động](#4-luồng-hoạt-động)
+5. [Cấu trúc thư mục](#5-cấu-trúc-thư-mục)
+6. [Tiến độ & tồn đọng](#6-tiến-độ--tồn-đọng)
+7. [Lịch sử lỗi & bản vá](#7-lịch-sử-lỗi--bản-vá)
 
-## 2. Kiến trúc tổng thể hiện tại
-### 2.1 Mobile App (.NET MAUI)
-- UI Layer:
-  - MainPage.xaml: giao diện bản đồ, danh sách quán, tìm kiếm, bộ lọc.
-  - MainPage.xaml.cs: điều phối tương tác UI, tải dữ liệu, chuyển ngôn ngữ, phát âm thanh.
-- Service Layer:
-  - DatabaseService: CRUD và truy vấn POI từ SQLite.
-  - LocationService: theo dõi vị trí, phát sự kiện khi thay đổi tọa độ.
-  - GeofenceEngine: xử lý vào/ra vùng bằng Haversine + debounce + cooldown.
-  - NarrationService: điều phối phát âm thanh file/TTS, audio ducking.
-- Data Layer:
-  - SQLite cục bộ, model POI lưu thông tin điểm và nội dung.
+---
 
-### 2.2 Nguyên tắc kỹ thuật
-- Dependency Injection để tách lớp rõ ràng.
-- Async/await để tránh chặn UI thread.
-- Tách interface cho service nhằm dễ kiểm thử và thay thế triển khai.
-- Ưu tiên ổn định runtime trước, sau đó nâng cấp UI/UX.
+## 1. Tổng quan
 
-## 3. Luồng hoạt động chi tiết
-### 3.1 Luồng khởi động
-1. MauiProgram đăng ký các service vào DI.
-2. MainPage được khởi tạo qua DI.
-3. MainPage đăng ký NarrationPlayer cho NarrationService.
-4. OnAppearing thực hiện:
-- Xin quyền vị trí.
-- Tải dữ liệu POI.
-- Render pin bản đồ + danh sách.
-- Khởi động GeofenceEngine.
+Hệ sinh thái du lịch ẩm thực phố Vĩnh Khánh, Quận 4, TP.HCM gồm 2 khối:
 
-### 3.2 Luồng tải danh sách quán ăn từ POI (đã hoàn thiện thêm)
-Vấn đề cũ:
-- Danh sách có thể thiếu hoặc không đồng bộ theo ngôn ngữ.
+| Khối | Công nghệ | Mô tả |
+|---|---|---|
+| Mobile App | .NET 10 MAUI | Bản đồ, geofence, thuyết minh tự động theo vị trí |
+| Web Admin | ASP.NET Core + React | Quản trị POI, nội dung, media |
 
-Giải pháp đã triển khai:
-1. Tải toàn bộ POI từ DatabaseService.
-2. Gom nhóm theo cụm quán (tọa độ làm tròn + category).
-3. Chọn 1 bản ghi hiển thị theo thứ tự ưu tiên ngôn ngữ:
-- Ngôn ngữ hiện tại người dùng chọn.
-- Fallback sang en.
-- Fallback sang vi.
-- Nếu vẫn không có, lấy bản ghi ưu tiên cao nhất.
-4. Sắp xếp lại theo Priority giảm dần.
-5. Cập nhật map pin và danh sách từ tập dữ liệu đã chuẩn hóa.
+Repo đang dùng mô hình mono-repo. Mobile chạy từ project gốc VinhKhanhFoodStreet.csproj, còn phần backend/admin nằm trong các thư mục VinhKhanh.Admin, VinhKhanh.Application, VinhKhanh.Domain, VinhKhanh.Infrastructure và VinhKhanh.Shared.
 
-Kết quả:
-- Danh sách hiển thị ổn định hơn.
-- Giảm rủi ro “đã thêm POI nhưng chưa thấy lên danh sách”.
-- Dễ mở rộng khi bổ sung ngôn ngữ mới.
+---
 
-### 3.3 Luồng geofence và trigger nội dung
-1. LocationService phát LocationChanged khi vị trí thay đổi đủ điều kiện.
-2. GeofenceEngine nhận tọa độ mới, tính khoảng cách bằng Haversine.
-3. Áp dụng debounce để tránh nhiễu GPS.
-4. Áp dụng cooldown để chống phát lặp.
-5. Khi vào vùng hợp lệ, MainPage nhận OnPoiEntered và gọi NarrationService.
+## 2. Kiến trúc hệ thống
 
-### 3.4 Luồng âm thanh
-1. Ưu tiên phát file audio nếu POI có AudioPath.
-2. Nếu không có file, fallback sang TTS theo ngôn ngữ POI.
-3. NarrationService bảo đảm không chồng nhiều luồng phát cùng lúc.
-4. Trên Android có audio ducking để giảm âm ứng dụng nền.
+```
+VinhKhanh.Mobile          ← MAUI Android/iOS
+VinhKhanh.Admin           ← ASP.NET Core Web API
+VinhKhanh.Admin.Ui        ← React + Tailwind
+VinhKhanh.Application     ← Use cases
+VinhKhanh.Domain          ← Entities, interfaces
+VinhKhanh.Infrastructure  ← EF Core, repositories
+VinhKhanh.Shared          ← Models dùng chung
+```
 
-### 3.5 Luồng đổi ngôn ngữ
-1. Người dùng bấm nút ngôn ngữ trên header.
-2. MainPage đổi mã ngôn ngữ vi/en/ja.
-3. Gọi GeofenceEngine.SetLanguageAsync để đồng bộ engine.
-4. Tải lại dữ liệu POI và render lại map/list theo ngôn ngữ mới.
+### Mobile — các lớp chính
 
-## 4. Đánh giá tiến độ hiện tại
+```
+MauiProgram.cs            ← DI container, cấu hình services
+App.xaml.cs               ← Entry point, NavigationPage
+Views/MapPage             ← UI bản đồ full-screen
+ViewModels/MapViewModel   ← State, filter, sync logic
+Services/
+  LocalDatabase           ← SQLite CRUD
+  SyncService             ← Đồng bộ POI từ API
+  GeofenceService         ← Theo dõi vào/ra vùng
+  NarrationEngine         ← Phát audio/TTS
+Platforms/Android/
+  MainActivity.cs         ← Android entry point
+  MapUiCustomizer.cs      ← Tắt controls mặc định Google Maps
+
+### Dữ liệu hình ảnh
+
+- Backend admin lưu ảnh POI dưới dạng đường dẫn media như /media/ten_anh.jpg.
+- Mobile sync sẽ chuyển đường dẫn này sang URL phù hợp cho emulator hoặc máy thật.
+- Nếu dữ liệu local cũ đang giữ placeholder dotnet_bot.png hoặc file:///media/... thì cần sync lại hoặc xóa cache app để lấy ảnh mới.
+```
+
+---
+
+## 3. Cách chạy app
+
+### Yêu cầu môi trường
+
+| Công cụ | Phiên bản |
+|---|---|
+| .NET SDK | 10.0+ |
+| Android SDK | API 35+ |
+| Android Emulator | API 35, x86_64 |
+| Visual Studio / Rider | Có MAUI workload |
+| Node.js | Dùng cho VinhKhanh.Admin.Ui |
+
+Lưu ý khi chạy trên Android emulator:
+- Backend local nên chạy ở http://localhost:5000.
+- Emulator không đọc localhost trực tiếp, app sẽ tự đổi sang http://10.0.2.2:5000.
+
+### 3.1 Chạy Admin API (backend)
+
+```bash
+cd VinhKhanhFoodStreet/VinhKhanh.Admin
+dotnet run
+# API chạy tại http://localhost:5000
+```
+
+### 3.2 Chạy Admin UI (frontend)
+
+```bash
+cd VinhKhanhFoodStreet/VinhKhanh.Admin.Ui
+npm install
+npm run dev
+```
+
+### 3.3 Build Mobile Android
+
+```bash
+cd VinhKhanhFoodStreet
+
+dotnet build VinhKhanhFoodStreet.csproj -f net10.0-android -c Debug
+```
+
+APK output: `bin/Debug/net10.0-android/com.companyname.vinhkhanhfoodstreet-Signed.apk`
+
+### 3.4 Deploy lên emulator (script tự động)
+
+Chạy file `reinstall.bat` ở thư mục gốc:
+
+```bat
+reinstall.bat
+```
+
+Script thực hiện tuần tự:
+1. Force stop app cũ
+2. Xóa toàn bộ data/cache (`pm clear`)
+3. Gỡ cài đặt (`uninstall`)
+4. Cài APK mới (`install`)
+5. Xác nhận package tồn tại
+6. Launch app
+
+Nếu muốn cài thủ công sau khi build xong, dùng:
+
+```powershell
+$adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
+$apk = "C:\Users\phamq\Downloads\C Sharp\VinhKhanhFoodStreet\bin\Debug\net10.0-android\com.companyname.vinhkhanhfoodstreet-Signed.apk"
+& $adb install -r $apk
+& $adb shell monkey -p com.companyname.vinhkhanhfoodstreet -c android.intent.category.LAUNCHER 1
+```
+
+### 3.5 Deploy thủ công
+
+```bat
+set ADB=C:\Users\<user>\AppData\Local\Android\Sdk\platform-tools\adb.exe
+set APK=VinhKhanh.Mobile\bin\Debug\net9.0-android\com.vinhkhanh.mobile-Signed.apk
+
+# Xóa data sạch
+%ADB% -s emulator-5554 shell am force-stop com.vinhkhanh.mobile
+%ADB% -s emulator-5554 shell pm clear com.vinhkhanh.mobile
+%ADB% -s emulator-5554 uninstall com.vinhkhanh.mobile
+
+# Cài mới
+%ADB% -s emulator-5554 install "%APK%"
+
+# Launch
+%ADB% -s emulator-5554 shell monkey -p com.vinhkhanh.mobile -c android.intent.category.LAUNCHER 1
+```
+
+### 3.6 Xem crash log
+
+```bat
+%ADB% -s emulator-5554 logcat -d AndroidRuntime:E DOTNET:E *:S
+```
+
+### Thông tin package
+
+| Thông tin | Giá trị |
+|---|---|
+| Package ID | `com.companyname.vinhkhanhfoodstreet` |
+| API backend (emulator) | `http://10.0.2.2:5000` |
+| API backend (localhost) | `http://localhost:5000` |
+| DB local | `AppDataDirectory/vinhkhanh_foodstreet.db3` |
+
+---
+
+## 4. Luồng hoạt động
+
+### 4.1 Khởi động app
+
+```
+App.xaml.cs
+  └─ MainPage = NavigationPage(MapPage)
+
+MauiProgram.CreateMauiApp()
+  ├─ Đăng ký DI: LocalDatabase, SyncService, GeofenceService,
+  │              NarrationEngine, MapViewModel, MapPage
+  └─ UseMauiMaps() — khởi tạo bản đồ
+
+MapPage.OnAppearing
+  ├─ MapViewModel.LoadCommand → SyncAndReloadAsync
+  │    ├─ SyncService.SyncIfConnectedAsync() → GET api/pois/updates
+  │    └─ LocalDatabase.GetActivePoisAsync() → đọc SQLite
+  ├─ PlacePins(FilteredPois) → đặt pin lên bản đồ
+  ├─ Load danh sách POI theo category dropdown
+  ├─ Hiển thị ảnh POI qua ImagePath/PoiImageSource
+  └─ StartMonitoring() → GeofenceService.Start() + tự đồng bộ theo chu kỳ
+```
+
+### 4.2 Đồng bộ dữ liệu POI
+
+```
+SyncService.SyncIfConnectedAsync()
+  ├─ Kiểm tra kết nối mạng
+  ├─ Kiểm tra dung lượng trống
+  │    └─ < 200MB → textOnlyMode = true (không sync audio)
+  ├─ GET api/pois/updates?lastSync=...&includeAudio=...
+  ├─ MapToLocalPois() — chuyển Poi → PoiRecord (mỗi ngôn ngữ 1 record)
+  ├─ Normalize media path — đổi /media/... hoặc file:///media/... sang URL backend
+  ├─ UpsertPoisAsync() — lưu/cập nhật SQLite
+  ├─ DeletePoisAsync() — xóa POI đã bị xóa trên server
+  └─ SaveLastSyncTime() — lưu timestamp sync cuối
+```
+
+### 4.3 Lọc POI theo loại quán
+
+```
+MapViewModel
+  ├─ Pois (toàn bộ từ DB)
+  ├─ Categories (tự build từ Pois.Category, luôn có "Tất cả" đầu)
+  ├─ SelectedCategory (bind với Picker trên UI)
+  └─ FilteredPois = Pois nếu "Tất cả", ngược lại filter theo Category
+
+MapPage ← lắng nghe FilteredPois thay đổi → PlacePins()
+```
+
+### 4.4 Hiển thị thông tin POI (tap pin)
+
+```
+MapPage.OnMapClicked(tọa độ tap)
+  ├─ Tìm pin gần nhất trong vòng ~40m
+  └─ ShowPoiCard(poi)
+       ├─ Hiển thị tên, mô tả, category
+       ├─ Load ảnh từ poi.ImagePath
+       │    ├─ URL (http/https) → ImageSource.FromUri
+       │    ├─ /media/... hoặc file:///media/... → đổi sang URL backend
+       │    └─ File local → ImageSource.FromFile
+       └─ PoiCard.IsVisible = true (card trượt lên từ dưới)
+```
+
+### 4.5 Hiển thị danh sách POI
+
+```
+MainPage.OnAppearing / OnToggleLanguage / OnSearchPoi
+  ├─ LoadMapPinsAndListAsync(reloadFromDatabase: true)
+  ├─ GetLocalizedPoisAsync() — chọn bản ghi theo ngôn ngữ hiện tại
+  ├─ CreateDisplayPoi() — tạo item cho list UI
+  ├─ CategoryPicker — lọc theo nhóm quán
+  └─ PoiCollectionView — hiển thị thumbnail, tên, mô tả và nút nghe/đi đường
+```
+
+### 4.6 Luồng ảnh trên mobile
+
+```
+Admin upload ảnh
+  └─ lưu /media/ten_anh.jpg trong wwwroot
+
+PoiSyncUseCase / PoisController
+  └─ trả ImageUrl về mobile qua api/pois/updates
+
+Mobile sync
+  ├─ ResolveRemoteMediaPath / BuildRemoteMediaUrl
+  ├─ chuẩn hóa host localhost → 10.0.2.2 trên emulator
+  └─ lưu ImagePath vào SQLite
+
+UI
+  └─ POI.ImagePath → PoiImageSource → ImageSource.FromUri / FromFile
+```
+
+### 4.5 Geofence — trigger thuyết minh tự động
+
+```
+GeofenceService (chạy nền)
+  ├─ Lắng nghe GPS thay đổi
+  ├─ Tính khoảng cách Haversine đến từng POI active
+  ├─ Debounce — bỏ qua nhiễu GPS ngắn hạn
+  ├─ Cooldown — không trigger lại cùng POI trong thời gian ngắn
+  └─ Khi vào vùng hợp lệ → NarrationEngine.PlayAsync(poi)
+
+NarrationEngine.PlayAsync(poi)
+  ├─ Có AudioPath → phát file MP3 từ Resources/Raw/
+  └─ Không có → fallback TTS theo LanguageCode của POI
+```
+
+### 4.6 Zoom & MyLocation (custom buttons)
+
+```
+OnZoomInClicked  → _currentRadiusMeters / 1.8 → MoveToRegion
+OnZoomOutClicked → _currentRadiusMeters * 1.8 → MoveToRegion
+OnMyLocationClicked
+  ├─ Geolocation.GetLastKnownLocationAsync() (nhanh)
+  ├─ Fallback: GetLocationAsync(Medium accuracy)
+  └─ Fallback: CenterOnVinhKhanh() nếu lỗi quyền/GPS
+```
+
+### 4.7 Auto sync định kỳ
+
+```
+PeriodicTimer (15 phút)
+  └─ SyncAndReloadAsync(showAlert: false)
+       └─ Cập nhật FilteredPois → PlacePins() tự động
+```
+
+---
+
+## 5. Cấu trúc thư mục
+
+```
+VinhKhanhFoodStreet/
+├─ VinhKhanh.Mobile/
+│   ├─ Platforms/Android/
+│   │   ├─ MainActivity.cs        ← Android entry point (MainLauncher)
+│   │   └─ MapUiCustomizer.cs     ← Tắt Google Maps native controls
+│   ├─ Views/
+│   │   ├─ MapPage.xaml           ← UI full-screen, overlay controls
+│   │   └─ MapPage.xaml.cs        ← Logic pin, card, zoom, location
+│   ├─ ViewModels/
+│   │   └─ MapViewModel.cs        ← State, categories, filter, sync
+│   ├─ Services/
+│   │   ├─ LocalDatabase.cs       ← SQLite
+│   │   ├─ SyncService.cs         ← API sync
+│   │   ├─ GeofenceService.cs     ← Vùng địa lý
+│   │   └─ NarrationEngine.cs     ← Audio/TTS
+│   ├─ Models/
+│   │   └─ PoiRecord.cs           ← SQLite model
+│   ├─ MauiProgram.cs             ← DI + cấu hình
+│   └─ App.xaml.cs                ← Root page
+├─ VinhKhanh.Admin/               ← ASP.NET Core API
+├─ VinhKhanh.Admin.Ui/            ← React frontend
+├─ VinhKhanh.Shared/              ← Models dùng chung
+├─ reinstall.bat                  ← Script deploy emulator
+└─ README.md
+```
+
+---
+
+## 6. Tiến độ & tồn đọng
+
 | Phân hệ | Tiến độ | Trạng thái |
 |---|---:|---|
-| Kiến trúc & dữ liệu | 92% | DI + SQLite ổn định, dữ liệu mẫu đa ngôn ngữ có sẵn |
-| Location & Geofence | 95% | Đã vận hành, có debounce/cooldown |
-| Audio/Narration | 78% | Đã phát file + TTS, đã xử lý đăng ký player |
-| UI/UX & bản đồ | 60% | Đã tách map/list, tìm kiếm kính lúp, lọc danh mục |
-| Web Admin/API | 0% | Chưa triển khai |
-| MVP mở rộng (QR, payment, offline rule) | 10% | Mới ở mức kế hoạch |
+| Kiến trúc & DI | 100% | Hoàn thiện |
+| SQLite + Sync | 90% | Ổn định, cần test offline edge case |
+| Geofence | 95% | Debounce/cooldown hoạt động |
+| Audio/TTS | 78% | Có fallback TTS, cần test đa thiết bị |
+| UI/UX Mobile | 80% | Full-screen map, filter, POI card với ảnh |
+| Web Admin API | 40% | CRUD POI cơ bản |
+| Admin UI | 30% | Scaffold xong, chưa hoàn thiện |
 
-## 5. Các tồn đọng quan trọng cần xử lý tiếp
-### 5.1 Danh sách quán ăn
-Đã cải thiện mạnh phần tải dữ liệu, nhưng vẫn cần:
-1. Thêm màn debug nội bộ để so sánh số lượng:
-- Tổng POI trong DB.
-- Sau chuẩn hóa ngôn ngữ.
-- Sau lọc category.
-- Sau lọc search text.
-2. Thêm thao tác Refresh dữ liệu thủ công trên UI để kiểm chứng nhanh sau khi thêm POI mới.
-3. Chuẩn hóa quy tắc định danh quán (group key) để tránh trùng/thiếu khi tọa độ quá sát.
+### Tồn đọng ưu tiên cao
 
-### 5.2 Đa ngôn ngữ
-Đã đồng bộ lại luồng đổi ngôn ngữ, nhưng cần hoàn thiện thêm:
-1. Kiểm tra độ phủ nội dung cho từng POI ở vi/en/ja.
-2. Chuẩn hóa fallback ở mọi lớp (UI list, geofence, narration).
-3. Đồng bộ ngôn ngữ cho toàn bộ text tĩnh trên UI.
+1. Điều tra crash khi khởi động app trên emulator (đang xử lý)
+2. Thêm `ACCESS_FINE_LOCATION` permission request khi app lần đầu chạy
+3. Kiểm tra `Category` field có được sync từ API không (hiện đang để `string.Empty`)
+4. Test ảnh POI load từ URL thực tế
 
-### 5.3 UI/UX
-1. Nâng cấp bottom sheet chuẩn sản phẩm.
-2. Thêm mini player có trạng thái đang phát/tạm dừng.
-3. Custom pin theo loại quán trên bản đồ.
-4. Popup thông tin nhanh khi chạm pin.
+---
 
-## 6. Build, đóng gói và triển khai Android
-### 6.1 Trạng thái build
-- Build Android Release thành công.
-- Không có lỗi chặn build.
+## 7. Lịch sử lỗi & bản vá
 
-### 6.2 Trạng thái đóng gói/cài đặt
-- APK đã được xuất và cài lại lên emulator Android Studio.
-- Package xác nhận tồn tại trên thiết bị:
-  - com.companyname.vinhkhanhfoodstreet
+### 2026-04-03 — Admin mục Phân tích / Cài đặt nhảy về login ở đầu
+- Triệu chứng: Khi mở một số trang trong khu vực admin như Phân tích và Cài đặt, giao diện tự cuộn hoặc nhảy về phần login ở phía trên thay vì giữ đúng vị trí nội dung.
+- Khu vực ảnh hưởng: Admin UI, các trang có layout dài hoặc có vùng điều hướng/đăng nhập ở đầu trang.
+- Ghi chú: Đây là lỗi hành vi giao diện, cần kiểm tra lại state điều hướng, anchor scroll và logic render lại khi chuyển tab.
 
-## 7. Hướng dẫn thao tác nhanh cho team
-### 7.1 Build Android
-- dotnet build -f net10.0-android -c Release
+### 2026-04-03 — Crash khi khởi động (đang điều tra)
+- Triệu chứng: App crash ngay sau splash screen
+- Nguyên nhân nghi ngờ: thiếu Google Maps API key hoặc lỗi permission location
+- Hướng xử lý: xem logcat `AndroidRuntime:E DOTNET:E`
 
-### 7.2 Xuất APK
-- dotnet publish -f net10.0-android -c Release -p:AndroidPackageFormat=apk -p:AndroidKeyStore=false
+### 2026-04-03 — Thiếu MainActivity.cs
+- Triệu chứng: APK cài được nhưng không có launcher activity, monkey abort
+- Nguyên nhân: file `Platforms/Android/MainActivity.cs` bị thiếu
+- Bản vá: tạo lại `MainActivity : MauiAppCompatActivity` với `MainLauncher = true`
 
-### 7.3 Cài APK lên emulator
-- adb install -r đường_dẫn_đến_file_apk
+### 2026-04-03 — Package name sai (VinhKhanh.Mobile thay vì com.vinhkhanh.mobile)
+- Nguyên nhân: thiếu `<ApplicationId>` trong csproj
+- Bản vá: thêm `<ApplicationId>com.vinhkhanh.mobile</ApplicationId>` vào csproj
 
-## 8. Kế hoạch thực hiện 2 sprint gần nhất
-### Sprint A (ưu tiên cao)
-1. Hoàn thiện kiểm chứng danh sách quán bằng bộ log đối chiếu.
-2. Chuẩn hóa i18n cho toàn bộ UI và dữ liệu.
-3. Hoàn thiện mini player + bottom sheet.
+### 2026-03-28 — Audio không phát được
+- Triệu chứng: `Không thể phát xong file âm thanh: lau-nuong.mp3`
+- Nguyên nhân: hàm chuẩn hóa đường dẫn cắt mất thư mục con `audio/vi/`
+- Bản vá: giữ nguyên đường dẫn đầy đủ, giảm timeout 30s → 12s, thêm fallback TTS
 
-### Sprint B
-1. Scaffold ASP.NET Core Web API quản trị POI.
-2. Thiết kế cơ sở dữ liệu server cho CMS.
-3. Tạo Admin Dashboard bản đầu.
+### 2026-03-28 — Frame obsolete warning (.NET 9)
+- Nguyên nhân: `Frame` bị deprecated từ .NET 9
+- Bản vá: thay toàn bộ `Frame` → `Border` với `StrokeShape="RoundRectangle"`
 
-## 9. Rủi ro kỹ thuật và hướng giảm thiểu
-1. Nhiễu GPS đô thị gây trigger sai:
-- Giảm bằng debounce, cooldown, tối ưu radius theo khu vực.
-2. Mất đồng bộ dữ liệu đa ngôn ngữ:
-- Giảm bằng fallback rõ ràng + kiểm thử độ phủ theo POI.
-3. Audio không ổn định giữa thiết bị:
-- Giảm bằng fallback TTS và logging chi tiết từng phiên phát.
+### 2026-03-28 — PinClicked không tồn tại
+- Nguyên nhân: MAUI Maps không có event `PinClicked` trên `Map`
+- Bản vá: dùng `MapClicked` + tìm pin gần nhất trong vòng ~40m
 
-## 10. Kết luận
-Dự án đã đạt nền tảng kỹ thuật tốt cho lõi Mobile: dữ liệu cục bộ, geofence, và phát thuyết minh theo vị trí. Phần tải danh sách quán ăn từ POI đã được nâng cấp theo hướng có fallback ngôn ngữ và đồng bộ lại khi đổi ngôn ngữ. Bước tiếp theo nên tập trung hoàn thiện trải nghiệm UI/UX chuyên nghiệp và triển khai Web Admin để đưa hệ thống vào vận hành thực tế.
-
-## 11. Cập nhật lỗi thực tế (2026-03-28)
-### 11.1 Mô tả lỗi
-- Người dùng bấm phát audio tại danh sách quán và nhận thông báo:
-  - `Không thể phát âm thanh: Không thể phát xong file âm thanh: lau-nuong.mp3`
-
-### 11.2 Nguyên nhân gốc
-- Trong `NarrationService`, hàm chuẩn hóa đường dẫn audio đã cắt mất thư mục con.
-- Ví dụ đường dẫn đúng từ dữ liệu POI: `audio/vi/lau-nuong.mp3`
-- Sau chuẩn hóa cũ, app chỉ còn `lau-nuong.mp3` -> MediaElement không tìm đúng asset trong `Resources/Raw/audio/vi`.
-
-### 11.3 Bản vá đã áp dụng
-1. Giữ nguyên đường dẫn logic audio theo cấu trúc thư mục trong app package.
-2. Thêm bước kiểm tra file audio tồn tại trước khi phát để fail sớm, tránh timeout dài.
-3. Giảm timeout chờ phát từ 30s xuống 12s để phản hồi lỗi nhanh hơn.
-4. Bổ sung fallback TTS ở nút phát audio trong danh sách nếu phát file thất bại.
-
-### 11.4 Kết quả mong đợi sau bản vá
-- Với POI có đường dẫn đúng (`audio/vi/...`, `audio/en/...`, `audio/ja/...`): phát file thành công.
-- Nếu file thiếu/hỏng: app không kẹt lâu, tự chuyển qua TTS thay vì dừng hẳn chức năng nghe nội dung.
+### 2026-03-28 — SyncService.MapToLocalPois gọi instance method từ static
+- Nguyên nhân: `MapToLocalPois` khai báo `static` nhưng gọi `BuildRemoteMediaUrl` là instance method
+- Bản vá: bỏ `static` khỏi `MapToLocalPois`
