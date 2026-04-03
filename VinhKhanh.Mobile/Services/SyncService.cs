@@ -150,8 +150,14 @@ public class SyncService(HttpClient http, LocalDatabase db)
         return new Uri(baseAddress, mediaPath).ToString();
     }
 
-    private static Uri NormalizeAndroidLoopbackUri(Uri uri)
+    private Uri NormalizeAndroidLoopbackUri(Uri uri)
     {
+        if (string.Equals(uri.Scheme, Uri.UriSchemeFile, StringComparison.OrdinalIgnoreCase) &&
+            uri.AbsolutePath.StartsWith("/media/", StringComparison.OrdinalIgnoreCase))
+        {
+            return BuildBackendMediaUri(uri.AbsolutePath);
+        }
+
         if (DeviceInfo.Current.Platform != DevicePlatform.Android)
         {
             return uri;
@@ -170,6 +176,12 @@ public class SyncService(HttpClient http, LocalDatabase db)
         };
 
         return builder.Uri;
+    }
+
+    private Uri BuildBackendMediaUri(string mediaPath)
+    {
+        var baseAddress = http.BaseAddress ?? new Uri("http://10.0.2.2:5000/");
+        return new Uri(baseAddress, mediaPath.TrimStart('/'));
     }
 
     private static int GetLanguageSlot(string? languageCode) => languageCode?.Trim().ToLowerInvariant() switch

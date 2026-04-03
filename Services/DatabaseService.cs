@@ -395,6 +395,12 @@ public class DatabaseService : IDatabaseService
 
     private static Uri NormalizeAndroidLoopbackUri(Uri uri)
     {
+        if (string.Equals(uri.Scheme, Uri.UriSchemeFile, StringComparison.OrdinalIgnoreCase) &&
+            uri.AbsolutePath.StartsWith("/media/", StringComparison.OrdinalIgnoreCase))
+        {
+            return BuildBackendMediaUri(uri.AbsolutePath);
+        }
+
         if (DeviceInfo.Current.Platform != DevicePlatform.Android)
         {
             return uri;
@@ -413,6 +419,12 @@ public class DatabaseService : IDatabaseService
         };
 
         return builder.Uri;
+    }
+
+    private static Uri BuildBackendMediaUri(string mediaPath)
+    {
+        var baseUri = new Uri(AppConfig.BaseApiUrl, UriKind.Absolute);
+        return new Uri(baseUri, mediaPath.TrimStart('/'));
     }
 
     private static DateTime GetLastSyncTime()
