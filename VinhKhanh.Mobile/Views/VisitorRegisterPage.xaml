@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:VinhKhanh.Mobile.ViewModels"
+             x:Class="VinhKhanh.Mobile.Views.VisitorRegisterPage"
+             Title="Đăng ký tài khoản"
+             BackgroundColor="#F5F5F5">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16" VerticalOptions="Center">
+
+            <Label Text="Tạo tài khoản Visitor" FontSize="22" FontAttributes="Bold"
+                   HorizontalOptions="Center" Margin="0,0,0,8"/>
+
+            <Frame BackgroundColor="White" CornerRadius="12" Padding="16">
+                <VerticalStackLayout Spacing="12">
+                    <Entry Placeholder="Họ và tên" Text="{Binding FullName}" Keyboard="Text"/>
+                    <Entry Placeholder="Email" Text="{Binding Email}" Keyboard="Email"/>
+                    <Entry Placeholder="Mật khẩu (ít nhất 6 ký tự)" Text="{Binding Password}" IsPassword="True"/>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- Thông báo lỗi -->
+            <Label Text="{Binding ErrorMessage}" TextColor="Red" FontSize="13"
+                   IsVisible="{Binding ErrorMessage, Converter={StaticResource StringToBoolConverter}}"
+                   HorizontalOptions="Center"/>
+
+            <Button Text="Đăng ký" Command="{Binding RegisterCommand}"
+                    IsEnabled="{Binding IsBusy, Converter={StaticResource InvertBoolConverter}}"
+                    BackgroundColor="#FF7F50" TextColor="White"
+                    CornerRadius="12" Padding="16,12" FontSize="16"/>
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}"
+                               Color="#FF7F50" HorizontalOptions="Center"/>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

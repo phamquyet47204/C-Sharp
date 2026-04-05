@@ -4,6 +4,9 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>VinhKhanh.Mobile</RootNamespace>
     <UseMaui>true</UseMaui>
+    <ApplicationId>com.vinhkhanh.mobile</ApplicationId>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>

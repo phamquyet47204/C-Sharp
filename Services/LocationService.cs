@@ -277,7 +277,7 @@ public class LocationService : ILocationService
     /// <summary>
     /// Xin quyen vi tri:
     /// - Bat buoc LocationWhenInUse.
-    /// - Co gang xin LocationAlways de app van thuyet minh khi tat man hinh.
+    /// - Co gang xin LocationAlways nhung khong crash neu bi tu choi (chi warn).
     /// </summary>
     private static async Task EnsureLocationPermissionsAsync()
     {
@@ -292,16 +292,25 @@ public class LocationService : ILocationService
             throw new PermissionException("Nguoi dung tu choi quyen LocationWhenInUse.");
         }
 
-        var alwaysStatus = await Permissions.CheckStatusAsync<Permissions.LocationAlways>();
-        if (alwaysStatus != PermissionStatus.Granted)
+        // LocationAlways la tuy chon: neu bi tu choi thi app van chay binh thuong khi o foreground.
+        try
         {
-            alwaysStatus = await Permissions.RequestAsync<Permissions.LocationAlways>();
-        }
+            var alwaysStatus = await Permissions.CheckStatusAsync<Permissions.LocationAlways>();
+            if (alwaysStatus != PermissionStatus.Granted)
+            {
+                alwaysStatus = await Permissions.RequestAsync<Permissions.LocationAlways>();
+            }
 
-        if (alwaysStatus != PermissionStatus.Granted)
+            if (alwaysStatus != PermissionStatus.Granted)
+            {
+                Debug.WriteLine("[LocationService] LocationAlways bi tu choi, app chi theo doi vi tri khi o foreground.");
+                await ShowAlwaysPermissionExplanationAsync();
+            }
+        }
+        catch (Exception ex)
         {
-            await ShowAlwaysPermissionExplanationAsync();
-            throw new PermissionException("Nguoi dung tu choi quyen LocationAlways.");
+            // Khong crash neu quyen Always khong kha dung (emulator, mot so thiet bi).
+            Debug.WriteLine($"[LocationService] Khong the xin quyen LocationAlways: {ex.Message}");
         }
     }
 

@@ -1,39 +1,95 @@
 using SQLite;
-using VinhKhanh.Shared.Models;
+using VinhKhanh.Mobile.Models;
 
 namespace VinhKhanh.Mobile.Services;
 
 public class LocalDatabase
 {
     private readonly SQLiteAsyncConnection _db;
+    private readonly SemaphoreSlim _dbLock = new(1, 1);
 
     public LocalDatabase(string dbPath)
     {
         _db = new SQLiteAsyncConnection(dbPath);
-        _db.CreateTableAsync<Poi>().Wait();
+        _db.CreateTableAsync<PoiRecord>().Wait();
         _db.CreateTableAsync<NarrationEvent>().Wait();
     }
 
-    public Task<List<Poi>> GetActivePoisAsync() =>
-        _db.Table<Poi>().Where(p => p.IsActive).OrderByDescending(p => p.Priority).ToListAsync();
-
-    public async Task UpsertPoisAsync(IEnumerable<Poi> pois)
+    public async Task<List<PoiRecord>> GetActivePoisAsync()
     {
-        foreach (var poi in pois)
-            await _db.InsertOrReplaceAsync(poi);
+        await _dbLock.WaitAsync();
+        try
+        {
+            return await _db.Table<PoiRecord>().Where(p => p.IsActive).OrderByDescending(p => p.Priority).ToListAsync();
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
+    }
+
+    public async Task<PoiRecord?> GetPoiByIdAsync(int poiId)
+    {
+        await _dbLock.WaitAsync();
+        try
+        {
+            return await _db.Table<PoiRecord>().Where(p => p.Id == poiId).FirstOrDefaultAsync();
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
+    }
+
+    public async Task UpsertPoisAsync(IEnumerable<PoiRecord> pois)
+    {
+        await _dbLock.WaitAsync();
+        try
+        {
+            foreach (var poi in pois)
+            {
+                await _db.InsertOrReplaceAsync(poi);
+            }
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
     }
 
     public async Task DeletePoisAsync(IEnumerable<int> ids)
     {
-        foreach (var id in ids)
-            await _db.DeleteAsync<Poi>(id);
+        await _dbLock.WaitAsync();
+        try
+        {
+            foreach (var id in ids)
+            {
+                var rows = await _db.Table<PoiRecord>()
+                    .Where(p => p.BasePoiId == id)
+                    .ToListAsync();
+
+                foreach (var row in rows)
+                {
+                    await _db.DeleteAsync(row);
+                }
+            }
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
     }
 
-    public Task<DateTime> GetLastSyncTimeAsync() =>
-        _db.Table<NarrationEvent>()
-           .OrderByDescending(e => e.TriggeredAt)
-           .FirstOrDefaultAsync()
-           .ContinueWith(t => t.Result?.TriggeredAt ?? DateTime.MinValue);
-
-    public Task LogNarrationAsync(NarrationEvent e) => _db.InsertAsync(e);
+    public async Task LogNarrationAsync(NarrationEvent e)
+    {
+        await _dbLock.WaitAsync();
+        try
+        {
+            await _db.InsertAsync(e);
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
+    }
 }

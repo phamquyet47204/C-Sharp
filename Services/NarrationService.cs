@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Maui.Views;
@@ -46,9 +47,17 @@ public partial class NarrationService : INarrationService
 
         await RunExclusiveNarrationAsync(async ct =>
         {
+            await StopMediaElementIfNeededAsync();
+
             // Uu tien ngon ngu user chon trong app; neu chua co moi dung ngon ngu truyen vao/he thong.
             var effectiveLang = _appLanguageService.GetEffectiveLanguage(lang);
             var locale = await ResolveBestLocaleAsync(effectiveLang);
+            var sanitizedText = SanitizeTtsText(text);
+
+            if (string.IsNullOrWhiteSpace(sanitizedText))
+            {
+                return;
+            }
 
             // Offline-first: TTS van uu tien engine noi bo cua may.
             if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
@@ -58,9 +67,12 @@ public partial class NarrationService : INarrationService
 
             Debug.WriteLine($"[NarrationService] Bat dau TTS ({locale?.Language}:{locale?.Country})");
 
-            await TextToSpeech.Default.SpeakAsync(text, new SpeechOptions
+            await TextToSpeech.Default.SpeakAsync(sanitizedText, new SpeechOptions
             {
-                Locale = locale
+                Locale = locale,
+                Pitch = 1.0f,
+                Rate = 0.92f,
+                Volume = 1.0f
             }, ct);
 
             Debug.WriteLine("[NarrationService] TTS hoan tat");
@@ -126,6 +138,7 @@ public partial class NarrationService : INarrationService
             try
             {
                 await BeginAudioDuckingAsync();
+                await Task.Delay(120, ct);
                 await work(ct);
             }
             finally
@@ -133,6 +146,39 @@ public partial class NarrationService : INarrationService
                 EndAudioDucking();
             }
         });
+    }
+
+    private async Task StopMediaElementIfNeededAsync()
+    {
+        try
+        {
+            var mediaElement = await ResolveNarrationMediaElementAsync();
+            if (mediaElement is null)
+            {
+                return;
+            }
+
+            await MainThread.InvokeOnMainThreadAsync(() => mediaElement.Stop());
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[NarrationService] Loi StopMediaElementIfNeededAsync: {ex.Message}");
+        }
+    }
+
+    private static string SanitizeTtsText(string input)
+    {
+        // Loai cac ky tu icon/symbol de giam kha nang engine TTS phat am bi re, vo am.
+        var text = input
+            .Replace("🔊", " ")
+            .Replace("🧭", " ")
+            .Replace("🔍", " ")
+            .Replace("✕", " ")
+            .Replace("★", " ")
+            .Replace("↔", " ");
+
+        text = Regex.Replace(text, "\\s+", " ").Trim();
+        return text;
     }
 
     private static string NormalizeAudioPath(string filePath)

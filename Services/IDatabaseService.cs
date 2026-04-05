@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using VinhKhanhFoodStreet.Models;
 
@@ -16,4 +17,5 @@ public interface IDatabaseService
     Task<int> DeletePoiAsync(int poiId);
     Task<List<POI>> GetAllPoisAsync();
     Task<List<POI>> GetLocalizedPoisAsync(string langCode);
+    Task<bool> SyncPoisFromServerAsync(CancellationToken cancellationToken = default);
 }

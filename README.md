@@ -1,383 +1,623 @@
-# VinhKhanh Food Street — Tài liệu dự án
+# Tài liệu Hệ thống VinhKhanh Food Street
 
-## Mục lục
-1. [Tổng quan](#1-tổng-quan)
-2. [Kiến trúc hệ thống](#2-kiến-trúc-hệ-thống)
-3. [Cách chạy app](#3-cách-chạy-app)
-4. [Luồng hoạt động](#4-luồng-hoạt-động)
-5. [Cấu trúc thư mục](#5-cấu-trúc-thư-mục)
-6. [Tiến độ & tồn đọng](#6-tiến-độ--tồn-đọng)
-7. [Lịch sử lỗi & bản vá](#7-lịch-sử-lỗi--bản-vá)
+> Phiên bản: 1.0 | Cập nhật: 04/2026
 
 ---
 
-## 1. Tổng quan
+## 1. Tổng quan hệ thống
 
-Hệ sinh thái du lịch ẩm thực phố Vĩnh Khánh, Quận 4, TP.HCM gồm 2 khối:
+VinhKhanh Food Street là nền tảng du lịch ẩm thực thông minh gồm 3 thành phần chính:
 
-| Khối | Công nghệ | Mô tả |
+| Thành phần | Công nghệ | Mô tả |
 |---|---|---|
-| Mobile App | .NET 10 MAUI | Bản đồ, geofence, thuyết minh tự động theo vị trí |
-| Web Admin | ASP.NET Core + React | Quản trị POI, nội dung, media |
+| **Backend API** | ASP.NET Core 10, EF Core, SQL Server | REST API trung tâm |
+| **Admin Web UI** | React 18, Vite, Tailwind CSS | Quản trị & cổng chủ quán |
+| **Mobile App** | .NET MAUI (Android) | App du khách |
 
-Repo đang dùng mô hình mono-repo. Mobile chạy từ project gốc VinhKhanhFoodStreet.csproj, còn phần backend/admin nằm trong các thư mục VinhKhanh.Admin, VinhKhanh.Application, VinhKhanh.Domain, VinhKhanh.Infrastructure và VinhKhanh.Shared.
+**Domain:** `https://enormitpham.me`  
+**Server:** AWS EC2 t3.medium, Singapore (`ap-southeast-1`)  
+**SSL:** AWS ALB + ACM Certificate
 
 ---
 
 ## 2. Kiến trúc hệ thống
 
 ```
-VinhKhanh.Mobile          ← MAUI Android/iOS
-VinhKhanh.Admin           ← ASP.NET Core Web API
-VinhKhanh.Admin.Ui        ← React + Tailwind
-VinhKhanh.Application     ← Use cases
-VinhKhanh.Domain          ← Entities, interfaces
-VinhKhanh.Infrastructure  ← EF Core, repositories
-VinhKhanh.Shared          ← Models dùng chung
+┌─────────────────────────────────────────────────────────────┐
+│                        INTERNET                             │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ HTTPS
+              ┌────────▼────────┐
+              │   AWS ALB       │  (enormitpham.me)
+              │   + ACM SSL     │
+              └────────┬────────┘
+                       │ HTTP :80
+              ┌────────▼────────┐
+              │   EC2 t3.medium │
+              │   Ubuntu 22.04  │
+              │                 │
+              │  ┌───────────┐  │
+              │  │   Nginx   │  │  port 80
+              │  │           │  │
+              │  │ /         │  │──► React SPA (static files)
+              │  │ /api/     │  │──► ASP.NET Core :5000
+              │  │ /media/   │  │──► ASP.NET Core :5000
+              │  └───────────┘  │
+              │                 │
+              │  ┌───────────┐  │
+              │  │ ASP.NET   │  │  port 5000 (systemd service)
+              │  │ Core API  │  │
+              │  └─────┬─────┘  │
+              │        │        │
+              │  ┌─────▼─────┐  │
+              │  │SQL Server │  │  port 1433 (Docker container)
+              │  │  Docker   │  │
+              │  └───────────┘  │
+              └─────────────────┘
+
+Mobile App (Android)
+  └── HTTPS ──► enormitpham.me/api/
 ```
 
-### Mobile — các lớp chính
+### 2.1 Kiến trúc Clean Architecture (Backend)
 
 ```
-MauiProgram.cs            ← DI container, cấu hình services
-App.xaml.cs               ← Entry point, NavigationPage
-Views/MapPage             ← UI bản đồ full-screen
-ViewModels/MapViewModel   ← State, filter, sync logic
-Services/
-  LocalDatabase           ← SQLite CRUD
-  SyncService             ← Đồng bộ POI từ API
-  GeofenceService         ← Theo dõi vào/ra vùng
-  NarrationEngine         ← Phát audio/TTS
-Platforms/Android/
-  MainActivity.cs         ← Android entry point
-  MapUiCustomizer.cs      ← Tắt controls mặc định Google Maps
-
-### Dữ liệu hình ảnh
-
-- Backend admin lưu ảnh POI dưới dạng đường dẫn media như /media/ten_anh.jpg.
-- Mobile sync sẽ chuyển đường dẫn này sang URL phù hợp cho emulator hoặc máy thật.
-- Nếu dữ liệu local cũ đang giữ placeholder dotnet_bot.png hoặc file:///media/... thì cần sync lại hoặc xóa cache app để lấy ảnh mới.
+VinhKhanhFoodStreet/
+├── VinhKhanh.Domain/          # Entities, Interfaces (không phụ thuộc gì)
+│   └── Entities/
+│       ├── Poi.cs             # Điểm tham quan
+│       ├── PoiLocalization.cs # Nội dung đa ngôn ngữ
+│       ├── ApplicationUser.cs # User (Identity)
+│       ├── AnalyticsEvent.cs  # Sự kiện analytics
+│       ├── Payment.cs         # Thanh toán
+│       └── FreeTrialRecord.cs # Lịch sử dùng thử
+│
+├── VinhKhanh.Application/     # Use Cases (business logic)
+│   └── UseCases/
+│       ├── PoiSyncUseCase.cs       # Đồng bộ POI cho mobile
+│       ├── AnalyticsVisitUseCase.cs # Ghi nhận lượt xem
+│       └── AdminApproveUseCase.cs  # Duyệt POI
+│
+├── VinhKhanh.Infrastructure/  # EF Core, Migrations, Repositories
+│   ├── Data/AppDbContext.cs
+│   ├── Repositories/
+│   └── Migrations/
+│
+├── VinhKhanh.Shared/          # DTOs dùng chung (API ↔ Mobile)
+│   └── Models/
+│       ├── SyncRequest.cs
+│       ├── SyncResponse.cs
+│       └── Poi.cs (DTO)
+│
+├── VinhKhanh.Admin/           # ASP.NET Core Web API
+│   ├── Controllers/
+│   │   ├── AuthController.cs      # Đăng nhập, đăng ký
+│   │   ├── AdminController.cs     # Quản lý POI, duyệt
+│   │   ├── ShopController.cs      # Cổng chủ quán
+│   │   ├── AnalyticsController.cs # Thống kê
+│   │   └── PoisController.cs      # Sync endpoint cho mobile
+│   └── Program.cs
+│
+├── VinhKhanh.Admin.Ui/        # React SPA
+│   └── src/pages/
+│       ├── Dashboard.jsx      # Tổng quan
+│       ├── PoiManager.jsx     # Quản lý POI
+│       ├── Approvals.jsx      # Duyệt POI
+│       ├── Analytics.jsx      # Thống kê
+│       └── shop/              # Cổng chủ quán
+│
+└── VinhKhanh.Mobile/          # .NET MAUI Android
+    ├── Services/
+    │   ├── SyncService.cs     # Đồng bộ từ server
+    │   ├── NarrationEngine.cs # TTS / phát audio
+    │   ├── AuthService.cs     # Đăng nhập
+    │   └── GeofenceService.cs # Phát hiện vị trí
+    └── ViewModels/
+        └── MapViewModel.cs    # Logic bản đồ
 ```
 
 ---
 
-## 3. Cách chạy app
+## 3. Cơ sở dữ liệu
 
-### Yêu cầu môi trường
+### 3.1 Sơ đồ bảng chính
 
-| Công cụ | Phiên bản |
+```
+AspNetUsers (Identity)
+├── Id (PK)
+├── Email, PasswordHash
+├── FullName, IsApproved
+├── ActivationDate
+├── IsPremium, PremiumExpiry
+├── ShopName, ShopAddress, ShopPhone
+└── PoiId (FK → Pois, nullable)
+
+Pois
+├── Id (PK, IDENTITY)
+├── BasePoiId (string, unique slug)
+├── Latitude, Longitude, Radius
+├── CategoryCode (FOOD_STREET | FOOD_SNAIL | FOOD_BBQ | DRINK | UTILITY)
+├── Status (0=Draft | 1=Pending_Approval | 2=Approved | 3=Rejected | 4=Hidden)
+├── IsApproved (bit, sync với Status)
+├── IsPremium (bit)
+├── OwnerId (FK → AspNetUsers, nullable)
+├── ImageUrl
+├── RejectionReason
+├── CreatedAt, UpdatedAt
+└── Priority
+
+PoiLocalizations
+├── Id (PK)
+├── PoiId (FK → Pois, CASCADE DELETE)
+├── LanguageCode (vi | en | ja)
+├── Name, Description
+└── AudioUrl (đường dẫn file MP3)
+
+AnalyticsEvents
+├── Id (PK)
+├── Latitude, Longitude
+├── Timestamp
+├── DeviceId
+├── PoiId (FK → Pois, nullable)
+└── EventType (visit | narration)
+
+FreeTrialRecords
+├── Id (PK)
+├── DeviceId
+├── PoiId (FK → Pois)
+└── FirstHeardAt
+
+Payments
+├── Id (PK)
+├── UserId (FK → AspNetUsers)
+├── TransactionId (UNIQUE)
+├── Amount, Currency
+└── CreatedAt
+```
+
+### 3.2 Phân quyền người dùng
+
+| Role | Quyền |
 |---|---|
-| .NET SDK | 10.0+ |
-| Android SDK | API 35+ |
-| Android Emulator | API 35, x86_64 |
-| Visual Studio / Rider | Có MAUI workload |
-| Node.js | Dùng cho VinhKhanh.Admin.Ui |
-
-Lưu ý khi chạy trên Android emulator:
-- Backend local nên chạy ở http://localhost:5000.
-- Emulator không đọc localhost trực tiếp, app sẽ tự đổi sang http://10.0.2.2:5000.
-
-### 3.1 Chạy Admin API (backend)
-
-```bash
-cd VinhKhanhFoodStreet/VinhKhanh.Admin
-dotnet run
-# API chạy tại http://localhost:5000
-```
-
-### 3.2 Chạy Admin UI (frontend)
-
-```bash
-cd VinhKhanhFoodStreet/VinhKhanh.Admin.Ui
-npm install
-npm run dev
-```
-
-### 3.3 Build Mobile Android
-
-```bash
-cd VinhKhanhFoodStreet
-
-dotnet build VinhKhanhFoodStreet.csproj -f net10.0-android -c Debug
-```
-
-APK output: `bin/Debug/net10.0-android/com.companyname.vinhkhanhfoodstreet-Signed.apk`
-
-### 3.4 Deploy lên emulator (script tự động)
-
-Chạy file `reinstall.bat` ở thư mục gốc:
-
-```bat
-reinstall.bat
-```
-
-Script thực hiện tuần tự:
-1. Force stop app cũ
-2. Xóa toàn bộ data/cache (`pm clear`)
-3. Gỡ cài đặt (`uninstall`)
-4. Cài APK mới (`install`)
-5. Xác nhận package tồn tại
-6. Launch app
-
-Nếu muốn cài thủ công sau khi build xong, dùng:
-
-```powershell
-$adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
-$apk = "C:\Users\phamq\Downloads\C Sharp\VinhKhanhFoodStreet\bin\Debug\net10.0-android\com.companyname.vinhkhanhfoodstreet-Signed.apk"
-& $adb install -r $apk
-& $adb shell monkey -p com.companyname.vinhkhanhfoodstreet -c android.intent.category.LAUNCHER 1
-```
-
-### 3.5 Deploy thủ công
-
-```bat
-set ADB=C:\Users\<user>\AppData\Local\Android\Sdk\platform-tools\adb.exe
-set APK=VinhKhanh.Mobile\bin\Debug\net9.0-android\com.vinhkhanh.mobile-Signed.apk
-
-# Xóa data sạch
-%ADB% -s emulator-5554 shell am force-stop com.vinhkhanh.mobile
-%ADB% -s emulator-5554 shell pm clear com.vinhkhanh.mobile
-%ADB% -s emulator-5554 uninstall com.vinhkhanh.mobile
-
-# Cài mới
-%ADB% -s emulator-5554 install "%APK%"
-
-# Launch
-%ADB% -s emulator-5554 shell monkey -p com.vinhkhanh.mobile -c android.intent.category.LAUNCHER 1
-```
-
-### 3.6 Xem crash log
-
-```bat
-%ADB% -s emulator-5554 logcat -d AndroidRuntime:E DOTNET:E *:S
-```
-
-### Thông tin package
-
-| Thông tin | Giá trị |
-|---|---|
-| Package ID | `com.companyname.vinhkhanhfoodstreet` |
-| API backend (emulator) | `http://10.0.2.2:5000` |
-| API backend (localhost) | `http://localhost:5000` |
-| DB local | `AppDataDirectory/vinhkhanh_foodstreet.db3` |
+| **Admin** | Toàn quyền: quản lý POI, duyệt, xem analytics, quản lý users |
+| **ShopOwner** | Tạo/sửa/xóa POI của mình, xem thống kê POI của mình |
+| **Visitor** | Chỉ đọc: sync POI, nghe thuyết minh |
 
 ---
 
 ## 4. Luồng hoạt động
 
-### 4.1 Khởi động app
+### 4.1 Luồng đăng ký & duyệt tài khoản ShopOwner
 
 ```
-App.xaml.cs
-  └─ MainPage = NavigationPage(MapPage)
-
-MauiProgram.CreateMauiApp()
-  ├─ Đăng ký DI: LocalDatabase, SyncService, GeofenceService,
-  │              NarrationEngine, MapViewModel, MapPage
-  └─ UseMauiMaps() — khởi tạo bản đồ
-
-MapPage.OnAppearing
-  ├─ MapViewModel.LoadCommand → SyncAndReloadAsync
-  │    ├─ SyncService.SyncIfConnectedAsync() → GET api/pois/updates
-  │    └─ LocalDatabase.GetActivePoisAsync() → đọc SQLite
-  ├─ PlacePins(FilteredPois) → đặt pin lên bản đồ
-  ├─ Load danh sách POI theo category dropdown
-  ├─ Hiển thị ảnh POI qua ImagePath/PoiImageSource
-  └─ StartMonitoring() → GeofenceService.Start() + tự đồng bộ theo chu kỳ
+ShopOwner                    Backend                    Admin
+    │                           │                          │
+    │── POST /api/auth/         │                          │
+    │   register-shop ─────────►│                          │
+    │                           │ Tạo user, IsApproved=false│
+    │◄── 200 "Chờ duyệt" ───────│                          │
+    │                           │                          │
+    │                           │◄── GET /api/admin/       │
+    │                           │    shop-owners ──────────│
+    │                           │──► Danh sách chờ duyệt ──►│
+    │                           │                          │
+    │                           │◄── POST /api/admin/      │
+    │                           │    approve/{userId} ─────│
+    │                           │ IsApproved = true        │
+    │                           │──► 200 OK ───────────────►│
+    │                           │                          │
+    │── POST /api/auth/login ──►│                          │
+    │◄── JWT Token ─────────────│                          │
 ```
 
-### 4.2 Đồng bộ dữ liệu POI
+### 4.2 Luồng tạo & duyệt POI
 
 ```
-SyncService.SyncIfConnectedAsync()
-  ├─ Kiểm tra kết nối mạng
-  ├─ Kiểm tra dung lượng trống
-  │    └─ < 200MB → textOnlyMode = true (không sync audio)
-  ├─ GET api/pois/updates?lastSync=...&includeAudio=...
-  ├─ MapToLocalPois() — chuyển Poi → PoiRecord (mỗi ngôn ngữ 1 record)
-  ├─ Normalize media path — đổi /media/... hoặc file:///media/... sang URL backend
-  ├─ UpsertPoisAsync() — lưu/cập nhật SQLite
-  ├─ DeletePoisAsync() — xóa POI đã bị xóa trên server
-  └─ SaveLastSyncTime() — lưu timestamp sync cuối
+ShopOwner                    Backend                    Admin
+    │                           │                          │
+    │── POST /api/shop/pois ───►│                          │
+    │   (form: tên, mô tả,      │ Status = Pending_Approval│
+    │    ảnh, tọa độ, AI dịch)  │                          │
+    │◄── 200 {poiId} ───────────│                          │
+    │                           │                          │
+    │                           │◄── GET /api/admin/       │
+    │                           │    pois/pending ─────────│
+    │                           │──► Danh sách chờ duyệt ──►│
+    │                           │                          │
+    │                           │◄── POST /api/admin/      │
+    │                           │    pois/{id}/approve ────│
+    │                           │ Status = Approved        │
+    │                           │ IsApproved = true        │
+    │                           │──► 200 OK ───────────────►│
+    │                           │                          │
+    │                           │◄── POST /api/admin/      │
+    │                           │    pois/{id}/reject ─────│
+    │                           │ Status = Rejected        │
+    │                           │ RejectionReason = "..."  │
 ```
 
-### 4.3 Lọc POI theo loại quán
+### 4.3 Luồng đồng bộ Mobile App
 
 ```
-MapViewModel
-  ├─ Pois (toàn bộ từ DB)
-  ├─ Categories (tự build từ Pois.Category, luôn có "Tất cả" đầu)
-  ├─ SelectedCategory (bind với Picker trên UI)
-  └─ FilteredPois = Pois nếu "Tất cả", ngược lại filter theo Category
-
-MapPage ← lắng nghe FilteredPois thay đổi → PlacePins()
+Mobile App                   Backend                  SQL Server
+    │                           │                          │
+    │ Khởi động app             │                          │
+    │── GET /api/pois/updates   │                          │
+    │   ?lastSync=<timestamp>   │                          │
+    │   &includeAudio=true ────►│                          │
+    │                           │── SELECT Pois WHERE      │
+    │                           │   Status=Approved AND    │
+    │                           │   UpdatedAt > lastSync ─►│
+    │                           │◄── Danh sách POI ────────│
+    │◄── SyncResponse ──────────│                          │
+    │   {updatedPois, deletedIds│                          │
+    │    serverTime}            │                          │
+    │                           │                          │
+    │ Lưu vào SQLite local      │                          │
+    │ (vinhkhanh.db)            │                          │
 ```
 
-### 4.4 Hiển thị thông tin POI (tap pin)
+### 4.4 Luồng thuyết minh tự động (Geofence)
 
 ```
-MapPage.OnMapClicked(tọa độ tap)
-  ├─ Tìm pin gần nhất trong vòng ~40m
-  └─ ShowPoiCard(poi)
-       ├─ Hiển thị tên, mô tả, category
-       ├─ Load ảnh từ poi.ImagePath
-       │    ├─ URL (http/https) → ImageSource.FromUri
-       │    ├─ /media/... hoặc file:///media/... → đổi sang URL backend
-       │    └─ File local → ImageSource.FromFile
-       └─ PoiCard.IsVisible = true (card trượt lên từ dưới)
+Mobile App (Background)
+    │
+    │ GPS cập nhật vị trí liên tục
+    │
+    ▼
+GeofenceService.CheckGeofencesAsync(lat, lon)
+    │
+    │ Duyệt qua tất cả POI trong SQLite
+    │ Tính khoảng cách Haversine
+    │
+    ├── Khoảng cách ≤ Radius POI?
+    │       │
+    │       ▼ YES
+    │   NarrationEngine.EnqueueAsync(poi)
+    │       │
+    │       ├── Đang cooldown (20 phút)? → Bỏ qua
+    │       ├── Đã trong queue? → Bỏ qua
+    │       │
+    │       ▼
+    │   PlayNextAsync()
+    │       │
+    │       ├── Có AudioPath (MP3)? → PlayAudioAsync()
+    │       └── Không có? → TextToSpeech.SpeakAsync()
+    │               │
+    │               └── Locale: LanguageCode POI → Preferences → System
+    │
+    └── POST /api/analytics/visit
+        {eventType: "narration", poiId, deviceId}
 ```
 
-### 4.5 Hiển thị danh sách POI
+### 4.5 Luồng AI dịch thuật
 
 ```
-MainPage.OnAppearing / OnToggleLanguage / OnSearchPoi
-  ├─ LoadMapPinsAndListAsync(reloadFromDatabase: true)
-  ├─ GetLocalizedPoisAsync() — chọn bản ghi theo ngôn ngữ hiện tại
-  ├─ CreateDisplayPoi() — tạo item cho list UI
-  ├─ CategoryPicker — lọc theo nhóm quán
-  └─ PoiCollectionView — hiển thị thumbnail, tên, mô tả và nút nghe/đi đường
-```
-
-### 4.6 Luồng ảnh trên mobile
-
-```
-Admin upload ảnh
-  └─ lưu /media/ten_anh.jpg trong wwwroot
-
-PoiSyncUseCase / PoisController
-  └─ trả ImageUrl về mobile qua api/pois/updates
-
-Mobile sync
-  ├─ ResolveRemoteMediaPath / BuildRemoteMediaUrl
-  ├─ chuẩn hóa host localhost → 10.0.2.2 trên emulator
-  └─ lưu ImagePath vào SQLite
-
-UI
-  └─ POI.ImagePath → PoiImageSource → ImageSource.FromUri / FromFile
-```
-
-### 4.5 Geofence — trigger thuyết minh tự động
-
-```
-GeofenceService (chạy nền)
-  ├─ Lắng nghe GPS thay đổi
-  ├─ Tính khoảng cách Haversine đến từng POI active
-  ├─ Debounce — bỏ qua nhiễu GPS ngắn hạn
-  ├─ Cooldown — không trigger lại cùng POI trong thời gian ngắn
-  └─ Khi vào vùng hợp lệ → NarrationEngine.PlayAsync(poi)
-
-NarrationEngine.PlayAsync(poi)
-  ├─ Có AudioPath → phát file MP3 từ Resources/Raw/
-  └─ Không có → fallback TTS theo LanguageCode của POI
-```
-
-### 4.6 Zoom & MyLocation (custom buttons)
-
-```
-OnZoomInClicked  → _currentRadiusMeters / 1.8 → MoveToRegion
-OnZoomOutClicked → _currentRadiusMeters * 1.8 → MoveToRegion
-OnMyLocationClicked
-  ├─ Geolocation.GetLastKnownLocationAsync() (nhanh)
-  ├─ Fallback: GetLocationAsync(Medium accuracy)
-  └─ Fallback: CenterOnVinhKhanh() nếu lỗi quyền/GPS
-```
-
-### 4.7 Auto sync định kỳ
-
-```
-PeriodicTimer (15 phút)
-  └─ SyncAndReloadAsync(showAlert: false)
-       └─ Cập nhật FilteredPois → PlacePins() tự động
+Admin/ShopOwner UI           Backend                  Gemini API
+    │                           │                          │
+    │ Nhập tên + mô tả tiếng Việt│                         │
+    │── POST /api/admin/ai/     │                          │
+    │   generate (hoặc          │                          │
+    │   /api/shop/ai/generate) ►│                          │
+    │                           │── POST Gemini API ───────►│
+    │                           │   Prompt: dịch vi→en,ja  │
+    │                           │◄── JSON {en, ja} ────────│
+    │◄── {nameEn, descEn,       │                          │
+    │     nameJa, descJa} ──────│                          │
+    │                           │                          │
+    │ Tự động điền form         │                          │
 ```
 
 ---
 
-## 5. Cấu trúc thư mục
+## 5. API Reference
+
+### 5.1 Authentication
+
+| Method | Endpoint | Auth | Mô tả |
+|---|---|---|---|
+| POST | `/api/auth/login` | Public | Đăng nhập, trả về JWT |
+| POST | `/api/auth/register-shop` | Public | Đăng ký chủ quán |
+| POST | `/api/auth/register-visitor` | Public | Đăng ký du khách |
+
+**Login Response:**
+```json
+{
+  "token": "eyJhbGci...",
+  "expiration": "2026-04-05T07:30:49Z",
+  "roles": ["Admin"]
+}
+```
+
+### 5.2 Admin API (`/api/admin/*`)
+
+> Yêu cầu: `Authorization: Bearer <token>` + Role = Admin
+
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| GET | `/api/admin/pois` | Danh sách tất cả POI |
+| GET | `/api/admin/pois/{id}` | Chi tiết POI |
+| POST | `/api/admin/pois` | Tạo POI mới |
+| PUT | `/api/admin/pois/{id}` | Cập nhật POI |
+| GET | `/api/admin/pois/pending` | POI chờ duyệt |
+| POST | `/api/admin/pois/{id}/approve` | Duyệt POI |
+| POST | `/api/admin/pois/{id}/reject` | Từ chối POI |
+| POST | `/api/admin/pois/{id}/hide` | Ẩn POI |
+| GET | `/api/admin/dashboard-summary` | Thống kê tổng quan |
+| POST | `/api/admin/ai/generate` | AI dịch thuật |
+
+### 5.3 Shop API (`/api/shop/*`)
+
+> Yêu cầu: Role = ShopOwner
+
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| GET | `/api/shop/pois` | POI của chủ quán |
+| GET | `/api/shop/pois/{id}` | Chi tiết POI |
+| POST | `/api/shop/pois` | Tạo POI mới |
+| PUT | `/api/shop/pois/{id}` | Cập nhật POI |
+| DELETE | `/api/shop/pois/{id}` | Xóa POI |
+| POST | `/api/shop/ai/generate` | AI dịch thuật |
+
+### 5.4 Mobile Sync API
+
+| Method | Endpoint | Auth | Mô tả |
+|---|---|---|---|
+| GET | `/api/pois/updates` | Public | Đồng bộ POI |
+| POST | `/api/analytics/visit` | Public | Ghi nhận lượt xem |
+| GET | `/api/access/check` | Public | Kiểm tra quyền truy cập |
+
+**Sync Request:**
+```
+GET /api/pois/updates?lastSync=2026-01-01T00:00:00Z&includeAudio=true
+```
+
+**Sync Response:**
+```json
+{
+  "updatedPois": [
+    {
+      "id": 5,
+      "basePoiId": "demo-001",
+      "latitude": 10.763,
+      "longitude": 106.702,
+      "radius": 50,
+      "isActive": true,
+      "isPremium": false,
+      "localizations": [
+        {
+          "languageCode": "vi",
+          "name": "Quán Ốc Bà Nam",
+          "description": "Quán ốc nổi tiếng...",
+          "audioFile": "/media/audio_vi_5.mp3"
+        }
+      ]
+    }
+  ],
+  "deletedIds": [],
+  "serverTime": "2026-04-04T07:00:00Z"
+}
+```
+
+### 5.5 Analytics API
+
+| Method | Endpoint | Auth | Mô tả |
+|---|---|---|---|
+| POST | `/api/analytics/visit` | Public | Ghi nhận sự kiện |
+| GET | `/api/analytics/heatmap` | Admin | Bản đồ nhiệt |
+| GET | `/api/analytics/content-performance` | Admin | Hiệu suất nội dung |
+
+---
+
+## 6. Hạ tầng & Vận hành
+
+### 6.1 Cấu hình server EC2
 
 ```
-VinhKhanhFoodStreet/
-├─ VinhKhanh.Mobile/
-│   ├─ Platforms/Android/
-│   │   ├─ MainActivity.cs        ← Android entry point (MainLauncher)
-│   │   └─ MapUiCustomizer.cs     ← Tắt Google Maps native controls
-│   ├─ Views/
-│   │   ├─ MapPage.xaml           ← UI full-screen, overlay controls
-│   │   └─ MapPage.xaml.cs        ← Logic pin, card, zoom, location
-│   ├─ ViewModels/
-│   │   └─ MapViewModel.cs        ← State, categories, filter, sync
-│   ├─ Services/
-│   │   ├─ LocalDatabase.cs       ← SQLite
-│   │   ├─ SyncService.cs         ← API sync
-│   │   ├─ GeofenceService.cs     ← Vùng địa lý
-│   │   └─ NarrationEngine.cs     ← Audio/TTS
-│   ├─ Models/
-│   │   └─ PoiRecord.cs           ← SQLite model
-│   ├─ MauiProgram.cs             ← DI + cấu hình
-│   └─ App.xaml.cs                ← Root page
-├─ VinhKhanh.Admin/               ← ASP.NET Core API
-├─ VinhKhanh.Admin.Ui/            ← React frontend
-├─ VinhKhanh.Shared/              ← Models dùng chung
-├─ reinstall.bat                  ← Script deploy emulator
-└─ README.md
+IP:           18.139.184.43
+Domain:       enormitpham.me
+OS:           Ubuntu 22.04 LTS
+Instance:     t3.medium (2 vCPU, 4GB RAM)
+Disk:         30GB gp3
+Region:       ap-southeast-1 (Singapore)
+```
+
+**Các service đang chạy:**
+
+| Service | Mô tả | Lệnh kiểm tra |
+|---|---|---|
+| `nginx` | Reverse proxy + static files | `sudo systemctl status nginx` |
+| `vinhkhanh` | ASP.NET Core API | `sudo systemctl status vinhkhanh` |
+| `docker` | SQL Server container | `docker ps` |
+| `sqlserver` | SQL Server 2022 | `docker exec sqlserver ...` |
+
+### 6.2 Cấu trúc thư mục trên EC2
+
+```
+/home/ubuntu/vinhkhanh/
+├── backend/                  # ASP.NET Core publish output
+│   ├── VinhKhanh.Admin.dll
+│   ├── appsettings.Production.json
+│   └── wwwroot/media/        # File ảnh, audio upload
+├── frontend/                 # React build output
+│   ├── index.html
+│   └── assets/
+└── app.env                   # Environment variables
+
+/etc/nginx/sites-enabled/vinhkhanh  # Nginx config
+/etc/systemd/system/vinhkhanh.service  # Systemd service
+```
+
+### 6.3 Environment Variables (`app.env`)
+
+```env
+ASPNETCORE_ENVIRONMENT=Production
+ASPNETCORE_URLS=http://localhost:5000
+DOTNET_ROOT=/home/ubuntu/.dotnet
+ConnectionStrings__Default=Server=localhost,1433;Database=VinhKhanhCleanDb;...
+AllowedHosts=*
+```
+
+### 6.4 Nginx Configuration
+
+```nginx
+server {
+    listen 80;
+    server_name _;
+
+    root /home/ubuntu/vinhkhanh/frontend;
+
+    location / {
+        try_files $uri $uri/ /index.html;  # SPA routing
+    }
+
+    location /api/ {
+        proxy_pass http://localhost:5000;  # Backend API
+    }
+
+    location /media/ {
+        proxy_pass http://localhost:5000;  # Media files
+    }
+}
 ```
 
 ---
 
-## 6. Tiến độ & tồn đọng
+## 7. Hướng dẫn vận hành
 
-| Phân hệ | Tiến độ | Trạng thái |
-|---|---:|---|
-| Kiến trúc & DI | 100% | Hoàn thiện |
-| SQLite + Sync | 90% | Ổn định, cần test offline edge case |
-| Geofence | 95% | Debounce/cooldown hoạt động |
-| Audio/TTS | 78% | Có fallback TTS, cần test đa thiết bị |
-| UI/UX Mobile | 80% | Full-screen map, filter, POI card với ảnh |
-| Web Admin API | 40% | CRUD POI cơ bản |
-| Admin UI | 30% | Scaffold xong, chưa hoàn thiện |
+### 7.1 Deploy cập nhật
 
-### Tồn đọng ưu tiên cao
+```powershell
+# Từ máy local Windows
+.\deploy\deploy.ps1
 
-1. Điều tra crash khi khởi động app trên emulator (đang xử lý)
-2. Thêm `ACCESS_FINE_LOCATION` permission request khi app lần đầu chạy
-3. Kiểm tra `Category` field có được sync từ API không (hiện đang để `string.Empty`)
-4. Test ảnh POI load từ URL thực tế
+# Script sẽ tự động:
+# 1. Build backend (dotnet publish)
+# 2. Build frontend (npm run build)
+# 3. Upload lên EC2 qua SCP (tar.gz)
+# 4. Restart service
+# 5. Health check
+```
+
+### 7.2 Migrate data từ local lên EC2
+
+```powershell
+.\deploy\migrate-data.ps1
+
+# Script sẽ:
+# 1. Export Pois + PoiLocalizations + ShopOwners từ SQL Server local
+# 2. Tạo SQL INSERT script
+# 3. Upload và chạy trên EC2
+```
+
+### 7.3 SSH vào server
+
+```bash
+ssh -i "C:\Users\phamq\Documents\key\cs.pem" ubuntu@18.139.184.43
+```
+
+### 7.4 Xem logs
+
+```bash
+# API logs
+sudo journalctl -u vinhkhanh -n 50 --no-pager
+
+# Nginx logs
+sudo tail -50 /var/log/nginx/error.log
+
+# SQL Server logs
+docker logs sqlserver --tail 20
+```
+
+### 7.5 Restart services
+
+```bash
+# Restart API
+sudo systemctl restart vinhkhanh
+
+# Restart Nginx
+sudo systemctl reload nginx
+
+# Restart SQL Server
+docker restart sqlserver
+```
+
+### 7.6 Chạy SQL trực tiếp trên EC2
+
+```bash
+# Kết nối SQL Server
+docker exec -it sqlserver /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P 'VinhKhanh@Ec2Strong2026!' -C -d VinhKhanhCleanDb
+
+# Hoặc chạy file SQL
+docker cp myfile.sql sqlserver:/myfile.sql
+docker exec sqlserver /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P 'VinhKhanh@Ec2Strong2026!' -C -i /myfile.sql
+```
+
+### 7.7 Build & cài APK lên Android
+
+```powershell
+# Build Release APK
+dotnet publish VinhKhanhFoodStreet.csproj -f net10.0-android -c Release
+
+# Cài lên thiết bị qua ADB
+$adb = "$env:USERPROFILE\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+& $adb install -r "bin\Release\net10.0-android\com.companyname.vinhkhanhfoodstreet-Signed.apk"
+```
 
 ---
 
-## 7. Lịch sử lỗi & bản vá
+## 8. Tài khoản mặc định
 
-### 2026-04-03 — Admin mục Phân tích / Cài đặt nhảy về login ở đầu
-- Triệu chứng: Khi mở một số trang trong khu vực admin như Phân tích và Cài đặt, giao diện tự cuộn hoặc nhảy về phần login ở phía trên thay vì giữ đúng vị trí nội dung.
-- Khu vực ảnh hưởng: Admin UI, các trang có layout dài hoặc có vùng điều hướng/đăng nhập ở đầu trang.
-- Ghi chú: Đây là lỗi hành vi giao diện, cần kiểm tra lại state điều hướng, anchor scroll và logic render lại khi chuyển tab.
+| Tài khoản | Email | Mật khẩu | Role |
+|---|---|---|---|
+| Admin | `admin@vinhkhanh.vn` | `Admin123!` | Admin |
+| ShopOwner demo 1 | `shopowner1@vinhkhanh.vn` | `ShopOwner@123` | ShopOwner |
+| ShopOwner demo 2 | `shopowner2@vinhkhanh.vn` | `ShopOwner@123` | ShopOwner |
 
-### 2026-04-03 — Crash khi khởi động (đang điều tra)
-- Triệu chứng: App crash ngay sau splash screen
-- Nguyên nhân nghi ngờ: thiếu Google Maps API key hoặc lỗi permission location
-- Hướng xử lý: xem logcat `AndroidRuntime:E DOTNET:E`
+---
 
-### 2026-04-03 — Thiếu MainActivity.cs
-- Triệu chứng: APK cài được nhưng không có launcher activity, monkey abort
-- Nguyên nhân: file `Platforms/Android/MainActivity.cs` bị thiếu
-- Bản vá: tạo lại `MainActivity : MauiAppCompatActivity` với `MainLauncher = true`
+## 9. Cấu hình Mobile App
 
-### 2026-04-03 — Package name sai (VinhKhanh.Mobile thay vì com.vinhkhanh.mobile)
-- Nguyên nhân: thiếu `<ApplicationId>` trong csproj
-- Bản vá: thêm `<ApplicationId>com.vinhkhanh.mobile</ApplicationId>` vào csproj
+### 9.1 API URL
 
-### 2026-03-28 — Audio không phát được
-- Triệu chứng: `Không thể phát xong file âm thanh: lau-nuong.mp3`
-- Nguyên nhân: hàm chuẩn hóa đường dẫn cắt mất thư mục con `audio/vi/`
-- Bản vá: giữ nguyên đường dẫn đầy đủ, giảm timeout 30s → 12s, thêm fallback TTS
+File `Configuration/AppConfig.cs`:
 
-### 2026-03-28 — Frame obsolete warning (.NET 9)
-- Nguyên nhân: `Frame` bị deprecated từ .NET 9
-- Bản vá: thay toàn bộ `Frame` → `Border` với `StrokeShape="RoundRectangle"`
+```csharp
+public static string BaseApiUrl =>
+#if DEBUG
+    DeviceInfo.Platform == Android ? "http://10.0.2.2:5000/" : "http://localhost:5000/";
+#else
+    "https://enormitpham.me/";  // Production
+#endif
+```
 
-### 2026-03-28 — PinClicked không tồn tại
-- Nguyên nhân: MAUI Maps không có event `PinClicked` trên `Map`
-- Bản vá: dùng `MapClicked` + tìm pin gần nhất trong vòng ~40m
+- **Debug** (emulator): `http://10.0.2.2:5000/` (loopback Android → máy host)
+- **Release** (thiết bị thật): `https://enormitpham.me/`
 
-### 2026-03-28 — SyncService.MapToLocalPois gọi instance method từ static
-- Nguyên nhân: `MapToLocalPois` khai báo `static` nhưng gọi `BuildRemoteMediaUrl` là instance method
-- Bản vá: bỏ `static` khỏi `MapToLocalPois`
+### 9.2 Ngôn ngữ hỗ trợ
+
+| Code | Ngôn ngữ |
+|---|---|
+| `vi` | Tiếng Việt |
+| `en` | Tiếng Anh |
+| `ja` | Tiếng Nhật |
+
+### 9.3 Chế độ đồng bộ
+
+- **Full sync**: Tải cả text + audio MP3
+- **Text-only mode**: Khi dung lượng trống < 200MB, chỉ tải text, dùng TTS thay MP3
+
+---
+
+## 10. Xử lý sự cố thường gặp
+
+| Triệu chứng | Nguyên nhân | Cách xử lý |
+|---|---|---|
+| API trả về 400 "Invalid Hostname" | `AllowedHosts` không bao gồm `localhost` | Thêm `AllowedHosts=*` vào `app.env` |
+| API trả về 500 "Invalid column name" | DB thiếu cột mới từ migration | Chạy ALTER TABLE thủ công hoặc `dotnet ef database update` |
+| Service crash loop | Connection string sai hoặc DB chưa tạo | Kiểm tra `app.env`, tạo DB trong Docker |
+| White screen trên browser | Assets 404 hoặc JS runtime error | Kiểm tra permissions `chmod -R o+rx ~/vinhkhanh/frontend` |
+| Mobile không sync được | URL hardcode `10.0.2.2` trong Release | Build với `-c Release` để dùng `AppConfig` production URL |
+| Login 403 "Chờ duyệt" | `IsApproved = false` | Admin duyệt tài khoản trong trang Approvals |

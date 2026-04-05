@@ -1,5 +1,4 @@
 #if ANDROID
-using System.Diagnostics;
 using System.Threading.Tasks;
 using Android.Media;
 using Microsoft.Maui.ApplicationModel;
@@ -21,22 +20,22 @@ public partial class NarrationService
                 return Task.CompletedTask;
             }
 
-            // Yêu cầu audio focus với chế độ giảm âm (transient may duck)
+            // Dung focus transient de uu tien narration, han che meo tieng do ducking.
             _audioFocusListener ??= new AudioFocusChangeListener();
-            var result = _audioManager.RequestAudioFocus(_audioFocusListener, Android.Media.Stream.Music, AudioFocus.GainTransientMayDuck);
+            var result = _audioManager.RequestAudioFocus(_audioFocusListener, Android.Media.Stream.Music, AudioFocus.GainTransient);
             
             if (result == AudioFocusRequest.Granted)
             {
-                Debug.WriteLine("[NarrationService] Da cap audio focus cho narration");
+                System.Diagnostics.Debug.WriteLine("[NarrationService] Da cap audio focus cho narration");
             }
             else
             {
-                Debug.WriteLine("[NarrationService] Khong the cap audio focus");
+                System.Diagnostics.Debug.WriteLine("[NarrationService] Khong the cap audio focus");
             }
         }
         catch (System.Exception ex)
         {
-            Debug.WriteLine($"[NarrationService] Loi BeginAudioDuckingAsync: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[NarrationService] Loi BeginAudioDuckingAsync: {ex.Message}");
         }
 
         return Task.CompletedTask;
@@ -49,12 +48,12 @@ public partial class NarrationService
             if (_audioManager is not null && _audioFocusListener is not null)
             {
                 _audioManager.AbandonAudioFocus(_audioFocusListener);
-                Debug.WriteLine("[NarrationService] Da nha audio focus");
+                System.Diagnostics.Debug.WriteLine("[NarrationService] Da nha audio focus");
             }
         }
         catch (System.Exception ex)
         {
-            Debug.WriteLine($"[NarrationService] Loi EndAudioDucking: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[NarrationService] Loi EndAudioDucking: {ex.Message}");
         }
     }
 

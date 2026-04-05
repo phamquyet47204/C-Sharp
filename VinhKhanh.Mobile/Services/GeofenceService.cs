@@ -1,5 +1,5 @@
 using VinhKhanh.Shared;
-using VinhKhanh.Shared.Models;
+using VinhKhanh.Mobile.Models;
 
 namespace VinhKhanh.Mobile.Services;
 
@@ -10,15 +10,27 @@ namespace VinhKhanh.Mobile.Services;
 public class GeofenceService(LocalDatabase db, NarrationEngine narration)
 {
     private CancellationTokenSource? _cts;
+    private Task? _loopTask;
     private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(5);
 
     public void Start()
     {
+        if (_loopTask is not null && !_loopTask.IsCompleted)
+        {
+            return;
+        }
+
         _cts = new CancellationTokenSource();
-        Task.Run(() => LoopAsync(_cts.Token));
+        _loopTask = Task.Run(() => LoopAsync(_cts.Token));
     }
 
-    public void Stop() => _cts?.Cancel();
+    public void Stop()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
+        _loopTask = null;
+    }
 
     private async Task LoopAsync(CancellationToken ct)
     {

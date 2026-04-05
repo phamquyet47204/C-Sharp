@@ -121,6 +121,7 @@ public class SyncService(HttpClient http, LocalDatabase db)
                     Priority = remotePoi.Priority,
                     IsDownloaded = includeAudio && !string.IsNullOrWhiteSpace(localization.AudioFile),
                     IsActive = remotePoi.IsActive,
+                    IsPremium = remotePoi.IsPremium,
                     UpdatedAt = remotePoi.UpdatedAt
                 });
             }
@@ -189,7 +190,6 @@ public class SyncService(HttpClient http, LocalDatabase db)
         "vi" => 1,
         "en" => 2,
         "ja" => 3,
-        "ko" => 4,
         _ => 9
     };
 }

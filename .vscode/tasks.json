@@ -2,6 +2,36 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "maui: auto sync android",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/.vscode/dev-mobile-sync.ps1"
+      ],
+      "isBackground": true,
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "problemMatcher": {
+        "owner": "custom",
+        "pattern": [],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^==> BUILD START$",
+          "endsPattern": "^==> WATCHER READY$"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
       "label": "maui: build windows",
       "type": "shell",
       "command": "dotnet",

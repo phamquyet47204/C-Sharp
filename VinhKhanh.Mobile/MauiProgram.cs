@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Maui.Devices;
+using Microsoft.Maui.Maps.Handlers;
 using VinhKhanh.Mobile.Services;
 using VinhKhanh.Mobile.ViewModels;
 using VinhKhanh.Mobile.Views;
@@ -24,11 +26,25 @@ public static class MauiProgram
             .AddSingleton(_ => new LocalDatabase(dbPath))
             .AddSingleton<NarrationEngine>()
             .AddSingleton<GeofenceService>()
+            .AddSingleton(sp =>
+            {
+                return new HttpClient
+                {
+                    BaseAddress = new Uri(VinhKhanhFoodStreet.Configuration.AppConfig.BaseApiUrl)
+                };
+            })
             .AddSingleton<SyncService>()
-            .AddHttpClient<SyncService>()
-            .Services
+            .AddSingleton<AccessControlService>()
+            .AddSingleton<AuthService>()
             .AddTransient<MapViewModel>()
             .AddTransient<MapPage>();
+
+#if ANDROID
+        MapHandler.Mapper.AppendToMapping("MoveMyLocationButton", (handler, _) =>
+        {
+            Platforms.Android.MapUiCustomizer.Configure(handler);
+        });
+#endif
 
         return builder.Build();
     }

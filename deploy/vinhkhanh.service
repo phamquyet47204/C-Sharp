@@ -1,0 +1,17 @@
+[Unit]
+Description=VinhKhanh ASP.NET Core API
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+WorkingDirectory=/home/ubuntu/vinhkhanh/backend
+ExecStart=/home/ubuntu/.dotnet/dotnet VinhKhanh.Admin.dll
+Restart=always
+RestartSec=10
+KillSignal=SIGINT
+SyslogIdentifier=vinhkhanh
+User=ubuntu
+EnvironmentFile=/home/ubuntu/vinhkhanh/app.env
+
+[Install]
+WantedBy=multi-user.target

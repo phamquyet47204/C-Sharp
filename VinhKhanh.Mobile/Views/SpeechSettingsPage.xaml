@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="VinhKhanh.Mobile.Views.SpeechSettingsPage"
+             Title="Cài đặt giọng đọc"
+             BackgroundColor="#F5F5F5">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="24">
+
+            <!-- Pitch -->
+            <Frame BackgroundColor="White" CornerRadius="12" Padding="16">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Cao độ giọng đọc (Pitch)" FontSize="15" FontAttributes="Bold"/>
+                    <HorizontalStackLayout Spacing="12">
+                        <Label Text="0.5" FontSize="12" TextColor="Gray" VerticalOptions="Center"/>
+                        <Slider x:Name="PitchSlider"
+                                Minimum="0.5" Maximum="2.0"
+                                Value="1.0"
+                                HorizontalOptions="FillAndExpand"
+                                ValueChanged="OnPitchChanged"/>
+                        <Label Text="2.0" FontSize="12" TextColor="Gray" VerticalOptions="Center"/>
+                    </HorizontalStackLayout>
+                    <Label x:Name="PitchValueLabel" Text="1.0" FontSize="13"
+                           TextColor="#FF7F50" HorizontalOptions="Center"/>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- Rate -->
+            <Frame BackgroundColor="White" CornerRadius="12" Padding="16">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Tốc độ đọc (Rate)" FontSize="15" FontAttributes="Bold"/>
+                    <HorizontalStackLayout Spacing="12">
+                        <Label Text="0.5" FontSize="12" TextColor="Gray" VerticalOptions="Center"/>
+                        <Slider x:Name="RateSlider"
+                                Minimum="0.5" Maximum="2.0"
+                                Value="1.0"
+                                HorizontalOptions="FillAndExpand"
+                                ValueChanged="OnRateChanged"/>
+                        <Label Text="2.0" FontSize="12" TextColor="Gray" VerticalOptions="Center"/>
+                    </HorizontalStackLayout>
+                    <Label x:Name="RateValueLabel" Text="1.0" FontSize="13"
+                           TextColor="#FF7F50" HorizontalOptions="Center"/>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- Reset -->
+            <Button Text="Đặt lại mặc định" Clicked="OnResetClicked"
+                    BackgroundColor="#E0E0E0" TextColor="#333"
+                    CornerRadius="10" Padding="16,10"/>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

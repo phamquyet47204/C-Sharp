@@ -2,29 +2,286 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:maps="clr-namespace:Microsoft.Maui.Controls.Maps;assembly=Microsoft.Maui.Controls.Maps"
-             xmlns:vm="clr-namespace:VinhKhanh.Mobile.ViewModels"
              x:Class="VinhKhanh.Mobile.Views.MapPage"
-             Title="Phố Vĩnh Khánh">
+             Title="Phố Vĩnh Khánh"
+             NavigationPage.HasNavigationBar="False">
 
-    <ContentPage.ToolbarItems>
-        <ToolbarItem Text="🔓 Mở khóa" Command="{Binding UnlockCommand}"
-                     IsVisible="{Binding IsUnlocked, Converter={StaticResource InvertBool}}"/>
-    </ContentPage.ToolbarItems>
+    <Grid>
 
-    <Grid RowDefinitions="Auto,*">
-
-        <!-- Language Picker -->
-        <Picker Grid.Row="0" ItemsSource="{Binding Languages}"
-                SelectedItem="{Binding SelectedLanguage}"
-                Title="Ngôn ngữ"
-                Margin="8,4"
-                HorizontalOptions="End"
-                WidthRequest="140"/>
-
-        <!-- Map -->
-        <maps:Map Grid.Row="1" x:Name="MainMap"
+        <!-- Map full-screen -->
+        <maps:Map x:Name="MainMap"
                   MapType="Street"
-                  IsShowingUser="True"/>
+                  IsShowingUser="True"
+                  IsZoomEnabled="True"
+                  IsScrollEnabled="True"/>
+
+        <!-- Overlay góc trên: Category + Language + Unlock -->
+        <Grid ColumnDefinitions="*,Auto,Auto"
+              VerticalOptions="Start"
+              HorizontalOptions="Fill"
+              Margin="10,48,10,0">
+
+            <!-- Dropdown loại quán ăn -->
+            <Border Grid.Column="0"
+                    StrokeShape="RoundRectangle 20"
+                    Stroke="Transparent"
+                    BackgroundColor="White"
+                    HeightRequest="40">
+                <Border.Shadow>
+                    <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
+                </Border.Shadow>
+                <Picker ItemsSource="{Binding Categories}"
+                        SelectedItem="{Binding SelectedCategory}"
+                        Title="🍜 Loại quán"
+                        FontSize="13"
+                        Margin="12,0"
+                        VerticalOptions="Center"/>
+            </Border>
+
+            <!-- Language Picker -->
+            <Border Grid.Column="1"
+                    StrokeShape="RoundRectangle 20"
+                    Stroke="Transparent"
+                    BackgroundColor="White"
+                    HeightRequest="40"
+                    WidthRequest="90"
+                    Margin="6,0,0,0">
+                <Border.Shadow>
+                    <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
+                </Border.Shadow>
+                <Picker ItemsSource="{Binding Languages}"
+                        SelectedItem="{Binding SelectedLanguage}"
+                        Title="🌐"
+                        FontSize="12"
+                        Margin="8,0"
+                        VerticalOptions="Center"/>
+            </Border>
+
+            <!-- Unlock button -->
+            <Border Grid.Column="2"
+                    StrokeShape="RoundRectangle 20"
+                    Stroke="Transparent"
+                    BackgroundColor="#FF6B35"
+                    HeightRequest="40"
+                    Margin="6,0,0,0">
+                <Border.Shadow>
+                    <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.2"/>
+                </Border.Shadow>
+                <Button Text="🔓"
+                        FontSize="16"
+                        BackgroundColor="Transparent"
+                        TextColor="White"
+                        Padding="10,0"
+                        Command="{Binding UnlockAsyncCommand}"/>
+            </Border>
+        </Grid>
+
+        <!-- Overlay góc phải dưới: Zoom In / Zoom Out / MyLocation -->
+        <StackLayout VerticalOptions="End"
+                     HorizontalOptions="End"
+                     Orientation="Vertical"
+                     Spacing="8"
+                     Margin="0,0,12,32">
+
+            <Border StrokeShape="RoundRectangle 24"
+                    Stroke="Transparent"
+                    BackgroundColor="White"
+                    WidthRequest="48"
+                    HeightRequest="48">
+                <Border.Shadow>
+                    <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
+                </Border.Shadow>
+                <Button Text="+"
+                        FontSize="22"
+                        FontAttributes="Bold"
+                        BackgroundColor="Transparent"
+                        TextColor="#333"
+                        Padding="0"
+                        Clicked="OnZoomInClicked"/>
+            </Border>
+
+            <Border StrokeShape="RoundRectangle 24"
+                    Stroke="Transparent"
+                    BackgroundColor="White"
+                    WidthRequest="48"
+                    HeightRequest="48">
+                <Border.Shadow>
+                    <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
+                </Border.Shadow>
+                <Button Text="−"
+                        FontSize="22"
+                        FontAttributes="Bold"
+                        BackgroundColor="Transparent"
+                        TextColor="#333"
+                        Padding="0"
+                        Clicked="OnZoomOutClicked"/>
+            </Border>
+
+            <Border StrokeShape="RoundRectangle 24"
+                    Stroke="Transparent"
+                    BackgroundColor="White"
+                    WidthRequest="48"
+                    HeightRequest="48">
+                <Border.Shadow>
+                    <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
+                </Border.Shadow>
+                <Button Text="📍"
+                        FontSize="20"
+                        BackgroundColor="Transparent"
+                        Padding="0"
+                        Clicked="OnMyLocationClicked"/>
+            </Border>
+        </StackLayout>
+
+        <!-- POI Detail Card -->
+        <Border x:Name="PoiCard"
+                IsVisible="False"
+                VerticalOptions="End"
+                HorizontalOptions="Fill"
+                Margin="10,0,10,100"
+                StrokeShape="RoundRectangle 16"
+                Stroke="Transparent"
+                BackgroundColor="White">
+            <Border.Shadow>
+                <Shadow Brush="Black" Offset="0,4" Radius="12" Opacity="0.2"/>
+            </Border.Shadow>
+            <Grid RowDefinitions="180,Auto" ColumnDefinitions="*,Auto">
+
+                <!-- Ảnh POI -->
+                <Image x:Name="PoiImage"
+                       Grid.Row="0" Grid.ColumnSpan="2"
+                       Aspect="AspectFill"
+                       HeightRequest="180"/>
+
+                <!-- Thông tin -->
+                <StackLayout Grid.Row="1" Grid.Column="0"
+                             Padding="12,10"
+                             Spacing="4">
+                    <Label x:Name="PoiNameLabel"
+                           FontSize="16"
+                           FontAttributes="Bold"
+                           TextColor="#1A1A1A"/>
+                    <Label x:Name="PoiDescLabel"
+                           FontSize="13"
+                           TextColor="#555"
+                           MaxLines="2"
+                           LineBreakMode="TailTruncation"/>
+                    <Label x:Name="PoiCategoryLabel"
+                           FontSize="11"
+                           TextColor="#FF6B35"
+                           FontAttributes="Bold"/>
+                    <!-- Nút nghe TTS -->
+                    <Button Text="🔊 Nghe thuyết minh"
+                            FontSize="13"
+                            BackgroundColor="#FF6B35"
+                            TextColor="White"
+                            CornerRadius="8"
+                            Padding="12,6"
+                            Margin="0,4,0,0"
+                            Clicked="OnListenClicked"/>
+                </StackLayout>
+
+                <!-- Nút đóng -->
+                <Button Grid.Row="1" Grid.Column="1"
+                        Text="✕"
+                        FontSize="16"
+                        BackgroundColor="Transparent"
+                        TextColor="#999"
+                        WidthRequest="44"
+                        HeightRequest="44"
+                        Padding="0"
+                        Clicked="OnClosePoiCard"/>
+            </Grid>
+        </Border>
+
+        <!-- Free Trial Banner (Requirement 4.5) -->
+        <Border x:Name="FreeTrialBanner"
+                IsVisible="False"
+                VerticalOptions="End"
+                HorizontalOptions="Fill"
+                Margin="10,0,10,56"
+                StrokeShape="RoundRectangle 10"
+                Stroke="Transparent"
+                BackgroundColor="#FFF3E0">
+            <Border.Shadow>
+                <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.1"/>
+            </Border.Shadow>
+            <Label x:Name="FreeTrialLabel"
+                   FontSize="13"
+                   TextColor="#E65100"
+                   HorizontalTextAlignment="Center"
+                   Padding="12,8"/>
+        </Border>
+
+        <!-- Premium POI Bottom Sheet (Requirement 14.4) -->
+        <Border x:Name="PremiumSheet"
+                IsVisible="False"
+                VerticalOptions="End"
+                HorizontalOptions="Fill"
+                StrokeShape="RoundRectangle 20,20,0,0"
+                Stroke="Transparent"
+                BackgroundColor="White">
+            <Border.Shadow>
+                <Shadow Brush="Black" Offset="0,-4" Radius="16" Opacity="0.25"/>
+            </Border.Shadow>
+            <StackLayout Padding="20,16,20,32" Spacing="12">
+
+                <!-- Handle bar -->
+                <BoxView WidthRequest="40"
+                         HeightRequest="4"
+                         CornerRadius="2"
+                         Color="#DDD"
+                         HorizontalOptions="Center"/>
+
+                <!-- Lock icon + title -->
+                <StackLayout Orientation="Horizontal" Spacing="10" HorizontalOptions="Center">
+                    <Label Text="🔒" FontSize="28" VerticalOptions="Center"/>
+                    <Label x:Name="PremiumPoiNameLabel"
+                           FontSize="18"
+                           FontAttributes="Bold"
+                           TextColor="#1A1A1A"
+                           VerticalOptions="Center"/>
+                </StackLayout>
+
+                <Label x:Name="PremiumPoiDescLabel"
+                       FontSize="13"
+                       TextColor="#555"
+                       MaxLines="3"
+                       LineBreakMode="TailTruncation"
+                       HorizontalTextAlignment="Center"/>
+
+                <!-- Free trial info -->
+                <Label x:Name="PremiumFreeTrialLabel"
+                       IsVisible="False"
+                       FontSize="13"
+                       TextColor="#E65100"
+                       HorizontalTextAlignment="Center"
+                       FontAttributes="Italic"/>
+
+                <Label Text="Nội dung này yêu cầu Access Pass để nghe thuyết minh."
+                       FontSize="13"
+                       TextColor="#777"
+                       HorizontalTextAlignment="Center"/>
+
+                <!-- Mua Access Pass button -->
+                <Button x:Name="BuyAccessPassButton"
+                        Text="🔓 Mua Access Pass ($1/7 ngày)"
+                        FontSize="15"
+                        FontAttributes="Bold"
+                        BackgroundColor="#FF6B35"
+                        TextColor="White"
+                        CornerRadius="12"
+                        HeightRequest="50"
+                        Clicked="OnBuyAccessPassClicked"/>
+
+                <!-- Đóng -->
+                <Button Text="Đóng"
+                        FontSize="14"
+                        BackgroundColor="Transparent"
+                        TextColor="#999"
+                        Clicked="OnClosePremiumSheet"/>
+            </StackLayout>
+        </Border>
 
     </Grid>
 </ContentPage>

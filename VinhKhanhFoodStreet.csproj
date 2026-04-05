@@ -82,14 +82,25 @@
 	<ItemGroup>
 		<!-- Keep MAUI app isolated from sibling modules in mono-repo layout -->
 		<Compile Remove="VinhKhanh.Admin\**\*.cs" />
+		<Compile Remove="VinhKhanh.Application\**\*.cs" />
+		<Compile Remove="VinhKhanh.Domain\**\*.cs" />
+		<Compile Remove="VinhKhanh.Infrastructure\**\*.cs" />
 		<Compile Remove="VinhKhanh.Mobile\**\*.cs" />
 		<Compile Remove="VinhKhanh.Shared\**\*.cs" />
+		<Compile Remove="VinhKhanh.Tests\**\*.cs" />
 		<MauiXaml Remove="VinhKhanh.Admin\**\*.xaml" />
+		<MauiXaml Remove="VinhKhanh.Application\**\*.xaml" />
+		<MauiXaml Remove="VinhKhanh.Domain\**\*.xaml" />
+		<MauiXaml Remove="VinhKhanh.Infrastructure\**\*.xaml" />
 		<MauiXaml Remove="VinhKhanh.Mobile\**\*.xaml" />
 		<MauiXaml Remove="VinhKhanh.Shared\**\*.xaml" />
 		<EmbeddedResource Remove="VinhKhanh.Admin\**\*" />
+		<EmbeddedResource Remove="VinhKhanh.Application\**\*" />
+		<EmbeddedResource Remove="VinhKhanh.Domain\**\*" />
+		<EmbeddedResource Remove="VinhKhanh.Infrastructure\**\*" />
 		<EmbeddedResource Remove="VinhKhanh.Mobile\**\*" />
 		<EmbeddedResource Remove="VinhKhanh.Shared\**\*" />
+		<EmbeddedResource Remove="VinhKhanh.Tests\**\*" />
 	</ItemGroup>
 
 	<ItemGroup>

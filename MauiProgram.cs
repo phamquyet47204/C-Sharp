@@ -1,6 +1,8 @@
 ﻿using CommunityToolkit.Maui;
 using CommunityToolkit.Maui.Maps;
 using Microsoft.Extensions.Logging;
+using Microsoft.Maui.Controls.Maps;
+using Microsoft.Maui.Maps.Handlers;
 using VinhKhanhFoodStreet.Extensions;
 using VinhKhanhFoodStreet.Services;
 
@@ -25,8 +27,6 @@ public static class MauiProgram
 #else
 			.UseMauiMaps()
 #endif
-
-			.UseMauiCommunityToolkitMediaElement(true)
 			.ConfigureFonts(fonts =>
 			{
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -41,6 +41,22 @@ public static class MauiProgram
 			.AddSingleton<IAudioQueueManager, AudioQueueManager>()
 			.AddSingleton<INarrationService, NarrationService>()
 			.AddSingleton<MainPage>();
+
+#if ANDROID
+		if (OperatingSystem.IsAndroidVersionAtLeast(26))
+		{
+			builder.UseMauiCommunityToolkitMediaElement(true);
+		}
+#else
+		builder.UseMauiCommunityToolkitMediaElement(true);
+#endif
+
+#if ANDROID
+		MapHandler.Mapper.AppendToMapping("MoveMyLocationButton", (handler, _) =>
+		{
+			Platforms.Android.MapUiCustomizer.Configure(handler);
+		});
+#endif
 
 #if DEBUG
 		builder.Logging.AddDebug();
