@@ -1,0 +1,61 @@
+using CommunityToolkit.Maui;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Maui.Devices;
+using Microsoft.Maui.Maps.Handlers;
+using VinhKhanh.Mobile.Services;
+using VinhKhanh.Mobile.ViewModels;
+using VinhKhanh.Mobile.Views;
+
+namespace VinhKhanh.Mobile;
+
+public static class MauiProgram
+{
+    public static MauiApp CreateMauiApp()
+    {
+        var builder = MauiApp.CreateBuilder();
+        builder
+            .UseMauiApp<App>()
+            .UseMauiMaps()
+            .UseMauiCommunityToolkitMediaElement(isAndroidForegroundServiceEnabled: false)
+            .ConfigureFonts(fonts =>
+            {
+                fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
+            });
+
+        var dbPath = Path.Combine(FileSystem.AppDataDirectory, "vinhkhanh.db");
+
+        builder.Services
+            .AddSingleton(_ => new LocalDatabase(dbPath))
+            .AddSingleton<NarrationEngine>()
+            .AddSingleton<GeofenceService>()
+            .AddSingleton(sp =>
+            {
+                return new HttpClient
+                {
+                    BaseAddress = new Uri(VinhKhanhFoodStreet.Configuration.AppConfig.BaseApiUrl)
+                };
+            })
+            .AddSingleton<SyncService>()
+<<<<<<< HEAD
+=======
+            .AddSingleton<AnalyticsService>()
+>>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
+            .AddSingleton<AccessControlService>()
+            .AddSingleton<AuthService>()
+            .AddTransient<MapViewModel>()
+            .AddTransient<MapPage>();
+
+#if ANDROID
+        MapHandler.Mapper.AppendToMapping("MoveMyLocationButton", (handler, _) =>
+        {
+<<<<<<< HEAD
+            Platforms.Android.MapUiCustomizer.Configure(handler);
+=======
+            VinhKhanhFoodStreet.Platforms.Android.MapUiCustomizer.Configure(handler);
+>>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
+        });
+#endif
+
+        return builder.Build();
+    }
+}

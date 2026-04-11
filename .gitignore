@@ -1,0 +1,55 @@
+# Build outputs
+bin/
+obj/
+out/
+publish/
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+build.log
+
+# User-specific files
+.vs/
+*.user
+*.suo
+
+# Rider
+.idea/
+
+# macOS
+.DS_Store
+
+# Environment
+.env
+appsettings.Development.json
+
+# NuGet cache (temp restore folders)
+.nuget-temp/
+.nuget-temp-2/
+.nuget-temp-mobile/
+
+# Node modules
+node_modules/
+VinhKhanh.Admin.Ui/node_modules/
+
+# Frontend build output
+VinhKhanh.Admin.Ui/dist/
+
+# Terraform state & secrets
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/.terraform.lock.hcl
+terraform/terraform.exe
+
+# Kiro IDE
+.kiro/
+
+# Data export (chứa data thật)
+deploy/data-export/
+
+# APK builds
+*.apk
+*.aab
