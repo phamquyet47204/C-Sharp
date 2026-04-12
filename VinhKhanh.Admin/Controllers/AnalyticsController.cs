@@ -161,40 +161,4 @@ public class AnalyticsController(AnalyticsVisitUseCase visitUseCase, AppDbContex
             return Problem($"content-performance error: {ex.Message} | {ex.InnerException?.Message}");
         }
     }
-<<<<<<< HEAD
-=======
-
-    /// <summary>
-    /// Tổng hợp nhanh: tổng lượt mở app, tổng lượt nghe TTS, tổng lượt ghé POI.
-    /// Dùng cho dashboard Admin.
-    /// </summary>
-    [HttpGet("summary")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> GetSummary(CancellationToken cancellationToken)
-    {
-        var today = DateTime.UtcNow.Date;
-        var todayEnd = today.AddDays(1);
-
-        var counts = await dbContext.AnalyticsEvents
-            .GroupBy(e => e.EventType)
-            .Select(g => new { eventType = g.Key, total = g.Count(), todayCount = g.Count(e => e.Timestamp >= today && e.Timestamp < todayEnd) })
-            .ToListAsync(cancellationToken);
-
-        var uniqueDevices = await dbContext.AnalyticsEvents
-            .Select(e => e.DeviceId)
-            .Distinct()
-            .CountAsync(cancellationToken);
-
-        return Ok(new
-        {
-            totalAppOpens    = counts.FirstOrDefault(c => c.eventType == "app_open")?.total ?? 0,
-            todayAppOpens    = counts.FirstOrDefault(c => c.eventType == "app_open")?.todayCount ?? 0,
-            totalNarrations  = counts.FirstOrDefault(c => c.eventType == "narration")?.total ?? 0,
-            todayNarrations  = counts.FirstOrDefault(c => c.eventType == "narration")?.todayCount ?? 0,
-            totalPoiVisits   = counts.FirstOrDefault(c => c.eventType == "visit")?.total ?? 0,
-            todayPoiVisits   = counts.FirstOrDefault(c => c.eventType == "visit")?.todayCount ?? 0,
-            uniqueDevices
-        });
-    }
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 }

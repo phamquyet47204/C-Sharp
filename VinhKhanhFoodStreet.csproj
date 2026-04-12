@@ -85,35 +85,20 @@
 		<Compile Remove="VinhKhanh.Application\**\*.cs" />
 		<Compile Remove="VinhKhanh.Domain\**\*.cs" />
 		<Compile Remove="VinhKhanh.Infrastructure\**\*.cs" />
-<<<<<<< HEAD
 		<Compile Remove="VinhKhanh.Mobile\**\*.cs" />
 		<Compile Remove="VinhKhanh.Shared\**\*.cs" />
 		<Compile Remove="VinhKhanh.Tests\**\*.cs" />
-=======
-		<Compile Remove="VinhKhanh.Tests\**\*.cs" />
-		<Compile Remove="VinhKhanh.Shared\**\*.cs" />
-		<!-- Exclude Mobile obj/bin (generated files) and Platforms (handled by root) -->
-		<Compile Remove="VinhKhanh.Mobile\obj\**\*.cs" />
-		<Compile Remove="VinhKhanh.Mobile\bin\**\*.cs" />
-		<Compile Remove="VinhKhanh.Mobile\Platforms\**\*.cs" />
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 		<MauiXaml Remove="VinhKhanh.Admin\**\*.xaml" />
 		<MauiXaml Remove="VinhKhanh.Application\**\*.xaml" />
 		<MauiXaml Remove="VinhKhanh.Domain\**\*.xaml" />
 		<MauiXaml Remove="VinhKhanh.Infrastructure\**\*.xaml" />
-<<<<<<< HEAD
 		<MauiXaml Remove="VinhKhanh.Mobile\**\*.xaml" />
-=======
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 		<MauiXaml Remove="VinhKhanh.Shared\**\*.xaml" />
 		<EmbeddedResource Remove="VinhKhanh.Admin\**\*" />
 		<EmbeddedResource Remove="VinhKhanh.Application\**\*" />
 		<EmbeddedResource Remove="VinhKhanh.Domain\**\*" />
 		<EmbeddedResource Remove="VinhKhanh.Infrastructure\**\*" />
-<<<<<<< HEAD
 		<EmbeddedResource Remove="VinhKhanh.Mobile\**\*" />
-=======
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 		<EmbeddedResource Remove="VinhKhanh.Shared\**\*" />
 		<EmbeddedResource Remove="VinhKhanh.Tests\**\*" />
 	</ItemGroup>

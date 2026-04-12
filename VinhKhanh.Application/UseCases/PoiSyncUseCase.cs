@@ -20,10 +20,6 @@ public class PoiSyncUseCase(IPoiRepository repository)
             Radius = e.Radius,
             ImageUrl = e.ImageUrl,
             Priority = e.Priority,
-<<<<<<< HEAD
-=======
-            CategoryCode = e.CategoryCode ?? string.Empty,
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
             IsActive = e.Status == VinhKhanh.Domain.Entities.PoiStatus.Approved,
             IsPremium = e.IsPremium,
             UpdatedAt = e.UpdatedAt,

@@ -28,53 +28,6 @@ public class LocalDatabase
         }
     }
 
-<<<<<<< HEAD
-=======
-    /// <summary>
-    /// Lấy POI theo ngôn ngữ ưu tiên. Fallback: vi → en → bất kỳ.
-    /// Mỗi BasePoiId chỉ trả về 1 bản ghi theo ngôn ngữ phù hợp nhất.
-    /// </summary>
-    public async Task<List<PoiRecord>> GetActivePoisByLanguageAsync(string languageCode)
-    {
-        await _dbLock.WaitAsync();
-        try
-        {
-            var all = await _db.Table<PoiRecord>().Where(p => p.IsActive).ToListAsync();
-
-            // Chuẩn hóa: "vi-VN" → "vi", "en-US" → "en", "ja-JP" → "ja"
-            var lang = languageCode.Split('-')[0].ToLowerInvariant();
-            var fallbackChain = lang switch
-            {
-                "en" => new[] { "en", "vi", "ja" },
-                "ja" => new[] { "ja", "vi", "en" },
-                _    => new[] { "vi", "en", "ja" }
-            };
-
-            var grouped = all.GroupBy(p => p.BasePoiId);
-            var result = new List<PoiRecord>();
-
-            foreach (var group in grouped)
-            {
-                PoiRecord? chosen = null;
-                foreach (var targetLang in fallbackChain)
-                {
-                    chosen = group.FirstOrDefault(p =>
-                        p.LanguageCode.Split('-')[0].Equals(targetLang, StringComparison.OrdinalIgnoreCase));
-                    if (chosen is not null) break;
-                }
-                chosen ??= group.First();
-                result.Add(chosen);
-            }
-
-            return result.OrderByDescending(p => p.Priority).ToList();
-        }
-        finally
-        {
-            _dbLock.Release();
-        }
-    }
-
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
     public async Task<PoiRecord?> GetPoiByIdAsync(int poiId)
     {
         await _dbLock.WaitAsync();

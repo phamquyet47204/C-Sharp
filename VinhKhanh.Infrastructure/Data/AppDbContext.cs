@@ -13,10 +13,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<AnalyticsEvent> AnalyticsEvents { get; set; }
     public DbSet<Payment> Payments { get; set; }
     public DbSet<FreeTrialRecord> FreeTrialRecords { get; set; }
-<<<<<<< HEAD
-=======
-    public DbSet<DeviceTrial> DeviceTrials { get; set; }
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -36,14 +32,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .OnDelete(DeleteBehavior.NoAction)
             .IsRequired(false);
 
-<<<<<<< HEAD
-=======
-        // Payment.Amount precision (tránh truncation warning)
-        modelBuilder.Entity<Payment>()
-            .Property(p => p.Amount)
-            .HasPrecision(18, 2);
-
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
         // Payment.TransactionId unique index
         modelBuilder.Entity<Payment>()
             .HasIndex(p => p.TransactionId)
@@ -66,12 +54,5 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .HasIndex(f => new { f.DeviceId, f.PoiId })
             .IsUnique()
             .HasFilter("[DeviceId] IS NOT NULL");
-<<<<<<< HEAD
-=======
-
-        modelBuilder.Entity<DeviceTrial>()
-            .HasIndex(d => d.DeviceId)
-            .IsUnique();
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
     }
 }

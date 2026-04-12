@@ -86,7 +86,6 @@ public class NarrationEngine(LocalDatabase db, AnalyticsService analytics)
         _cooldowns[poi.Id] = DateTime.UtcNow;
         await db.LogNarrationAsync(new NarrationEvent { PoiId = poi.Id, TriggeredAt = DateTime.UtcNow });
 
-<<<<<<< HEAD
         _speakCts = new CancellationTokenSource();
         try
         {
@@ -102,26 +101,6 @@ public class NarrationEngine(LocalDatabase db, AnalyticsService analytics)
             _speakCts = null;
         }
 
-=======
-        // Gửi event narration lên Admin API
-        _ = analytics.TrackNarrationAsync(poi.BasePoiId, poi.Latitude, poi.Longitude);
-
-        _speakCts = new CancellationTokenSource();
-        try
-        {
-            if (!string.IsNullOrEmpty(poi.AudioPath))
-                await PlayAudioAsync(poi.AudioPath);
-            else
-                await SpeakAsync(poi.Description, poi.LanguageCode, _speakCts.Token);
-        }
-        catch (OperationCanceledException) { /* skip/clear triggered */ }
-        finally
-        {
-            _speakCts?.Dispose();
-            _speakCts = null;
-        }
-
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
         await PlayNextAsync();
     }
 

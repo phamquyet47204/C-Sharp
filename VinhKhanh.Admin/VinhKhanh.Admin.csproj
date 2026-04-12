@@ -7,11 +7,6 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.*" />
-<<<<<<< HEAD
-=======
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.4" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.4" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.4" PrivateAssets="all" />

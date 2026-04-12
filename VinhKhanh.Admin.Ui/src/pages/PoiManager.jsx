@@ -2,11 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Search, Edit2, Trash2 } from 'lucide-react';
 import api from '../services/api';
-<<<<<<< HEAD
-=======
-import ConfirmDialog, { useConfirm } from '../components/ConfirmDialog';
-import Toast, { useToast } from '../components/Toast';
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 
 const PoiManager = () => {
   const [pois, setPois] = useState([]);
@@ -14,11 +9,6 @@ const PoiManager = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('ALL');
   const navigate = useNavigate();
-<<<<<<< HEAD
-=======
-  const { confirm, confirmProps } = useConfirm();
-  const { toast, show: showToast } = useToast();
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 
   const categoryOptions = [
     { code: 'ALL', label: 'Tất cả' },
@@ -126,35 +116,12 @@ const PoiManager = () => {
     }
   };
 
-<<<<<<< HEAD
-=======
-  const handleDelete = async (poi) => {
-    const ok = await confirm({
-      title: 'Xóa địa điểm',
-      message: `Bạn chắc chắn muốn xóa "${poi.name}"? Hành động này không thể hoàn tác.`,
-    });
-    if (!ok) return;
-    try {
-      await api.delete(`/admin/pois/${poi.id}`);
-      setPois(prev => prev.filter(p => p.id !== poi.id));
-      showToast(`Đã xóa "${poi.name}" thành công.`, 'success');
-    } catch (err) {
-      showToast(err?.response?.data?.error || 'Xóa POI thất bại.', 'error');
-    }
-  };
-
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
   useEffect(() => {
     fetchPois();
   }, []);
 
   return (
     <div className="space-y-6">
-<<<<<<< HEAD
-=======
-      <Toast toast={toast} />
-      <ConfirmDialog {...confirmProps} confirmLabel="Xóa" />
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Quản lý địa điểm</h2>
@@ -261,13 +228,7 @@ const PoiManager = () => {
                         <Link to={`/pois/${poi.id}`} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors">
                           <Edit2 size={18} />
                         </Link>
-<<<<<<< HEAD
                         <button className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors">
-=======
-                        <button
-                          onClick={() => handleDelete(poi)}
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors">
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
                           <Trash2 size={18} />
                         </button>
                       </div>

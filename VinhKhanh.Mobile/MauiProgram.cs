@@ -36,10 +36,6 @@ public static class MauiProgram
                 };
             })
             .AddSingleton<SyncService>()
-<<<<<<< HEAD
-=======
-            .AddSingleton<AnalyticsService>()
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
             .AddSingleton<AccessControlService>()
             .AddSingleton<AuthService>()
             .AddTransient<MapViewModel>()
@@ -48,11 +44,7 @@ public static class MauiProgram
 #if ANDROID
         MapHandler.Mapper.AppendToMapping("MoveMyLocationButton", (handler, _) =>
         {
-<<<<<<< HEAD
             Platforms.Android.MapUiCustomizer.Configure(handler);
-=======
-            VinhKhanhFoodStreet.Platforms.Android.MapUiCustomizer.Configure(handler);
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
         });
 #endif
 

@@ -1,8 +1,4 @@
 using Microsoft.AspNetCore.Authorization;
-<<<<<<< HEAD
-=======
-using Microsoft.AspNetCore.Identity;
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 using Microsoft.AspNetCore.Mvc;
 using VinhKhanh.Application.UseCases;
 using VinhKhanh.Infrastructure.Services;
@@ -20,12 +16,7 @@ public class AdminController(
     AdminApproveUseCase approveUseCase, 
     GeminiAiService geminiAiService,
     AppDbContext dbContext,
-<<<<<<< HEAD
     IWebHostEnvironment env) : ControllerBase
-=======
-    IWebHostEnvironment env,
-    UserManager<ApplicationUser> userManager) : ControllerBase
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 {
     private static readonly HashSet<string> SupportedCategoryCodes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -152,17 +143,12 @@ public class AdminController(
     {
         try
         {
-<<<<<<< HEAD
             var poi = await dbContext.Pois.FirstOrDefaultAsync(p => p.Id == poiId, cancellationToken);
             if (poi is null) return NotFound("POI không tồn tại.");
             poi.Status = PoiStatus.Approved;
             poi.IsApproved = true;
             poi.UpdatedAt = DateTime.UtcNow;
             await dbContext.SaveChangesAsync(cancellationToken);
-=======
-            var success = await approveUseCase.ExecuteAsync(poiId, cancellationToken);
-            if (!success) return NotFound("POI không tồn tại.");
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
             return Ok(new { success = true, message = "Đã duyệt thành công." });
         }
         catch (Exception ex)
@@ -410,110 +396,6 @@ public class AdminController(
         }
     }
 
-<<<<<<< HEAD
-=======
-    [HttpDelete("pois/{poiId:int}")]
-    public async Task<IActionResult> DeletePoi(int poiId, CancellationToken cancellationToken)
-    {
-        var poi = await dbContext.Pois
-            .Include(p => p.Localizations)
-            .FirstOrDefaultAsync(p => p.Id == poiId, cancellationToken);
-
-        if (poi is null) return NotFound(new { error = "Không tìm thấy POI." });
-
-        dbContext.Pois.Remove(poi);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        return Ok(new { success = true, message = "Đã xóa POI thành công." });
-    }
-
-    /// <summary>
-    /// Admin tạo tài khoản chủ quán trực tiếp, IsApproved = true luôn.
-    /// </summary>
-    [HttpPost("shop-owners")]
-    public async Task<IActionResult> CreateShopOwner([FromBody] CreateShopOwnerRequest request, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password) || string.IsNullOrWhiteSpace(request.FullName))
-            return BadRequest(new { error = "Email, mật khẩu và họ tên không được để trống." });
-
-        if (request.Password.Length < 6)
-            return BadRequest(new { error = "Mật khẩu phải có ít nhất 6 ký tự." });
-
-        var existing = await userManager.FindByEmailAsync(request.Email);
-        if (existing is not null)
-            return Conflict(new { error = "Email này đã được sử dụng." });
-
-        var user = new ApplicationUser
-        {
-            UserName = request.Email,
-            Email = request.Email,
-            FullName = request.FullName,
-            PhoneNumber = request.PhoneNumber,
-            IsApproved = true, // Admin tạo → duyệt luôn
-            SecurityStamp = Guid.NewGuid().ToString()
-        };
-
-        var result = await userManager.CreateAsync(user, request.Password);
-        if (!result.Succeeded)
-        {
-            var errors = result.Errors.Select(e => e.Description).ToList();
-            return BadRequest(new { error = "Tạo tài khoản thất bại.", details = errors });
-        }
-
-        await userManager.AddToRoleAsync(user, "ShopOwner");
-
-        return Ok(new { success = true, message = $"Đã tạo tài khoản chủ quán cho {request.Email}.", userId = user.Id });
-    }
-
-    /// <summary>
-    /// Lấy danh sách tất cả chủ quán (đã duyệt + chờ duyệt).
-    /// </summary>
-    [HttpGet("shop-owners")]
-    public async Task<IActionResult> GetShopOwners(CancellationToken cancellationToken)
-    {
-        var shopOwners = await userManager.GetUsersInRoleAsync("ShopOwner");
-        var result = shopOwners
-            .OrderByDescending(u => u.IsApproved)
-            .ThenBy(u => u.FullName)
-            .Select(u => new { u.Id, u.Email, u.FullName, u.PhoneNumber, u.IsApproved })
-            .ToList();
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Admin duyệt tài khoản chủ quán đang chờ.
-    /// </summary>
-    [HttpPost("shop-owners/{userId}/approve")]
-    public async Task<IActionResult> ApproveShopOwner(string userId, CancellationToken cancellationToken)
-    {
-        var user = await userManager.FindByIdAsync(userId);
-        if (user is null) return NotFound(new { error = "Không tìm thấy tài khoản." });
-
-        if (user.IsApproved) return Conflict(new { error = "Tài khoản đã được duyệt." });
-
-        user.IsApproved = true;
-        await userManager.UpdateAsync(user);
-        return Ok(new { success = true, message = $"Đã duyệt tài khoản {user.Email}." });
-    }
-
-    /// <summary>
-    /// Admin xóa tài khoản chủ quán.
-    /// </summary>
-    [HttpDelete("shop-owners/{userId}")]
-    public async Task<IActionResult> DeleteShopOwner(string userId, CancellationToken cancellationToken)
-    {
-        var user = await userManager.FindByIdAsync(userId);
-        if (user is null) return NotFound(new { error = "Không tìm thấy tài khoản." });
-
-        var roles = await userManager.GetRolesAsync(user);
-        if (!roles.Contains("ShopOwner"))
-            return BadRequest(new { error = "Tài khoản này không phải chủ quán." });
-
-        await userManager.DeleteAsync(user);
-        return Ok(new { success = true, message = $"Đã xóa tài khoản {user.Email}." });
-    }
-
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
     private static void UpsertLocalization(ICollection<PoiLocalization> localizations, string languageCode, string? name, string? description)
     {
         var existing = localizations.FirstOrDefault(l => l.LanguageCode == languageCode);
@@ -532,53 +414,6 @@ public class AdminController(
         existing.Name = name ?? string.Empty;
         existing.Description = description ?? string.Empty;
     }
-<<<<<<< HEAD
-=======
-
-    /// <summary>
-    /// Admin reset mật khẩu cho bất kỳ user nào (không cần mật khẩu cũ).
-    /// </summary>
-    [HttpPost("users/{userId}/reset-password")]
-    public async Task<IActionResult> ResetUserPassword(string userId, [FromBody] AdminResetPasswordRequest request, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 6)
-            return BadRequest(new { error = "Mật khẩu mới phải có ít nhất 6 ký tự." });
-
-        var user = await userManager.FindByIdAsync(userId);
-        if (user is null)
-            return NotFound(new { error = "Không tìm thấy tài khoản." });
-
-        // Dùng token reset để bypass mật khẩu cũ
-        var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
-        var result = await userManager.ResetPasswordAsync(user, resetToken, request.NewPassword);
-
-        if (!result.Succeeded)
-        {
-            var errors = result.Errors.Select(e => e.Description).ToList();
-            return BadRequest(new { error = "Reset mật khẩu thất bại.", details = errors });
-        }
-
-        return Ok(new { success = true, message = $"Đã reset mật khẩu cho {user.Email}." });
-    }
-
-    /// <summary>
-    /// Lấy danh sách tất cả users (Admin + ShopOwner) để Admin quản lý.
-    /// </summary>
-    [HttpGet("users")]
-    public async Task<IActionResult> GetUsers(CancellationToken cancellationToken)
-    {
-        var shopOwners = await userManager.GetUsersInRoleAsync("ShopOwner");
-        var admins = await userManager.GetUsersInRoleAsync("Admin");
-
-        var allUsers = shopOwners.Select(u => new { u.Id, u.Email, u.FullName, u.IsApproved, role = "ShopOwner" })
-            .Concat(admins.Select(u => new { u.Id, u.Email, u.FullName, u.IsApproved, role = "Admin" }))
-            .OrderBy(u => u.role)
-            .ThenBy(u => u.Email)
-            .ToList();
-
-        return Ok(allUsers);
-    }
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 }
 
 public class AiTranslationRequest
@@ -609,19 +444,3 @@ public class CreatePoiRequest
 
     public IFormFile? Image { get; set; }
 }
-<<<<<<< HEAD
-=======
-
-public class AdminResetPasswordRequest
-{
-    public string NewPassword { get; set; } = string.Empty;
-}
-
-public class CreateShopOwnerRequest
-{
-    public string Email { get; set; } = string.Empty;
-    public string Password { get; set; } = string.Empty;
-    public string FullName { get; set; } = string.Empty;
-    public string? PhoneNumber { get; set; }
-}
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)

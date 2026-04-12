@@ -1,10 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-<<<<<<< HEAD
-=======
-using Microsoft.AspNetCore.Authorization;
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
@@ -118,44 +114,6 @@ public class AuthController(
 
         return Ok(new { success = true, message = "Đăng ký thành công!" });
     }
-<<<<<<< HEAD
-=======
-
-    /// <summary>
-    /// Người dùng đang đăng nhập tự đổi mật khẩu của mình.
-    /// Yêu cầu cung cấp mật khẩu cũ để xác thực.
-    /// </summary>
-    [HttpPost("change-password")]
-    [Authorize]
-    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
-    {
-        if (string.IsNullOrWhiteSpace(request.CurrentPassword) || string.IsNullOrWhiteSpace(request.NewPassword))
-            return BadRequest(new { error = "Mật khẩu hiện tại và mật khẩu mới không được để trống." });
-
-        if (request.NewPassword.Length < 6)
-            return BadRequest(new { error = "Mật khẩu mới phải có ít nhất 6 ký tự." });
-
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var user = await userManager.FindByIdAsync(userId ?? string.Empty);
-        if (user is null)
-            return NotFound(new { error = "Không tìm thấy tài khoản." });
-
-        var result = await userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
-        if (!result.Succeeded)
-        {
-            var errors = result.Errors.Select(e => e.Description).ToList();
-            return BadRequest(new { error = "Đổi mật khẩu thất bại.", details = errors });
-        }
-
-        return Ok(new { success = true, message = "Đổi mật khẩu thành công." });
-    }
-}
-
-public class ChangePasswordRequest
-{
-    public string CurrentPassword { get; set; } = string.Empty;
-    public string NewPassword { get; set; } = string.Empty;
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 }
 
 public class LoginRequest

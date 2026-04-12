@@ -1,9 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-<<<<<<< HEAD
 import { LayoutDashboard, MapPin, LogOut } from 'lucide-react';
-=======
-import { LayoutDashboard, MapPin, Settings, LogOut } from 'lucide-react';
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 
 export default function ShopLayout() {
   const navigate = useNavigate();
@@ -32,14 +28,6 @@ export default function ShopLayout() {
               `flex items-center gap-3 px-4 py-3 rounded-2xl font-medium transition-all ${isActive ? 'bg-orange-50 text-orange-600' : 'text-gray-600 hover:bg-gray-50'}`}>
             <MapPin size={20} /><span>Quản lý POI</span>
           </NavLink>
-<<<<<<< HEAD
-=======
-          <NavLink to="/shop/settings"
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-3 rounded-2xl font-medium transition-all ${isActive ? 'bg-orange-50 text-orange-600' : 'text-gray-600 hover:bg-gray-50'}`}>
-            <Settings size={20} /><span>Cài đặt</span>
-          </NavLink>
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
         </nav>
         <div className="p-4 border-t">
           <button onClick={handleLogout}

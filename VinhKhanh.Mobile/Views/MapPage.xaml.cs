@@ -43,10 +43,6 @@ public partial class MapPage : ContentPage
         PlacePins(_vm.FilteredPois);
         CenterOnVinhKhanh();
         UpdateFreeTrialBanner();
-<<<<<<< HEAD
-=======
-        RebuildCategoryChips();
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
     }
 
     protected override void OnDisappearing()
@@ -69,17 +65,7 @@ public partial class MapPage : ContentPage
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(MapViewModel.FilteredPois) or nameof(MapViewModel.Pois))
-<<<<<<< HEAD
             MainThread.BeginInvokeOnMainThread(() => PlacePins(_vm.FilteredPois));
-=======
-        {
-            MainThread.BeginInvokeOnMainThread(() =>
-            {
-                PlacePins(_vm.FilteredPois);
-                RebuildCategoryChips();
-            });
-        }
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 
         if (e.PropertyName is nameof(MapViewModel.AccessStatus) or nameof(MapViewModel.FreeTrialMessage))
             MainThread.BeginInvokeOnMainThread(() =>
@@ -87,85 +73,9 @@ public partial class MapPage : ContentPage
                 PlacePins(_vm.FilteredPois);
                 UpdateFreeTrialBanner();
             });
-<<<<<<< HEAD
     }
 
     // Requirement 14.3 & 14.6: hiển thị lock icon trên premium POI khi chưa có pass
-=======
-
-        if (e.PropertyName is nameof(MapViewModel.IsListTabActive))
-            MainThread.BeginInvokeOnMainThread(UpdateTabBar);
-    }
-
-    // ===== TAB SWITCHING =====
-
-    private void OnMapTabClicked(object? sender, EventArgs e)
-    {
-        _vm.IsListTabActive = false;
-        UpdateTabBar();
-    }
-
-    private void OnListTabClicked(object? sender, EventArgs e)
-    {
-        _vm.IsListTabActive = true;
-        UpdateTabBar();
-    }
-
-    private void UpdateTabBar()
-    {
-        MapTabBtn.TextColor = _vm.IsListTabActive ? Color.FromArgb("#999") : Color.FromArgb("#FF6B35");
-        MapTabBtn.FontAttributes = _vm.IsListTabActive ? FontAttributes.None : FontAttributes.Bold;
-        ListTabBtn.TextColor = _vm.IsListTabActive ? Color.FromArgb("#FF6B35") : Color.FromArgb("#999");
-        ListTabBtn.FontAttributes = _vm.IsListTabActive ? FontAttributes.Bold : FontAttributes.None;
-    }
-
-    // ===== CATEGORY CHIPS =====
-
-    private void RebuildCategoryChips()
-    {
-        CategoryChips.Children.Clear();
-        foreach (var cat in _vm.Categories)
-        {
-            var isSelected = cat == _vm.SelectedCategory;
-            var btn = new Button
-            {
-                Text = cat,
-                FontSize = 12,
-                BackgroundColor = isSelected ? Color.FromArgb("#FF6B35") : Colors.White,
-                TextColor = isSelected ? Colors.White : Color.FromArgb("#555"),
-                CornerRadius = 16,
-                Padding = new Thickness(14, 6),
-                HeightRequest = 32,
-                BorderColor = isSelected ? Color.FromArgb("#FF6B35") : Color.FromArgb("#DDD"),
-                BorderWidth = 1
-            };
-            var catCapture = cat;
-            btn.Clicked += (_, _) =>
-            {
-                _vm.SelectedCategory = catCapture;
-                RebuildCategoryChips();
-            };
-            CategoryChips.Children.Add(btn);
-        }
-    }
-
-    // ===== NAVIGATE TO POI ON MAP =====
-
-    private void OnNavigateToPoiOnMap(PoiRecord poi)
-    {
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            _currentRadiusMeters = 150;
-            MainMap.MoveToRegion(MapSpan.FromCenterAndRadius(
-                new Location(poi.Latitude, poi.Longitude),
-                Distance.FromMeters(_currentRadiusMeters)));
-            HandlePoiTap(poi);
-        });
-    }
-
-    // ===== MAP LOGIC =====
-
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
     private void PlacePins(IEnumerable<PoiRecord> pois)
     {
         MainMap.Pins.Clear();
@@ -177,21 +87,12 @@ public partial class MapPage : ContentPage
 
         foreach (var poi in pois)
         {
-<<<<<<< HEAD
             // Requirement 14.6: ẩn lock icon khi có Access Pass còn hạn
             var showLock = poi.IsPremium && !hasActivePass;
             var pin = new Pin
             {
                 Label = showLock ? $"🔒 {poi.Name}" : poi.Name,
                 Address = poi.Category,
-=======
-            var showLock = poi.IsPremium && !hasActivePass;
-            var pin = new Pin
-            {
-                // Label rỗng → Google Maps không hiện callout popup
-                Label = showLock ? "🔒" : "●",
-                Address = string.Empty,
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
                 Location = new Location(poi.Latitude, poi.Longitude),
                 Type = PinType.Place
             };
@@ -218,13 +119,7 @@ public partial class MapPage : ContentPage
         }
 
         if (nearest is not null && minDist < thresholdDeg * thresholdDeg && _pinMap.TryGetValue(nearest, out var poi))
-<<<<<<< HEAD
             HandlePoiTap(poi);
-=======
-        {
-            HandlePoiTap(poi);
-        }
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
         else
         {
             PoiCard.IsVisible = false;
@@ -232,7 +127,6 @@ public partial class MapPage : ContentPage
         }
     }
 
-<<<<<<< HEAD
     // Requirement 14.3 & 14.4: xử lý tap vào POI — kiểm tra premium
     private void HandlePoiTap(PoiRecord poi)
     {
@@ -250,36 +144,17 @@ public partial class MapPage : ContentPage
     }
 
     // Requirement 14.4: bottom sheet với thông tin POI và nút mua Access Pass
-=======
-    private void HandlePoiTap(PoiRecord poi)
-    {
-        var hasActivePass = _vm.AccessStatus?.HasActivePass ?? false;
-        if (poi.IsPremium && !hasActivePass)
-            ShowPremiumSheet(poi);
-        else
-            ShowPoiCard(poi);
-    }
-
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
     private void ShowPremiumSheet(PoiRecord poi)
     {
         _currentPoiCard = poi;
         PremiumPoiNameLabel.Text = poi.Name;
         PremiumPoiDescLabel.Text = poi.Description;
 
-<<<<<<< HEAD
         // Requirement 4.5: hiển thị thông báo free trial trong bottom sheet
         var status = _vm.AccessStatus;
         if (status is not null && !status.HasActivePass && status.FreeTrialUsed < status.FreeTrialLimit)
         {
             PremiumFreeTrialLabel.Text = $"Bạn đã dùng {status.FreeTrialUsed}/{status.FreeTrialLimit} lượt thử miễn phí";
-=======
-        var status = _vm.AccessStatus;
-        if (status is not null && !status.HasActivePass && status.IsTrialActive && status.TrialExpiresAt.HasValue)
-        {
-            var daysLeft = (int)(status.TrialExpiresAt.Value - DateTime.UtcNow).TotalDays + 1;
-            PremiumFreeTrialLabel.Text = $"Dùng thử miễn phí: còn {daysLeft} ngày";
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
             PremiumFreeTrialLabel.IsVisible = true;
         }
         else
@@ -312,7 +187,6 @@ public partial class MapPage : ContentPage
         PoiCard.IsVisible = true;
     }
 
-<<<<<<< HEAD
     // Requirement 4.5: cập nhật banner free trial ở dưới màn hình
     private void UpdateFreeTrialBanner()
     {
@@ -326,13 +200,6 @@ public partial class MapPage : ContentPage
         {
             FreeTrialBanner.IsVisible = false;
         }
-=======
-    private void UpdateFreeTrialBanner()
-    {
-        var msg = _vm.FreeTrialMessage;
-        FreeTrialLabel.Text = msg;
-        FreeTrialBanner.IsVisible = !string.IsNullOrWhiteSpace(msg);
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
     }
 
     private async void OnListenClicked(object? sender, EventArgs e)

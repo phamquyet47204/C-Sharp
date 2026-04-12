@@ -19,32 +19,11 @@ public partial class MapViewModel(LocalDatabase db, GeofenceService geofence, Sy
     [ObservableProperty] private string _selectedCategory = "Tất cả";
     [ObservableProperty] private AccessStatus? _accessStatus;
     [ObservableProperty] private string _freeTrialMessage = string.Empty;
-<<<<<<< HEAD
 
     public List<string> Languages { get; } = ["vi-VN", "en-US", "ja-JP"];
     public List<string> Categories { get; private set; } = ["Tất cả"];
 
     partial void OnSelectedCategoryChanged(string value) => ApplyCategoryFilter();
-=======
-    [ObservableProperty] private string _searchText = string.Empty;
-    [ObservableProperty] private bool _isListTabActive;
-    [ObservableProperty] private bool _isRefreshing;
-
-    // Event để MapPage biết cần zoom vào POI nào
-    public event Action<PoiRecord>? NavigateToPoiOnMap;
-
-    public List<string> Languages { get; } = ["vi-VN", "en-US", "ja-JP"];
-    public List<string> Categories { get; private set; } = ["Tất cả"];
-
-    partial void OnSelectedCategoryChanged(string value) => ApplyFilter();
-    partial void OnSearchTextChanged(string value) => ApplyFilter();
-    partial void OnSelectedLanguageChanged(string value)
-    {
-        Preferences.Set("language", value);
-        // Reload POI theo ngôn ngữ mới (fire-and-forget)
-        _ = LoadLocalStateAsync();
-    }
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 
     partial void OnPoisChanged(List<PoiRecord> value)
     {
@@ -59,7 +38,6 @@ public partial class MapViewModel(LocalDatabase db, GeofenceService geofence, Sy
         cats.Insert(0, "Tất cả");
         Categories = cats;
         OnPropertyChanged(nameof(Categories));
-<<<<<<< HEAD
         ApplyCategoryFilter();
     }
 
@@ -68,46 +46,6 @@ public partial class MapViewModel(LocalDatabase db, GeofenceService geofence, Sy
         FilteredPois = SelectedCategory == "Tất cả"
             ? Pois
             : Pois.Where(p => p.CategoryDisplayName == SelectedCategory).ToList();
-=======
-        ApplyFilter();
-    }
-
-    private void ApplyFilter()
-    {
-        var result = Pois.AsEnumerable();
-
-        // Lọc theo category
-        if (SelectedCategory != "Tất cả")
-            result = result.Where(p => p.CategoryDisplayName == SelectedCategory);
-
-        // Lọc theo search text
-        if (!string.IsNullOrWhiteSpace(SearchText))
-        {
-            var q = SearchText.Trim().ToLowerInvariant();
-            result = result.Where(p =>
-                p.Name.ToLowerInvariant().Contains(q) ||
-                p.Description.ToLowerInvariant().Contains(q));
-        }
-
-        FilteredPois = result.ToList();
-    }
-
-    /// <summary>Gọi từ danh sách khi user nhấn "Xem trên bản đồ".</summary>
-    [RelayCommand]
-    void ShowOnMap(PoiRecord poi)
-    {
-        IsListTabActive = false;
-        NavigateToPoiOnMap?.Invoke(poi);
-    }
-
-    /// <summary>Gọi từ danh sách khi user nhấn icon 🔊.</summary>
-    public event Action<PoiRecord>? ListenRequested;
-
-    [RelayCommand]
-    void Listen(PoiRecord poi)
-    {
-        ListenRequested?.Invoke(poi);
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
     }
 
     [RelayCommand]
@@ -125,7 +63,6 @@ public partial class MapViewModel(LocalDatabase db, GeofenceService geofence, Sy
 
             await LoadLocalStateAsync();
         }
-<<<<<<< HEAD
     }
 
     public void StartAutoSync()
@@ -212,8 +149,6 @@ public partial class MapViewModel(LocalDatabase db, GeofenceService geofence, Sy
             Pois = activePois;
             IsUnlocked = unlocked;
         });
-=======
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
     }
 
     [RelayCommand]

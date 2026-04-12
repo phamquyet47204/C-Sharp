@@ -12,10 +12,6 @@ import ShopLayout from './pages/shop/ShopLayout';
 import ShopDashboard from './pages/shop/ShopDashboard';
 import ShopPoiList from './pages/shop/ShopPoiList';
 import ShopPoiForm from './pages/shop/ShopPoiForm';
-<<<<<<< HEAD
-=======
-import ShopOwners from './pages/ShopOwners';
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 
 function App() {
   return (
@@ -33,10 +29,6 @@ function App() {
             <Route path="pois/new" element={<PoiForm />} />
             <Route path="pois/:id" element={<PoiForm />} />
             <Route path="approvals" element={<Approvals />} />
-<<<<<<< HEAD
-=======
-            <Route path="shop-owners" element={<ShopOwners />} />
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
             <Route path="analytics" element={<Analytics />} />
             <Route path="settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -51,10 +43,6 @@ function App() {
             <Route path="pois" element={<ShopPoiList />} />
             <Route path="pois/new" element={<ShopPoiForm />} />
             <Route path="pois/:id/edit" element={<ShopPoiForm />} />
-<<<<<<< HEAD
-=======
-            <Route path="settings" element={<Settings />} />
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
           </Route>
         </Route>
 

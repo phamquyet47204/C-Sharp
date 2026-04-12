@@ -38,11 +38,6 @@ const PoiForm = () => {
   const [existingImageUrl, setExistingImageUrl] = useState('');
   const [selectedImagePreviewUrl, setSelectedImagePreviewUrl] = useState('');
   const [errorMsg, setErrorMsg] = useState(null);
-<<<<<<< HEAD
-=======
-  const [shopOwners, setShopOwners] = useState([]);
-  const [selectedOwnerId, setSelectedOwnerId] = useState('');
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 
   const getBackendOrigin = () => {
     const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
@@ -127,16 +122,6 @@ const PoiForm = () => {
     };
   }, [selectedImagePreviewUrl]);
 
-<<<<<<< HEAD
-=======
-  // Fetch danh sách chủ quán đã được duyệt
-  useEffect(() => {
-    api.get('/admin/users')
-      .then(res => setShopOwners(res.data.filter(u => u.role === 'ShopOwner' && u.isApproved)))
-      .catch(() => {});
-  }, []);
-
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
   const showError = (msg) => {
     setErrorMsg(msg);
     setTimeout(() => setErrorMsg(null), 4000); // Tự tắt sau 4s
@@ -212,10 +197,6 @@ const PoiForm = () => {
       data.append('Lng', formData.lng);
       data.append('Radius', formData.radius);
       data.append('CategoryCode', formData.categoryCode);
-<<<<<<< HEAD
-=======
-      if (selectedOwnerId) data.append('OwnerId', selectedOwnerId);
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
       
       data.append('NameVi', formData.vi.name);
       data.append('DescVi', formData.vi.description);
@@ -369,30 +350,6 @@ const PoiForm = () => {
             </select>
           </div>
 
-<<<<<<< HEAD
-=======
-          {/* Chủ quán */}
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-bold text-gray-900 mb-1">Chủ quán</h3>
-            <p className="text-xs text-gray-400 mb-4">Tùy chọn — để trống nếu chưa có chủ quán</p>
-            <select
-              value={selectedOwnerId}
-              onChange={e => setSelectedOwnerId(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-50 border-transparent focus:border-coral-500 focus:bg-white focus:ring-4 focus:ring-coral-500/10 rounded-2xl transition-all text-sm"
-            >
-              <option value="">— Không gán chủ quán —</option>
-              {shopOwners.map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.fullName || u.email} ({u.email})
-                </option>
-              ))}
-            </select>
-            {shopOwners.length === 0 && (
-              <p className="text-xs text-gray-400 mt-2">Chưa có chủ quán nào được duyệt.</p>
-            )}
-          </div>
-
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
             <div className="flex items-center gap-2 mb-6">
               <ImageIcon className="text-emerald-500" size={24} />

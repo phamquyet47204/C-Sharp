@@ -37,36 +37,6 @@ builder.Services.AddScoped<AdminApproveUseCase>();
 
 // 5. API CONFIGURATION & CORS
 builder.Services.AddControllers();
-<<<<<<< HEAD
-=======
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new() { Title = "VinhKhanh Admin API", Version = "v1" });
-    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-    {
-        Name = "Authorization",
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header
-    });
-    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
-    {
-        {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-            {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
-                {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
-    });
-});
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy => {
@@ -104,16 +74,6 @@ var app = builder.Build();
 
 app.UseCors("AllowAll");
 app.UseStaticFiles();
-<<<<<<< HEAD
-=======
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "VinhKhanh Admin API v1"));
-}
-
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
@@ -169,21 +129,6 @@ IF COL_LENGTH('Pois', 'CategoryCode') IS NULL
 BEGIN
     ALTER TABLE [Pois] ADD [CategoryCode] NVARCHAR(32) NOT NULL CONSTRAINT [DF_Pois_CategoryCode] DEFAULT 'FOOD_STREET';
 END
-<<<<<<< HEAD
-=======
-
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'DeviceTrials')
-BEGIN
-    CREATE TABLE [DeviceTrials] (
-        [Id] INT IDENTITY(1,1) NOT NULL,
-        [DeviceId] NVARCHAR(450) NOT NULL,
-        [FirstSeenAt] DATETIME2 NOT NULL,
-        [TrialExpiresAt] DATETIME2 NOT NULL,
-        CONSTRAINT [PK_DeviceTrials] PRIMARY KEY ([Id])
-    );
-    CREATE UNIQUE INDEX [IX_DeviceTrials_DeviceId] ON [DeviceTrials] ([DeviceId]);
-END
->>>>>>> bb1d8ae5 (feat: UI improvements, device trial, category fix, pull-to-refresh, map pin card)
 ");
     }
     catch (Exception ex)
