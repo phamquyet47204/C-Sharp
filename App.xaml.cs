@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace VinhKhanhFoodStreet;
 
@@ -17,7 +17,7 @@ public partial class App : Application
 #if WINDOWS
 		Page rootPage = CreateWindowsLandingPage();
 #else
-		Page rootPage = _serviceProvider.GetRequiredService<MainPage>();
+		Page rootPage = new NavigationPage(_serviceProvider.GetRequiredService<MainPage>());
 #endif
 
 		var window = new Window(rootPage)

@@ -30,8 +30,26 @@ public partial class MapPage : ContentPage
         await _vm.LoadCommand.ExecuteAsync(null);
         _vm.StartMonitoring();
         PlacePins(_vm.FilteredPois);
-        CenterOnVinhKhanh();
         UpdateFreeTrialBanner();
+
+        // Xử lý khi quay lại từ PoiListPage với một POI được chọn
+        if (SelectedPoiHelper.CurrentSelectedPoi is PoiRecord selected)
+        {
+            FocusOnPoi(selected);
+            SelectedPoiHelper.CurrentSelectedPoi = null;
+        }
+        else
+        {
+            CenterOnVinhKhanh();
+        }
+    }
+
+    private void FocusOnPoi(PoiRecord poi)
+    {
+        MainMap.MoveToRegion(MapSpan.FromCenterAndRadius(
+            new Location(poi.Latitude, poi.Longitude),
+            Distance.FromMeters(100)));
+        HandlePoiTap(poi);
     }
 
     protected override void OnDisappearing()
@@ -203,12 +221,43 @@ public partial class MapPage : ContentPage
     private async void OnBuyAccessPassClicked(object? sender, EventArgs e)
     {
         PremiumSheet.IsVisible = false;
-        // Hiển thị thông báo hướng dẫn mua Access Pass
-        // (tích hợp với PaymentController khi có UI thanh toán)
-        await DisplayAlert(
-            "Mua Access Pass",
-            "Mua Access Pass với giá $1/7 ngày để nghe thuyết minh không giới hạn tại Phố Vĩnh Khánh.\n\nTính năng thanh toán sẽ sớm được cập nhật.",
-            "OK");
+        await Navigation.PushAsync(Application.Current!.Handler!.MauiContext!.Services.GetRequiredService<SettingsPage>());
+    }
+
+    private void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        _vm.SearchText = e.NewTextValue;
+    }
+
+    private void OnSearchFocused(object? sender, FocusEventArgs e)
+    {
+        SearchResultsPopup.IsVisible = true;
+    }
+
+    private void OnSearchUnfocused(object? sender, FocusEventArgs e)
+    {
+        // Delay to allow selection
+        Task.Delay(200).ContinueWith(_ => MainThread.BeginInvokeOnMainThread(() => SearchResultsPopup.IsVisible = false));
+    }
+
+    private void OnSearchResultSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        if (e.CurrentSelection.FirstOrDefault() is PoiRecord poi)
+        {
+            ((CollectionView)sender!).SelectedItem = null;
+            MapSearchBar.Unfocus();
+            FocusOnPoi(poi);
+        }
+    }
+
+    private async void OnOpenListClicked(object? sender, EventArgs e)
+    {
+        await Navigation.PushAsync(Application.Current!.Handler!.MauiContext!.Services.GetRequiredService<PoiListPage>());
+    }
+
+    private async void OnSettingsClicked(object? sender, EventArgs e)
+    {
+        await Navigation.PushAsync(Application.Current!.Handler!.MauiContext!.Services.GetRequiredService<SettingsPage>());
     }
 
     private static ImageSource CreatePoiImageSource(string imagePath)

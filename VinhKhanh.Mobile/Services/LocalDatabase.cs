@@ -8,15 +8,29 @@ public class LocalDatabase
     private readonly SQLiteAsyncConnection _db;
     private readonly SemaphoreSlim _dbLock = new(1, 1);
 
+    private Task? _initTask;
+
     public LocalDatabase(string dbPath)
     {
         _db = new SQLiteAsyncConnection(dbPath);
-        _db.CreateTableAsync<PoiRecord>().Wait();
-        _db.CreateTableAsync<NarrationEvent>().Wait();
+    }
+
+    private Task EnsureInitializedAsync()
+    {
+        if (_initTask is not null) return _initTask;
+
+        _initTask = Task.Run(async () =>
+        {
+            await _db.CreateTableAsync<PoiRecord>();
+            await _db.CreateTableAsync<NarrationEvent>();
+        });
+
+        return _initTask;
     }
 
     public async Task<List<PoiRecord>> GetActivePoisAsync()
     {
+        await EnsureInitializedAsync();
         await _dbLock.WaitAsync();
         try
         {
@@ -30,6 +44,7 @@ public class LocalDatabase
 
     public async Task<PoiRecord?> GetPoiByIdAsync(int poiId)
     {
+        await EnsureInitializedAsync();
         await _dbLock.WaitAsync();
         try
         {
@@ -43,6 +58,7 @@ public class LocalDatabase
 
     public async Task UpsertPoisAsync(IEnumerable<PoiRecord> pois)
     {
+        await EnsureInitializedAsync();
         await _dbLock.WaitAsync();
         try
         {
@@ -59,6 +75,7 @@ public class LocalDatabase
 
     public async Task DeletePoisAsync(IEnumerable<int> ids)
     {
+        await EnsureInitializedAsync();
         await _dbLock.WaitAsync();
         try
         {
@@ -82,6 +99,7 @@ public class LocalDatabase
 
     public async Task LogNarrationAsync(NarrationEvent e)
     {
+        await EnsureInitializedAsync();
         await _dbLock.WaitAsync();
         try
         {

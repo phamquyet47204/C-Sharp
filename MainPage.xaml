@@ -15,10 +15,13 @@
                    FontSize="18"
                    FontAttributes="Bold"
                    VerticalOptions="Center" />
-            <Button x:Name="LanguageButton"
+            <Button x:Name="SettingsButton"
                     Grid.Column="1"
-                    Text="VN"
-                    Clicked="OnToggleLanguage" />
+                    Text="⚙️"
+                    FontSize="20"
+                    BackgroundColor="Transparent"
+                    TextColor="White"
+                    Clicked="OnSettingsClicked" />
         </Grid>
 
         <Grid Grid.Row="1" ColumnDefinitions="*,*" Padding="16,12" ColumnSpacing="10" BackgroundColor="#F8F8F8">
@@ -34,6 +37,17 @@
                           IsTrafficEnabled="False" />
 
                 <VerticalStackLayout Grid.Row="0" Padding="16" Spacing="12">
+                    <!-- Search Bar on Map -->
+                    <Border Stroke="#E0E0E0" StrokeThickness="1" BackgroundColor="White" Padding="4" StrokeShape="RoundRectangle 24">
+                        <SearchBar x:Name="MapSearchBar"
+                                   Placeholder="Tìm quán trên bản đồ..."
+                                   FontSize="14"
+                                   TextColor="#1A1A1A"
+                                   BackgroundColor="Transparent"
+                                   SearchButtonPressed="OnMapSearchPressed"
+                                   TextChanged="OnMapSearchTextChanged"/>
+                    </Border>
+                    
                     <Border Stroke="#E0E0E0" StrokeThickness="1" BackgroundColor="White" Padding="10" StrokeShape="RoundRectangle 12">
                         <Picker x:Name="CategoryPicker"
                                 Title="Chọn phân loại"
@@ -53,40 +67,63 @@
                         Margin="12,0,12,16"
                         BackgroundColor="White"
                         StrokeShape="RoundRectangle 16"
-                        Stroke="#E0E0E0"
+                        Stroke="#E8E8E8"
                         StrokeThickness="1">
                     <Border.Shadow>
-                        <Shadow Brush="Black" Offset="0,4" Radius="12" Opacity="0.15"/>
+                        <Shadow Brush="Black" Offset="0,6" Radius="16" Opacity="0.12"/>
                     </Border.Shadow>
-                    <Grid ColumnDefinitions="*,Auto,Auto" Padding="14,12" ColumnSpacing="10">
-                        <Label x:Name="PinCardNameLabel"
-                               Grid.Column="0"
-                               FontSize="16"
-                               FontAttributes="Bold"
-                               TextColor="#1A1A1A"
-                               VerticalOptions="Center"
-                               LineBreakMode="TailTruncation"
-                               MaxLines="1"/>
-                        <Button x:Name="PinCardPlayButton"
-                                Grid.Column="1"
-                                Text="🔊"
-                                FontSize="20"
-                                BackgroundColor="#FF7F50"
-                                TextColor="White"
-                                CornerRadius="24"
-                                WidthRequest="48"
-                                HeightRequest="48"
+                    
+                    <Grid ColumnDefinitions="90, *, Auto" Padding="12" ColumnSpacing="12">
+                        <!-- Image on the left -->
+                        <Border Grid.Column="0"
+                                Stroke="#F1F1F1"
+                                StrokeThickness="1"
+                                BackgroundColor="#FAFAFA"
+                                StrokeShape="RoundRectangle 12"
                                 Padding="0"
-                                Clicked="OnPinCardPlay"/>
-                        <Button Grid.Column="2"
-                                Text="✕"
-                                FontSize="16"
-                                BackgroundColor="Transparent"
-                                TextColor="#999"
-                                WidthRequest="36"
-                                HeightRequest="36"
-                                Padding="0"
-                                Clicked="OnPinCardClose"/>
+                                WidthRequest="90"
+                                HeightRequest="80">
+                            <Image x:Name="PinCardImage"
+                                   Aspect="AspectFill" />
+                        </Border>
+
+                        <!-- Content in the middle -->
+                        <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                            <Label x:Name="PinCardNameLabel"
+                                   FontSize="16"
+                                   FontAttributes="Bold"
+                                   TextColor="#1A1A1A"
+                                   LineBreakMode="TailTruncation"
+                                   MaxLines="1"/>
+                            <Label x:Name="PinCardDescriptionLabel"
+                                   FontSize="12"
+                                   TextColor="#666666"
+                                   LineBreakMode="TailTruncation"
+                                   MaxLines="2"/>
+                        </VerticalStackLayout>
+
+                        <!-- Actions on the right -->
+                        <VerticalStackLayout Grid.Column="2" Spacing="0" VerticalOptions="Start">
+                            <Button Text="✕"
+                                    FontSize="14"
+                                    BackgroundColor="Transparent"
+                                    TextColor="#999"
+                                    WidthRequest="32"
+                                    HeightRequest="32"
+                                    Padding="0"
+                                    Clicked="OnPinCardClose"/>
+                            <Button x:Name="PinCardPlayButton"
+                                    Text="🔊"
+                                    FontSize="18"
+                                    BackgroundColor="#FF7F50"
+                                    TextColor="White"
+                                    CornerRadius="20"
+                                    WidthRequest="40"
+                                    HeightRequest="40"
+                                    Padding="0"
+                                    Margin="0,4,0,0"
+                                    Clicked="OnPinCardPlay"/>
+                        </VerticalStackLayout>
                     </Grid>
                 </Border>
 
@@ -170,7 +207,7 @@
                                                 BackgroundColor="#FF7F50"
                                                 TextColor="White"
                                                 Clicked="OnPlayPoi" />
-                                        <Button Text="🧭"
+                                        <Button Text="📍"
                                                 WidthRequest="42"
                                                 HeightRequest="42"
                                                 CornerRadius="21"

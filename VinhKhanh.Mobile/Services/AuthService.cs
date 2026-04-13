@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Maui.Storage;
+using VinhKhanh.Mobile.Configuration;
 
 namespace VinhKhanh.Mobile.Services;
 
@@ -12,7 +13,7 @@ public class AuthService
     {
         _httpClient = new HttpClient
         {
-            BaseAddress = new Uri(VinhKhanhFoodStreet.Configuration.AppConfig.BaseApiUrl)
+            BaseAddress = new Uri(MobileAppConfig.BaseApiUrl)
         };
     }
 

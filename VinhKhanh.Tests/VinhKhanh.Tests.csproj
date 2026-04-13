@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\VinhKhanh.Admin\VinhKhanh.Admin.csproj" />
+    <ProjectReference Include="..\VinhKhanh.Application\VinhKhanh.Application.csproj" />
     <ProjectReference Include="..\VinhKhanh.Domain\VinhKhanh.Domain.csproj" />
     <ProjectReference Include="..\VinhKhanh.Infrastructure\VinhKhanh.Infrastructure.csproj" />
   </ItemGroup>

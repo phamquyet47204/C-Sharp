@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:maps="clr-namespace:Microsoft.Maui.Controls.Maps;assembly=Microsoft.Maui.Controls.Maps"
+             xmlns:models="clr-namespace:VinhKhanh.Mobile.Models"
              x:Class="VinhKhanh.Mobile.Views.MapPage"
              Title="Phố Vĩnh Khánh"
              NavigationPage.HasNavigationBar="False">
@@ -15,64 +16,99 @@
                   IsZoomEnabled="True"
                   IsScrollEnabled="True"/>
 
-        <!-- Overlay góc trên: Category + Language + Unlock -->
-        <Grid ColumnDefinitions="*,Auto,Auto"
+        <!-- Top Overlay: Search + Settings + List -->
+        <Grid RowDefinitions="Auto,Auto"
               VerticalOptions="Start"
               HorizontalOptions="Fill"
               Margin="10,48,10,0">
+            
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <!-- Search Bar -->
+                <Border Grid.Column="0"
+                        StrokeShape="RoundRectangle 20"
+                        Stroke="Transparent"
+                        BackgroundColor="White"
+                        HeightRequest="44">
+                    <Border.Shadow>
+                        <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
+                    </Border.Shadow>
+                    <SearchBar x:Name="MapSearchBar"
+                               Placeholder="Tìm quán ngon..."
+                               FontSize="13"
+                               TextColor="#333"
+                               BackgroundColor="Transparent"
+                               CancelButtonColor="#FF6B35"
+                               TextChanged="OnSearchTextChanged"
+                               Focused="OnSearchFocused"
+                               Unfocused="OnSearchUnfocused"/>
+                </Border>
 
-            <!-- Dropdown loại quán ăn -->
-            <Border Grid.Column="0"
-                    StrokeShape="RoundRectangle 20"
+                <!-- List button (📍) -->
+                <Border Grid.Column="1"
+                        StrokeShape="RoundRectangle 20"
+                        Stroke="Transparent"
+                        BackgroundColor="White"
+                        HeightRequest="44"
+                        WidthRequest="44">
+                    <Border.Shadow>
+                        <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
+                    </Border.Shadow>
+                    <Button Text="📍"
+                            FontSize="18"
+                            BackgroundColor="Transparent"
+                            TextColor="#FF6B35"
+                            Padding="0"
+                            Clicked="OnOpenListClicked"/>
+                </Border>
+
+                <!-- Settings button (⚙️) -->
+                <Border Grid.Column="2"
+                        StrokeShape="RoundRectangle 20"
+                        Stroke="Transparent"
+                        BackgroundColor="White"
+                        HeightRequest="44"
+                        WidthRequest="44">
+                    <Border.Shadow>
+                        <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
+                    </Border.Shadow>
+                    <Button Text="⚙️"
+                            FontSize="18"
+                            BackgroundColor="Transparent"
+                            TextColor="#666"
+                            Padding="0"
+                            Clicked="OnSettingsClicked"/>
+                </Border>
+            </Grid>
+
+            <!-- Search Results Popup (Overlay) -->
+            <Border x:Name="SearchResultsPopup"
+                    Grid.Row="1"
+                    IsVisible="False"
+                    Margin="0,8,0,0"
+                    StrokeShape="RoundRectangle 16"
                     Stroke="Transparent"
                     BackgroundColor="White"
-                    HeightRequest="40">
+                    MaximumHeightRequest="300"
+                    VerticalOptions="Start">
                 <Border.Shadow>
-                    <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
+                    <Shadow Brush="Black" Offset="0,4" Radius="12" Opacity="0.2"/>
                 </Border.Shadow>
-                <Picker ItemsSource="{Binding Categories}"
-                        SelectedItem="{Binding SelectedCategory}"
-                        Title="🍜 Loại quán"
-                        FontSize="13"
-                        Margin="12,0"
-                        VerticalOptions="Center"/>
-            </Border>
-
-            <!-- Language Picker -->
-            <Border Grid.Column="1"
-                    StrokeShape="RoundRectangle 20"
-                    Stroke="Transparent"
-                    BackgroundColor="White"
-                    HeightRequest="40"
-                    WidthRequest="90"
-                    Margin="6,0,0,0">
-                <Border.Shadow>
-                    <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
-                </Border.Shadow>
-                <Picker ItemsSource="{Binding Languages}"
-                        SelectedItem="{Binding SelectedLanguage}"
-                        Title="🌐"
-                        FontSize="12"
-                        Margin="8,0"
-                        VerticalOptions="Center"/>
-            </Border>
-
-            <!-- Unlock button -->
-            <Border Grid.Column="2"
-                    StrokeShape="RoundRectangle 20"
-                    Stroke="Transparent"
-                    BackgroundColor="#FF6B35"
-                    HeightRequest="40"
-                    Margin="6,0,0,0">
-                <Border.Shadow>
-                    <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.2"/>
-                </Border.Shadow>
-                <Button Text="🔓"
-                        FontSize="16"
-                        BackgroundColor="Transparent"
-                        TextColor="White"
-                        Padding="10,0"
-                        Command="{Binding UnlockAsyncCommand}"/>
+                <CollectionView x:Name="SearchResultsList"
+                                ItemsSource="{Binding FilteredPois}"
+                                SelectionMode="Single"
+                                SelectionChanged="OnSearchResultSelected">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:PoiRecord">
+                            <Grid Padding="12" ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                <Label Grid.Column="0" Text="📍" FontSize="16" VerticalOptions="Center"/>
+                                <StackLayout Grid.Column="1" VerticalOptions="Center">
+                                    <Label Text="{Binding Name}" FontSize="14" FontAttributes="Bold" TextColor="#333"/>
+                                    <Label Text="{Binding CategoryDisplayName}" FontSize="11" TextColor="#FF6B35"/>
+                                </StackLayout>
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
             </Border>
         </Grid>
 

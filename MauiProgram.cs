@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Maui;
+using CommunityToolkit.Maui;
 using CommunityToolkit.Maui.Maps;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Controls.Maps;
@@ -40,6 +40,8 @@ public static class MauiProgram
 			.AddSingleton<IAppLanguageService, AppLanguageService>()
 			.AddSingleton<IAudioQueueManager, AudioQueueManager>()
 			.AddSingleton<INarrationService, NarrationService>()
+			.AddSingleton<AccessService>()
+			.AddTransient<SettingsPage>()
 			.AddSingleton<MainPage>();
 
 #if ANDROID

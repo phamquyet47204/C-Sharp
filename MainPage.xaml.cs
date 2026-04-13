@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -31,6 +31,7 @@ public partial class MainPage : ContentPage
 	private readonly INarrationService _narrationService;
 	private readonly IDatabaseService _databaseService;
 	private readonly IAppLanguageService _appLanguageService;
+	private readonly IServiceProvider _serviceProvider;
 	private readonly MainPageViewModel _viewModel;
 	
 	private ObservableCollection<POI> _displayItems = new();
@@ -208,7 +209,8 @@ public partial class MainPage : ContentPage
 		ILocationService locationService,
 		INarrationService narrationService,
 		IDatabaseService databaseService,
-		IAppLanguageService appLanguageService)
+		IAppLanguageService appLanguageService,
+		IServiceProvider serviceProvider)
 	{
 		InitializeComponent();
 		_geofenceEngine = geofenceEngine;
@@ -216,6 +218,9 @@ public partial class MainPage : ContentPage
 		_narrationService = narrationService;
 		_databaseService = databaseService;
 		_appLanguageService = appLanguageService;
+		_serviceProvider = serviceProvider;
+		
+		NavigationPage.SetHasNavigationBar(this, false);
 		_viewModel = new MainPageViewModel();
 		_narrationService.RegisterMediaElement(NarrationPlayer);
 		_currentLanguage = _appLanguageService.GetEffectiveLanguage();
@@ -229,6 +234,20 @@ public partial class MainPage : ContentPage
 		ApplyLanguageUi();
 		ResetPoiUiState();
 		SetActiveTab(false);
+	}
+
+	private async void OnSettingsClicked(object? sender, EventArgs e)
+	{
+		try
+		{
+			var settingsPage = _serviceProvider.GetRequiredService<SettingsPage>();
+			await Navigation.PushAsync(settingsPage);
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"[MainPage] Loi navigation: {ex.Message}");
+			await DisplayAlert("Lỗi", "Không thể mở trang cài đặt.", "OK");
+		}
 	}
 
 	protected override async void OnAppearing()
@@ -259,6 +278,16 @@ public partial class MainPage : ContentPage
 			}
 
 			LocationStatusLabel.Text = T("GpsTracking");
+
+			// Check if language changed from SettingsPage
+			var newLang = _appLanguageService.GetEffectiveLanguage();
+			if (newLang != _currentLanguage)
+			{
+				_currentLanguage = newLang;
+				ApplyLanguageUi();
+				await LoadMapPinsAndListAsync(reloadFromDatabase: true);
+				await _geofenceEngine.SetLanguageAsync(_currentLanguage);
+			}
 		}
 		catch (Exception ex)
 		{
@@ -552,9 +581,33 @@ public partial class MainPage : ContentPage
 		await RefreshCollectionViewAsync();
 	}
 
-	/// <summary>
-	/// Search POI by name
-	/// </summary>
+	private void OnMapSearchTextChanged(object? sender, TextChangedEventArgs e)
+	{
+		ApplySearchFilter(e.NewTextValue);
+	}
+
+	private void OnMapSearchPressed(object? sender, EventArgs e)
+	{
+		ApplySearchFilter(MapSearchBar.Text);
+	}
+
+	private void ApplySearchFilter(string? query)
+	{
+		if (string.IsNullOrWhiteSpace(query))
+		{
+			_ = RebuildMapPinsAsync();
+			return;
+		}
+
+		var filteredPois = _allPois
+			.Where(p => CategoryMatchesCurrentFilter(p.Category))
+			.Where(p => p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+						(p.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+			.ToList();
+
+		_ = UpdateMapPinsInPlace(filteredPois);
+	}
+
 	private async void OnSearchPoi(object? sender, EventArgs e)
 	{
 		var query = SearchBarPoi.Text?.Trim();
@@ -582,6 +635,28 @@ public partial class MainPage : ContentPage
 		await HighlightNearestPoiAsync();
 	}
 
+	private async Task UpdateMapPinsInPlace(List<POI> filteredPois)
+	{
+		await MainThread.InvokeOnMainThreadAsync(() =>
+		{
+			PoiMap.Pins.Clear();
+			_poiPins.Clear();
+			foreach (var poi in filteredPois)
+			{
+				var aggregateId = GetAggregateId(poi);
+				var pin = new Pin
+				{
+					Label = poi.Name,
+					Location = new Location(poi.Latitude, poi.Longitude),
+					Type = PinType.Place
+				};
+				pin.InfoWindowClicked += (s, e) => OnPinClicked(poi);
+				PoiMap.Pins.Add(pin);
+				_poiPins[aggregateId] = pin;
+			}
+		});
+	}
+
 	/// <summary>
 	/// Refresh POI collection with current filter
 	/// </summary>
@@ -607,6 +682,8 @@ public partial class MainPage : ContentPage
 		MainThread.BeginInvokeOnMainThread(() =>
 		{
 			PinCardNameLabel.Text = poi.Name;
+			PinCardDescriptionLabel.Text = poi.Description;
+			PinCardImage.Source = poi.PoiImageSource;
 			PinQuickCard.IsVisible = true;
 		});
 	}
@@ -690,7 +767,8 @@ public partial class MainPage : ContentPage
 				{
 					SetActiveTab(false);
 					var location = new Location(poi.Latitude, poi.Longitude);
-					PoiMap.MoveToRegion(MapSpan.FromCenterAndRadius(location, Distance.FromMeters(200)));
+					PoiMap.MoveToRegion(MapSpan.FromCenterAndRadius(location, Distance.FromMeters(100)));
+					OnPinClicked(poi); // Automaticaly show detail card
 				}
 			}
 		}
@@ -718,37 +796,6 @@ public partial class MainPage : ContentPage
 			Debug.WriteLine($"[MainPage] Loi refresh text item: {ex.Message}");
 		}
 	}
-
-	private async void OnToggleLanguage(object? sender, EventArgs e)
-	{
-		// Cycle through 3 languages: vi -> en -> ja -> vi
-		_currentLanguage = _currentLanguage switch
-		{
-			"vi" => "en",
-			"en" => "ja",
-			_ => "vi"
-		};
-
-		_appLanguageService.SetPreferredLanguage(_currentLanguage);
-
-		ApplyLanguageUi();
-
-		Debug.WriteLine($"[MainPage] Switched language to: {_currentLanguage}");
-
-		try
-		{
-			await _geofenceEngine.SetLanguageAsync(_currentLanguage);
-			await LoadMapPinsAndListAsync(reloadFromDatabase: true);
-			await _geofenceEngine.StartAsync(_currentLanguage);
-			await HighlightNearestPoiAsync();
-		}
-		catch (Exception ex)
-		{
-			Debug.WriteLine($"[MainPage] Loi doi ngon ngu: {ex.Message}");
-			await DisplayAlertAsync(T("ErrorTitle"), T("ReloadByLanguageFailed"), T("Ok"));
-		}
-	}
-
 	private void InitializeLanguageFromSystemIfNeeded()
 	{
 		if (_isSystemLanguageInitialized)
@@ -775,14 +822,6 @@ public partial class MainPage : ContentPage
 		SearchBarPoi.Placeholder = T("SearchPlaceholder");
 		LocationStatusLabel.Text = T("GpsChecking");
 		ApplyLocalizedActionTextsToDisplayItems();
-
-		LanguageButton.Text = _currentLanguage switch
-		{
-			"vi" => "VN",
-			"en" => "EN",
-			"ja" => "JP",
-			_ => "VN"
-		};
 	}
 
 	private void ApplyLocalizedActionTextsToDisplayItems()

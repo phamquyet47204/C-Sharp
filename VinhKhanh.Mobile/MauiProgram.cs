@@ -4,6 +4,7 @@ using Microsoft.Maui.Maps.Handlers;
 using VinhKhanh.Mobile.Services;
 using VinhKhanh.Mobile.ViewModels;
 using VinhKhanh.Mobile.Views;
+using VinhKhanh.Mobile.Configuration;
 
 namespace VinhKhanh.Mobile;
 
@@ -30,14 +31,18 @@ public static class MauiProgram
             {
                 return new HttpClient
                 {
-                    BaseAddress = new Uri(VinhKhanhFoodStreet.Configuration.AppConfig.BaseApiUrl)
+                    BaseAddress = new Uri(MobileAppConfig.BaseApiUrl)
                 };
             })
             .AddSingleton<SyncService>()
             .AddSingleton<AccessControlService>()
             .AddSingleton<AuthService>()
             .AddTransient<MapViewModel>()
-            .AddTransient<MapPage>();
+            .AddTransient<MapPage>()
+            .AddTransient<SettingsViewModel>()
+            .AddTransient<SettingsPage>()
+            .AddTransient<PoiListViewModel>()
+            .AddTransient<PoiListPage>();
 
 #if ANDROID
         MapHandler.Mapper.AppendToMapping("MoveMyLocationButton", (handler, _) =>

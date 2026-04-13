@@ -24,6 +24,26 @@ public class AccessControlService(HttpClient http)
         return status.FreeTrialUsed < status.FreeTrialLimit;
     }
 
+    /// <summary>
+    /// Giả lập mua Access Pass ($1/7 ngày).
+    /// </summary>
+    public async Task<bool> PurchaseAccessPassAsync()
+    {
+        // Mocking: Giả lập thành công và cập nhật cache
+        var current = LoadCachedStatus();
+        var updated = current with 
+        { 
+            HasActivePass = true, 
+            PassExpiryDate = DateTime.Now.AddDays(7) 
+        };
+        
+        SaveCachedStatus(updated);
+        
+        // Thêm một độ trễ nhỏ để trải nghiệm thật hơn
+        await Task.Delay(1000);
+        return true;
+    }
+
     /// <summary>Lấy trạng thái truy cập đầy đủ từ server hoặc cache.</summary>
     public async Task<AccessStatus> GetAccessStatusAsync()
     {

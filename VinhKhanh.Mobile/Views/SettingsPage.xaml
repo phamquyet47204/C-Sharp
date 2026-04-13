@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:VinhKhanh.Mobile.ViewModels"
+             x:Class="VinhKhanh.Mobile.Views.SettingsPage"
+             Title="Cài đặt"
+             BackgroundColor="#F9F9FB">
+
+    <ScrollView>
+        <StackLayout Padding="20" Spacing="24">
+
+            <!-- Section: Language -->
+            <StackLayout Spacing="10">
+                <Label Text="Ngôn ngữ thuyết minh"
+                       FontSize="16"
+                       FontAttributes="Bold"
+                       TextColor="#333"/>
+                <Border StrokeShape="RoundRectangle 12"
+                        Stroke="Transparent"
+                        BackgroundColor="White"
+                        HeightRequest="60">
+                    <Border.Shadow>
+                        <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.05"/>
+                    </Border.Shadow>
+                    <Picker ItemsSource="{Binding Languages}"
+                            SelectedItem="{Binding SelectedLanguage}"
+                            FontSize="15"
+                            Margin="16,0"
+                            VerticalOptions="Center"/>
+                </Border>
+                <Label Text="Chọn ngôn ngữ bạn muốn nghe khi đến gần các địa điểm."
+                       FontSize="12"
+                       TextColor="#777"/>
+            </StackLayout>
+
+            <!-- Section: Subscription -->
+            <StackLayout Spacing="10">
+                <Label Text="Gói dịch vụ (Access Pass)"
+                       FontSize="16"
+                       FontAttributes="Bold"
+                       TextColor="#333"/>
+                <Border StrokeShape="RoundRectangle 12"
+                        Stroke="Transparent"
+                        BackgroundColor="White"
+                        Padding="16">
+                    <Border.Shadow>
+                        <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.05"/>
+                    </Border.Shadow>
+                    <StackLayout Spacing="12">
+                        <Label Text="{Binding AccessStatusText}"
+                               FontSize="14"
+                               TextColor="#1A1A1A"
+                               FontAttributes="Italic"/>
+                        
+                        <Label Text="Nội dung thuyết minh cao cấp (Premium) yêu cầu Access Pass để nghe không giới hạn."
+                               FontSize="13"
+                               TextColor="#555"/>
+
+                        <Button Text="🔓 Mua Access Pass ($1/7 ngày)"
+                                BackgroundColor="#FF6B35"
+                                TextColor="White"
+                                FontAttributes="Bold"
+                                CornerRadius="12"
+                                HeightRequest="50"
+                                Command="{Binding PurchaseCommand}"/>
+                    </StackLayout>
+                </Border>
+            </StackLayout>
+
+            <!-- Section: Info -->
+            <StackLayout Spacing="4" HorizontalOptions="Center" Margin="0,40,0,0">
+                <Label Text="VinhKhanh Food Street v1.0.0"
+                       FontSize="11"
+                       TextColor="#AAA"/>
+                <Label Text="Copyright © 2026 VinhKhanh."
+                       FontSize="11"
+                       TextColor="#AAA"/>
+            </StackLayout>
+
+        </StackLayout>
+    </ScrollView>
+</ContentPage>

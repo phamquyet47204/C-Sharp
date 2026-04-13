@@ -115,8 +115,8 @@ public class ShopController(
         var poi = await dbContext.Pois.Include(p => p.Localizations).FirstOrDefaultAsync(p => p.Id == id, ct);
         if (poi is null) return NotFound("Không tìm thấy POI.");
         if (poi.OwnerId != CurrentUserId) return StatusCode(403, "Bạn không có quyền chỉnh sửa POI này.");
-        if (poi.Status == PoiStatus.Pending_Approval)
-            return StatusCode(403, "Không thể chỉnh sửa POI đang chờ duyệt.");
+        if (poi.Status == PoiStatus.Pending_Approval || poi.Status == PoiStatus.Approved)
+            return StatusCode(403, "Không thể chỉnh sửa POI đang chờ duyệt hoặc đã được duyệt.");
         poi.Latitude = request.Lat; poi.Longitude = request.Lng;
         poi.Radius = request.Radius > 0 ? request.Radius : poi.Radius;
         poi.CategoryCode = request.CategoryCode ?? poi.CategoryCode;

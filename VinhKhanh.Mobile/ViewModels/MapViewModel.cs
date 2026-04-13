@@ -16,6 +16,7 @@ public partial class MapViewModel(LocalDatabase db, GeofenceService geofence, Sy
     [ObservableProperty] private List<PoiRecord> _filteredPois = [];
     [ObservableProperty] private string _selectedLanguage = "vi-VN";
     [ObservableProperty] private bool _isUnlocked;
+    [ObservableProperty] private string _searchText = string.Empty;
     [ObservableProperty] private string _selectedCategory = "Tất cả";
     [ObservableProperty] private AccessStatus? _accessStatus;
     [ObservableProperty] private string _freeTrialMessage = string.Empty;
@@ -23,11 +24,11 @@ public partial class MapViewModel(LocalDatabase db, GeofenceService geofence, Sy
     public List<string> Languages { get; } = ["vi-VN", "en-US", "ja-JP"];
     public List<string> Categories { get; private set; } = ["Tất cả"];
 
-    partial void OnSelectedCategoryChanged(string value) => ApplyCategoryFilter();
+    partial void OnSelectedCategoryChanged(string value) => ApplyFilter();
+    partial void OnSearchTextChanged(string value) => ApplyFilter();
 
     partial void OnPoisChanged(List<PoiRecord> value)
     {
-        // Cập nhật danh sách category từ dữ liệu thực
         var cats = value
             .Select(p => p.CategoryDisplayName)
             .Where(c => !string.IsNullOrWhiteSpace(c))
@@ -38,14 +39,26 @@ public partial class MapViewModel(LocalDatabase db, GeofenceService geofence, Sy
         cats.Insert(0, "Tất cả");
         Categories = cats;
         OnPropertyChanged(nameof(Categories));
-        ApplyCategoryFilter();
+        ApplyFilter();
     }
 
-    private void ApplyCategoryFilter()
+    private void ApplyFilter()
     {
-        FilteredPois = SelectedCategory == "Tất cả"
-            ? Pois
-            : Pois.Where(p => p.CategoryDisplayName == SelectedCategory).ToList();
+        var query = Pois.AsEnumerable();
+
+        if (SelectedCategory != "Tất cả")
+        {
+            query = query.Where(p => p.CategoryDisplayName == SelectedCategory);
+        }
+
+        if (!string.IsNullOrWhiteSpace(SearchText))
+        {
+            var lower = SearchText.ToLowerInvariant();
+            query = query.Where(p => p.Name.ToLowerInvariant().Contains(lower) || 
+                                    p.Description.ToLowerInvariant().Contains(lower));
+        }
+
+        FilteredPois = query.ToList();
     }
 
     [RelayCommand]
