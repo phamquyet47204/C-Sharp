@@ -2,54 +2,59 @@
 bin/
 obj/
 out/
+dist/
 publish/
+[Bb]in/
+[Oo]bj/
 
-# SQLite databases
+# IDE files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln.docstates
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment & Secrets
+.env
+.env.*
+appsettings.Development.json
+secrets.json
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Application Data / Uploads
+**/wwwroot/media/*
+!**/wwwroot/media/.gitkeep
+
+# SQLite
 *.db
 *.db-shm
 *.db-wal
 build.log
 
-# User-specific files
-.vs/
-*.user
-*.suo
-
-# Rider
-.idea/
-
-# macOS
-.DS_Store
-
-# Environment
-.env
-appsettings.Development.json
-
-# NuGet cache (temp restore folders)
-.nuget-temp/
-.nuget-temp-2/
-.nuget-temp-mobile/
-
-# Node modules
-node_modules/
-VinhKhanh.Admin.Ui/node_modules/
-
-# Frontend build output
-VinhKhanh.Admin.Ui/dist/
-
-# Terraform state & secrets
-terraform/.terraform/
-terraform/*.tfstate
-terraform/*.tfstate.backup
-terraform/.terraform.lock.hcl
-terraform/terraform.exe
-
-# Kiro IDE
-.kiro/
-
-# Data export (chứa data thật)
-deploy/data-export/
-
-# APK builds
+# APK
+android-apk/
 *.apk
 *.aab
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# deploy
+deploy/
+
+# NuGet Temp
+.nuget-temp*/
+.nuget/

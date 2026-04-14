@@ -36,7 +36,7 @@
                           IsShowingUser="True"
                           IsTrafficEnabled="False"
                           HandlerChanged="OnMapHandlerChanged" />
-                <Grid Grid.Row="0" Margin="16" RowDefinitions="Auto, Auto">
+                <Grid Grid.Row="0" Margin="16" RowDefinitions="Auto, Auto, *">
                     <!-- Compact Search Bar with Hamburger -->
                     <Border Grid.Row="0" Stroke="#E0E0E0" StrokeThickness="1" BackgroundColor="White" Padding="4" StrokeShape="RoundRectangle 24">
                         <Grid ColumnDefinitions="*, Auto">
@@ -60,6 +60,48 @@
                                     Margin="0,0,4,0"
                                     Clicked="OnToggleAdvancedFilter" />
                         </Grid>
+                    </Border>
+                    
+                    <!-- Map Search Results Floating Overlay -->
+                    <Border x:Name="MapSearchResultsContainer"
+                            Grid.Row="1"
+                            IsVisible="False"
+                            Margin="0,8,0,0"
+                            Padding="0"
+                            BackgroundColor="White"
+                            Stroke="#E0E0E0"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 16"
+                            MaximumHeightRequest="400"
+                            VerticalOptions="Start">
+                        <Border.Shadow>
+                            <Shadow Brush="Black" Offset="0,6" Radius="15" Opacity="0.12" />
+                        </Border.Shadow>
+                        <CollectionView x:Name="MapSearchResultsList"
+                                        SelectionMode="Single"
+                                        SelectionChanged="OnMapSearchResultSelected">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid RowDefinitions="Auto, Auto" ColumnDefinitions="60, *" Padding="12" ColumnSpacing="12">
+                                        <Border Grid.Column="0" Grid.RowSpan="2"
+                                                StrokeThickness="0"
+                                                StrokeShape="RoundRectangle 8"
+                                                WidthRequest="60" HeightRequest="60">
+                                            <Image Source="{Binding PoiImageSource}" Aspect="AspectFill" />
+                                        </Border>
+                                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                            <Label Text="{Binding Name}" FontSize="14" FontAttributes="Bold" TextColor="#1A1A1A" MaxLines="1" LineBreakMode="TailTruncation"/>
+                                            <HorizontalStackLayout Spacing="6">
+                                                <Label Text="{Binding Distance, StringFormat='{0}m'}" FontSize="11" TextColor="#FF7F50" FontAttributes="Bold"/>
+                                                <Label Text="•" TextColor="#CCCCCC" FontSize="11"/>
+                                                <Label Text="{Binding CategoryDisplayName}" FontSize="11" TextColor="#666666"/>
+                                            </HorizontalStackLayout>
+                                            <Label Text="{Binding Description}" FontSize="12" TextColor="#888888" MaxLines="1" LineBreakMode="TailTruncation"/>
+                                        </VerticalStackLayout>
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
                     </Border>
                     
                     <!-- Advanced Filter 'Drop List' (Hidden by default) -->

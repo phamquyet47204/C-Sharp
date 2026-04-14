@@ -38,6 +38,7 @@ public partial class MainPage : ContentPage
 	
 	private ObservableCollection<POI> _displayItems = new();
 	private ObservableCollection<POIGroup> _groupedDisplayItems = new();
+	private ObservableCollection<POI> _mapSearchResults = new();
 	private Dictionary<int, Pin> _poiPins = new();
 	private List<POI> _allPois = new();
 	private Dictionary<int, List<POI>> _poiVariantsByGroup = new();
@@ -94,6 +95,7 @@ public partial class MainPage : ContentPage
 		BindingContext = _viewModel;
 		_displayItems = _viewModel.DisplayPois;
 		PoiCollectionView.ItemsSource = _groupedDisplayItems;
+		MapSearchResultsList.ItemsSource = _mapSearchResults;
 		SearchContainer.IsVisible = false;
 		InitializeCategoryDropList();
 		ApplyLanguageUi();
@@ -608,6 +610,11 @@ public partial class MainPage : ContentPage
 	{
 		AdvancedFilterSection.IsVisible = !AdvancedFilterSection.IsVisible;
 		AdvancedFilterButton.TextColor = AdvancedFilterSection.IsVisible ? Color.FromArgb("#FF7F50") : Color.FromArgb("#666666");
+		
+		if (AdvancedFilterSection.IsVisible)
+		{
+			MapSearchResultsContainer.IsVisible = false;
+		}
 	}
 
 	private void HandlePoiExited(POI poi) { }
@@ -633,30 +640,71 @@ public partial class MainPage : ContentPage
 	private void ApplySearchFilter(string? query)
 	{
 		_currentSearchText = query ?? string.Empty;
+		_mapSearchResults.Clear();
 		
 		if (string.IsNullOrWhiteSpace(_currentSearchText))
 		{
+			MapSearchResultsContainer.IsVisible = false;
 			_ = RebuildMapPinsAsync();
 			return;
 		}
 
 		var searchText = _currentSearchText.ToLowerInvariant();
-		var filteredPois = _allPois
-			.Where(p => CategoryMatchesMapFilter(p.Category))
+		
+		// Search is now GLOBAL (ignoring category filter) for a better UX, similar to Google Maps
+		var filtered = _allPois
 			.Where(p => (p.Name?.ToLowerInvariant().Contains(searchText) == true) || 
 						(p.Description?.ToLowerInvariant().Contains(searchText) == true));
 
 		// Sort by distance if available
 		if (_currentLocation != null)
 		{
-			foreach (var poi in filteredPois)
+			foreach (var poi in filtered)
 			{
 				poi.Distance = (int)CalculateDistance(_currentLocation.Latitude, _currentLocation.Longitude, poi.Latitude, poi.Longitude);
 			}
-			filteredPois = filteredPois.OrderBy(p => p.Distance);
+			filtered = filtered.OrderBy(p => p.Distance);
 		}
 
-		_ = UpdateMapPinsInPlace(filteredPois.ToList());
+		var resultList = filtered.ToList();
+		
+		// Map Pin Update
+		_ = UpdateMapPinsInPlace(resultList);
+
+		// Overlay Update
+		if (resultList.Count > 0)
+		{
+			foreach (var poi in resultList.Take(10)) // Limit to top 10 for performance
+			{
+				_mapSearchResults.Add(CreateDisplayPoi(poi));
+			}
+			MapSearchResultsContainer.IsVisible = true;
+			AdvancedFilterSection.IsVisible = false;
+		}
+		else
+		{
+			MapSearchResultsContainer.IsVisible = false;
+		}
+	}
+
+	private async void OnMapSearchResultSelected(object? sender, SelectionChangedEventArgs e)
+	{
+		if (e.CurrentSelection.FirstOrDefault() is POI selectedPoi)
+		{
+			// Clear selection to allow re-selecting the same item
+			MapSearchResultsList.SelectedItem = null;
+			MapSearchResultsContainer.IsVisible = false;
+
+			var location = new Location(selectedPoi.Latitude, selectedPoi.Longitude);
+			PoiMap.MoveToRegion(MapSpan.FromCenterAndRadius(location, Distance.FromMeters(200)));
+			
+			// Find the actual localized POI to show in card
+			var poi = _allPois.FirstOrDefault(p => GetAggregateId(p) == GetAggregateId(selectedPoi));
+			if (poi != null)
+			{
+				OnPinClicked(poi);
+			}
+		}
 	}
 
 	private async void OnSearchPoi(object? sender, EventArgs e)

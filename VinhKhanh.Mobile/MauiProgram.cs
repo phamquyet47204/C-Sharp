@@ -1,56 +1,69 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Maui.Devices;
+using CommunityToolkit.Maui;
+using CommunityToolkit.Maui.Maps;
+using Microsoft.Extensions.Logging;
+using Microsoft.Maui.Controls.Maps;
 using Microsoft.Maui.Maps.Handlers;
-using VinhKhanh.Mobile.Services;
-using VinhKhanh.Mobile.ViewModels;
-using VinhKhanh.Mobile.Views;
-using VinhKhanh.Mobile.Configuration;
+using VinhKhanhFoodStreet.Extensions;
+using VinhKhanhFoodStreet.Services;
 
-namespace VinhKhanh.Mobile;
+namespace VinhKhanhFoodStreet;
 
 public static class MauiProgram
 {
-    public static MauiApp CreateMauiApp()
-    {
-        var builder = MauiApp.CreateBuilder();
-        builder
-            .UseMauiApp<App>()
-            .UseMauiMaps()
-            .ConfigureFonts(fonts =>
-            {
-                fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
-            });
+	public static MauiApp CreateMauiApp()
+	{
+		var builder = MauiApp.CreateBuilder();
+		
+		// Tinh duong dan SQLite database theo platform.
+		var databasePath = Path.Combine(
+			FileSystem.AppDataDirectory,
+			"vinhkhanh_foodstreet.db3");
 
-        var dbPath = Path.Combine(FileSystem.AppDataDirectory, "vinhkhanh.db");
+		builder
+			.UseMauiApp<App>()
 
-        builder.Services
-            .AddSingleton(_ => new LocalDatabase(dbPath))
-            .AddSingleton<NarrationEngine>()
-            .AddSingleton<GeofenceService>()
-            .AddSingleton(sp =>
-            {
-                return new HttpClient
-                {
-                    BaseAddress = new Uri(MobileAppConfig.BaseApiUrl)
-                };
-            })
-            .AddSingleton<SyncService>()
-            .AddSingleton<AccessControlService>()
-            .AddSingleton<AuthService>()
-            .AddTransient<MapViewModel>()
-            .AddTransient<MapPage>()
-            .AddTransient<SettingsViewModel>()
-            .AddTransient<SettingsPage>()
-            .AddTransient<PoiListViewModel>()
-            .AddTransient<PoiListPage>();
+#if WINDOWS
+			.UseMauiCommunityToolkitMaps(string.Empty)
+#else
+			.UseMauiMaps()
+#endif
+			.ConfigureFonts(fonts =>
+			{
+				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
+				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+			})
+			// Dang ky cac service dung dependency injection.
+			.Services
+			.AddDatabaseServices(databasePath)
+			.AddLocationServices()
+			.AddGeofenceEngine()
+			.AddSingleton<IAppLanguageService, AppLanguageService>()
+			.AddSingleton<IAudioQueueManager, AudioQueueManager>()
+			.AddSingleton<INarrationService, NarrationService>()
+			.AddSingleton<AccessService>()
+			.AddTransient<SettingsPage>()
+			.AddSingleton<MainPage>();
 
 #if ANDROID
-        MapHandler.Mapper.AppendToMapping("MoveMyLocationButton", (handler, _) =>
-        {
-            Platforms.Android.MapUiCustomizer.Configure(handler);
-        });
+		if (OperatingSystem.IsAndroidVersionAtLeast(26))
+		{
+			builder.UseMauiCommunityToolkitMediaElement(true);
+		}
+#else
+		builder.UseMauiCommunityToolkitMediaElement(true);
 #endif
 
-        return builder.Build();
-    }
+#if ANDROID
+		MapHandler.Mapper.AppendToMapping("MoveMyLocationButton", (handler, _) =>
+		{
+			Platforms.Android.MapUiCustomizer.Configure(handler);
+		});
+#endif
+
+#if DEBUG
+		builder.Logging.AddDebug();
+#endif
+
+		return builder.Build();
+	}
 }
