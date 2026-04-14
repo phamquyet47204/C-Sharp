@@ -8,4 +8,5 @@ public interface IAppLanguageService
     string GetEffectiveLanguage(string? requestedLanguageCode = null);
     IReadOnlyList<string> GetLanguageFallbackChain(string? requestedLanguageCode = null);
     void SetPreferredLanguage(string languageCode);
+    string T(string key, string lang);
 }

@@ -13,6 +13,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<AnalyticsEvent> AnalyticsEvents { get; set; }
     public DbSet<Payment> Payments { get; set; }
     public DbSet<FreeTrialRecord> FreeTrialRecords { get; set; }
+    public DbSet<DeviceTrial> DeviceTrials { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

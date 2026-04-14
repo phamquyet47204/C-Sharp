@@ -118,17 +118,20 @@ public class POI : INotifyPropertyChanged
     /// Ten hien thi than thien voi nguoi dung cho category.
     /// </summary>
     [Ignore]
-    public string CategoryDisplayName => Category switch
+    public string CategoryDisplayName => Category?.ToUpperInvariant() switch
     {
         "FOOD_SNAIL" => "Ốc & Hải sản",
         "FOOD_BBQ" => "Đồ nướng & Lẩu",
         "FOOD_STREET" => "Ăn vặt",
+        "PHOTO_SPOT" => "Check-in & Sống ảo",
         "DRINK" => "Đồ uống",
         "UTILITY" => "Tiện ích",
+        // Legacy fallbacks
         "OYSTER" => "Ốc & Hải sản",
         "BBQ" => "Đồ nướng & Lẩu",
         "BEVERAGE" => "Đồ uống",
-        _ => string.IsNullOrWhiteSpace(Category) ? "Khác" : Category
+        "ALL" => "Tất cả",
+        _ => string.IsNullOrWhiteSpace(Category) ? "Tất cả" : Category
     };
 
     /// <summary>
@@ -182,6 +185,22 @@ public class POI : INotifyPropertyChanged
         set => SetProperty(ref _navigateButtonText, value);
     }
 
+    private bool _isPlaying;
+    
+    [Ignore]
+    public bool IsPlaying
+    {
+        get => _isPlaying;
+        set
+        {
+            if (SetProperty(ref _isPlaying, value))
+            {
+                OnPropertyChanged(nameof(IsNearestBorderWidth));
+                OnPropertyChanged(nameof(IsNearestCardStroke));
+            }
+        }
+    }
+
     private bool _isNearest;
 
     [Ignore]
@@ -199,12 +218,18 @@ public class POI : INotifyPropertyChanged
     }
 
     [Ignore]
-    public int IsNearestBorderWidth => IsNearest ? 3 : 1;
+    public int IsNearestBorderWidth => (IsNearest || IsPlaying) ? 3 : 1;
 
     [Ignore]
-    public Color IsNearestCardStroke => IsNearest
-        ? Color.FromArgb("#FF7F50")
-        : Color.FromArgb("#E0E0E0");
+    public Color IsNearestCardStroke
+    {
+        get
+        {
+            if (IsPlaying) return Color.FromArgb("#FF7F50"); // Highlights during narration
+            if (IsNearest) return Color.FromArgb("#FF7F50"); // Highlights when close
+            return Color.FromArgb("#E0E0E0");
+        }
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

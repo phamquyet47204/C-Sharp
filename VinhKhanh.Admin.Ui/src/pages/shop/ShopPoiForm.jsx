@@ -8,6 +8,7 @@ const categoryOptions = [
   { code: 'FOOD_SNAIL', nameVi: 'Ốc & Hải sản' },
   { code: 'FOOD_BBQ',   nameVi: 'Đồ nướng & Lẩu' },
   { code: 'FOOD_STREET',nameVi: 'Ăn vặt' },
+  { code: 'PHOTO_SPOT', nameVi: 'Check-in & Sống ảo' },
   { code: 'DRINK',      nameVi: 'Đồ uống' },
   { code: 'UTILITY',    nameVi: 'Tiện ích' },
 ];

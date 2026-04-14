@@ -36,6 +36,7 @@ public class PoiRecord
         "FOOD_SNAIL"  => "Ốc & Hải sản",
         "FOOD_BBQ"    => "Đồ nướng & Lẩu",
         "FOOD_STREET" => "Ăn vặt",
+        "PHOTO_SPOT"  => "Check-in & Sống ảo",
         "DRINK"       => "Đồ uống",
         "UTILITY"     => "Tiện ích",
         _ => string.IsNullOrWhiteSpace(Category) ? "Khác" : Category

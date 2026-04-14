@@ -322,9 +322,12 @@ public class DatabaseService : IDatabaseService
                     ?? (string.IsNullOrWhiteSpace(matched.ImagePath) ? "dotnet_bot.png" : matched.ImagePath);
                 matched.LanguageCode = normalizedLang;
                 matched.Priority = remotePoi.Priority;
-                matched.Category = string.IsNullOrWhiteSpace(matched.Category)
-                    ? InferCategory(localization.Name, localization.Description)
-                    : matched.Category;
+                
+                // Prioritize official CategoryCode from server, fallback to inference
+                matched.Category = !string.IsNullOrWhiteSpace(remotePoi.CategoryCode)
+                    ? remotePoi.CategoryCode
+                    : InferCategory(localization.Name, localization.Description);
+
                 matched.IsDownloaded = !string.IsNullOrWhiteSpace(matched.AudioPath);
 
                 if (matched.Id > 0)
@@ -359,22 +362,27 @@ public class DatabaseService : IDatabaseService
     private static string InferCategory(string? name, string? description)
     {
         var source = $"{name} {description}".ToLowerInvariant();
-        if (source.Contains("oc") || source.Contains("oyster") || source.Contains("snail"))
+        if (source.Contains("oc") || source.Contains("oyster") || source.Contains("snail") || source.Contains("hai san"))
         {
-            return "Oyster";
+            return "FOOD_SNAIL";
         }
 
         if (source.Contains("bbq") || source.Contains("nuong") || source.Contains("lau") || source.Contains("hotpot"))
         {
-            return "Bbq";
+            return "FOOD_BBQ";
         }
 
-        if (source.Contains("coffee") || source.Contains("ca phe") || source.Contains("drink") || source.Contains("beverage"))
+        if (source.Contains("coffee") || source.Contains("ca phe") || source.Contains("drink") || source.Contains("beverage") || source.Contains("nuoc"))
         {
-            return "Beverage";
+            return "DRINK";
         }
 
-        return "All";
+        if (source.Contains("street") || source.Contains("vat") || source.Contains("snack"))
+        {
+            return "FOOD_STREET";
+        }
+
+        return "FOOD_STREET"; // Align with backend default
     }
 
     private static string? ResolveRemoteMediaPath(string? mediaPath)
@@ -610,6 +618,7 @@ public class DatabaseService : IDatabaseService
     {
         public int Id { get; set; }
         public string BasePoiId { get; set; } = string.Empty;
+        public string CategoryCode { get; set; } = string.Empty;
         public double Latitude { get; set; }
         public double Longitude { get; set; }
         public double Radius { get; set; } = 50;

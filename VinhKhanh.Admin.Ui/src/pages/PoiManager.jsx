@@ -15,6 +15,7 @@ const PoiManager = () => {
     { code: 'FOOD_SNAIL', label: 'Ốc & Hải sản' },
     { code: 'FOOD_BBQ', label: 'Đồ nướng & Lẩu' },
     { code: 'FOOD_STREET', label: 'Ăn vặt' },
+    { code: 'PHOTO_SPOT', label: 'Check-in' },
     { code: 'DRINK', label: 'Đồ uống' },
     { code: 'UTILITY', label: 'Tiện ích' }
   ];
@@ -27,6 +28,8 @@ const PoiManager = () => {
         return 'Đồ nướng & Lẩu';
       case 'FOOD_STREET':
         return 'Ăn vặt';
+      case 'PHOTO_SPOT':
+        return 'Check-in & Sống ảo';
       case 'DRINK':
         return 'Đồ uống';
       case 'UTILITY':
@@ -44,6 +47,8 @@ const PoiManager = () => {
         return 'bg-orange-100 text-orange-700';
       case 'FOOD_STREET':
         return 'bg-amber-100 text-amber-700';
+      case 'PHOTO_SPOT':
+        return 'bg-rose-100 text-rose-700';
       case 'DRINK':
         return 'bg-emerald-100 text-emerald-700';
       case 'UTILITY':

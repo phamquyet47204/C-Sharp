@@ -11,6 +11,7 @@ public class Poi
     public int Priority { get; set; } = 0;   // higher = plays first
     public bool IsActive { get; set; } = true;
     public bool IsPremium { get; set; } = false;
+    public string CategoryCode { get; set; } = "FOOD_STREET";
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Chứa thông tin 3 ngôn ngữ thay vì Flatten

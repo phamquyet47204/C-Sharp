@@ -14,6 +14,7 @@ const PoiForm = () => {
     { code: 'FOOD_SNAIL', nameVi: 'Ốc & Hải sản', nameEn: 'Snails & Seafood' },
     { code: 'FOOD_BBQ', nameVi: 'Đồ nướng & Lẩu', nameEn: 'BBQ & Hotpot' },
     { code: 'FOOD_STREET', nameVi: 'Ăn vặt', nameEn: 'Street Food' },
+    { code: 'PHOTO_SPOT', nameVi: 'Check-in & Sống ảo', nameEn: 'Photo Spots' },
     { code: 'DRINK', nameVi: 'Đồ uống', nameEn: 'Drinks' },
     { code: 'UTILITY', nameVi: 'Tiện ích', nameEn: 'Utilities' }
   ];

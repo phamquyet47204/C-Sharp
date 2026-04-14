@@ -10,7 +10,7 @@
             
             <!-- Section: Language -->
             <VerticalStackLayout Spacing="10">
-                <Label Text="Ngôn ngữ / Language" 
+                <Label x:Name="LanguageSectionLabel" 
                        FontSize="16" 
                        FontAttributes="Bold" 
                        TextColor="#374151" />
@@ -19,7 +19,6 @@
                         BackgroundColor="White" 
                         Padding="4">
                     <Picker x:Name="LanguagePicker"
-                            Title="Chọn ngôn ngữ"
                             HorizontalOptions="Fill"
                             TextColor="#1F2937">
                         <Picker.ItemsSource>
@@ -35,7 +34,7 @@
 
             <!-- Section: Access Pass -->
             <VerticalStackLayout Spacing="10">
-                <Label Text="Gói dịch vụ / Access Pass" 
+                <Label x:Name="AccessPassSectionLabel" 
                        FontSize="16" 
                        FontAttributes="Bold" 
                        TextColor="#374151" />
@@ -53,20 +52,18 @@
                             <Label x:Name="StatusIconLabel" Text="🔒" FontSize="24" VerticalOptions="Center"/>
                             <VerticalStackLayout VerticalOptions="Center">
                                 <Label x:Name="StatusTitleLabel" 
-                                       Text="Chưa kích hoạt" 
                                        FontSize="16" 
                                        FontAttributes="Bold" 
                                        TextColor="#1F2937"/>
                                 <Label x:Name="StatusDetailLabel" 
-                                       Text="Gói dùng thử 7 ngày đã hết hạn hoặc chưa dùng." 
                                        FontSize="13" 
                                        TextColor="#6B7280"/>
                             </VerticalStackLayout>
                         </HorizontalStackLayout>
-
+ 
                         <BoxView HeightRequest="1" Color="#F3F4F6" HorizontalOptions="Fill"/>
-
-                        <Label Text="Mở khóa toàn bộ tính năng thuyết minh và bản đồ chi tiết chỉ với 1$/7 ngày."
+ 
+                        <Label x:Name="UnlockDetailLabel"
                                FontSize="13"
                                TextColor="#4B5563"
                                LineBreakMode="WordWrap"/>

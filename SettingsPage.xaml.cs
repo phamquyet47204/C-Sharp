@@ -8,6 +8,7 @@ public partial class SettingsPage : ContentPage
 {
     private readonly AccessService _accessService;
     private readonly IAppLanguageService _appLanguageService;
+    private string _currentLanguage = "vi";
     private bool _isInitialized;
 
     public SettingsPage(AccessService accessService, IAppLanguageService appLanguageService)
@@ -16,17 +17,20 @@ public partial class SettingsPage : ContentPage
         _accessService = accessService;
         _appLanguageService = appLanguageService;
         
+        _currentLanguage = _appLanguageService.GetEffectiveLanguage();
         LoadSettings();
+        UpdateUiCulture();
         UpdateAccessStatus();
         _isInitialized = true;
 
         LanguagePicker.SelectedIndexChanged += OnLanguageChanged;
     }
 
+    private string T(string key) => _appLanguageService.T(key, _currentLanguage);
+
     private void LoadSettings()
     {
-        var currentLang = _appLanguageService.GetEffectiveLanguage();
-        LanguagePicker.SelectedIndex = currentLang switch
+        LanguagePicker.SelectedIndex = _currentLanguage switch
         {
             "vi" => 0,
             "en" => 1,
@@ -35,26 +39,47 @@ public partial class SettingsPage : ContentPage
         };
     }
 
+    private void UpdateUiCulture()
+    {
+        Title = T("SettingsTitle");
+        LanguageSectionLabel.Text = T("LanguageSection");
+        AccessPassSectionLabel.Text = T("AccessPassSection");
+        UnlockDetailLabel.Text = T("UnlockAllMessage");
+    }
+
     private void UpdateAccessStatus()
     {
         var hasPass = _accessService.HasActivePass();
         var expiry = _accessService.GetExpiryDate();
+        var remainingDays = _accessService.GetRemainingDays();
 
         if (hasPass)
         {
             StatusIconLabel.Text = "🔓";
-            StatusTitleLabel.Text = "Đang kích hoạt";
             StatusTitleLabel.TextColor = Color.FromArgb("#10B981"); // Success green
-            StatusDetailLabel.Text = $"Gói Access Pass còn hiệu lực đến: {expiry:dd/MM/yyyy}";
-            BuyButton.Text = "Gia hạn thêm 7 ngày ($1)";
+            
+            // Determine if it's a paid pass or a trial
+            // Trial is usually 7 days, let's assume if it was a trial it would be marked or we just show remaining
+            if (remainingDays > 0 && remainingDays <= 7) 
+            {
+                StatusTitleLabel.Text = T("StatusTrialActive");
+                StatusDetailLabel.Text = $"{remainingDays} {T("DaysRemaining")}";
+            }
+            else
+            {
+                StatusTitleLabel.Text = T("StatusActive");
+                StatusDetailLabel.Text = $"{T("StatusExpiryDate")}{expiry:dd/MM/yyyy}";
+            }
+            
+            BuyButton.Text = T("RenewPassButton");
         }
         else
         {
             StatusIconLabel.Text = "🔒";
-            StatusTitleLabel.Text = "Chưa kích hoạt";
+            StatusTitleLabel.Text = T("StatusInactive");
             StatusTitleLabel.TextColor = Color.FromArgb("#EF4444"); // Error red
-            StatusDetailLabel.Text = "Gói dùng thử 7 ngày đã hết hạn hoặc chưa dùng.";
-            BuyButton.Text = "Mua Access Pass ($1/7 ngày)";
+            StatusDetailLabel.Text = T("TrialExpired");
+            BuyButton.Text = T("BuyPassButton");
         }
     }
 
@@ -70,19 +95,23 @@ public partial class SettingsPage : ContentPage
             _ => "vi"
         };
 
-        _appLanguageService.SetPreferredLanguage(selected);
-        // We'll notify the user that language will be applied on comeback or restart
-        // Ideally, use a MessagingCenter or similar to notify MainPage
+        if (selected != _currentLanguage)
+        {
+            _currentLanguage = selected;
+            _appLanguageService.SetPreferredLanguage(selected);
+            UpdateUiCulture();
+            UpdateAccessStatus();
+        }
     }
 
     private async void OnBuyClicked(object? sender, EventArgs e)
     {
-        var result = await DisplayAlert("Xác nhận", "Bạn có muốn mua gói Access Pass 7 ngày với giá $1 không? (Giả lập thanh toán)", "Đồng ý", "Hủy");
+        var result = await DisplayAlert(T("Confirm"), T("BuyPrompt"), T("Ok"), T("Cancel"));
         if (result)
         {
             _accessService.PurchaseSuccess();
             UpdateAccessStatus();
-            await DisplayAlert("Thành công", "Cảm ơn bạn! Gói Access Pass của bạn đã được kích hoạt.", "OK");
+            await DisplayAlert(T("Success"), T("BuySuccess"), T("Ok"));
         }
     }
 }

@@ -10,6 +10,7 @@ using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Maps;
 using Microsoft.Maui.Devices.Sensors;
 using Microsoft.Maui.Maps;
+using Microsoft.Maui.Controls.Shapes;
 using VinhKhanhFoodStreet.Models;
 using VinhKhanhFoodStreet.Services;
 using VinhKhanhFoodStreet.ViewModels;
@@ -32,9 +33,11 @@ public partial class MainPage : ContentPage
 	private readonly IDatabaseService _databaseService;
 	private readonly IAppLanguageService _appLanguageService;
 	private readonly IServiceProvider _serviceProvider;
+	private readonly AccessService _accessService;
 	private readonly MainPageViewModel _viewModel;
 	
 	private ObservableCollection<POI> _displayItems = new();
+	private ObservableCollection<POIGroup> _groupedDisplayItems = new();
 	private Dictionary<int, Pin> _poiPins = new();
 	private List<POI> _allPois = new();
 	private Dictionary<int, List<POI>> _poiVariantsByGroup = new();
@@ -44,13 +47,16 @@ public partial class MainPage : ContentPage
 		("FOOD_SNAIL", "CategorySnail"),
 		("FOOD_BBQ", "CategoryBbq"),
 		("FOOD_STREET", "CategoryStreet"),
+		("PHOTO_SPOT", "CategoryPhotoSpot"),
 		("DRINK", "CategoryDrink"),
 		("UTILITY", "CategoryUtility")
 	];
 	private Location? _currentLocation;
 	private bool _eventsAttached;
 	private string _currentLanguage = "vi";
-	private string _currentFilter = "ALL";
+	private string _mapCategoryFilter = "ALL";
+	private string _listCategoryFilter = "ALL";
+	private string _currentSearchText = string.Empty;
 	private bool _isUpdatingCategoryPicker;
 	private bool _isSearchExpanded;
 	private bool _isListTabActive;
@@ -58,150 +64,7 @@ public partial class MainPage : ContentPage
 
 	private string T(string key)
 	{
-		return (_currentLanguage, key) switch
-		{
-			("en", "AppTitle") => "Vinh Khanh Food Street",
-			("ja", "AppTitle") => "ビンカイン フードストリート",
-			(_, "AppTitle") => "Vĩnh Khánh Food Street",
-
-			("en", "MapTab") => "Map",
-			("ja", "MapTab") => "地図",
-			(_, "MapTab") => "Bản đồ",
-
-			("en", "ListTab") => "List",
-			("ja", "ListTab") => "一覧",
-			(_, "ListTab") => "Danh sách",
-
-			("en", "CategoryAll") => "All",
-			("ja", "CategoryAll") => "すべて",
-			(_, "CategoryAll") => "Tất cả",
-
-			("en", "CategorySnail") => "Snails & Seafood",
-			("ja", "CategorySnail") => "巻貝・海鮮",
-			(_, "CategorySnail") => "Ốc & Hải sản",
-
-			("en", "CategoryBbq") => "BBQ & Hotpot",
-			("ja", "CategoryBbq") => "焼肉/鍋",
-			(_, "CategoryBbq") => "Đồ nướng & Lẩu",
-
-			("en", "CategoryStreet") => "Street Food",
-			("ja", "CategoryStreet") => "ストリートフード",
-			(_, "CategoryStreet") => "Ăn vặt",
-
-			("en", "CategoryDrink") => "Drinks",
-			("ja", "CategoryDrink") => "ドリンク",
-			(_, "CategoryDrink") => "Đồ uống",
-
-			("en", "CategoryUtility") => "Utilities",
-			("ja", "CategoryUtility") => "ユーティリティ",
-			(_, "CategoryUtility") => "Tiện ích",
-
-			("en", "MyLocation") => "Me",
-			("ja", "MyLocation") => "私",
-			(_, "MyLocation") => "Tôi",
-
-			("en", "ListHeader") => "Restaurant List",
-			("ja", "ListHeader") => "レストラン一覧",
-			(_, "ListHeader") => "Danh Sách Quán Ăn",
-
-			("en", "Search") => "Find",
-			("ja", "Search") => "検索",
-			(_, "Search") => "Tìm",
-
-			("en", "Close") => "Close",
-			("ja", "Close") => "閉じる",
-			(_, "Close") => "Đóng",
-
-			("en", "SearchPlaceholder") => "Search restaurants...",
-			("ja", "SearchPlaceholder") => "店名を検索...",
-			(_, "SearchPlaceholder") => "Tìm quán ăn...",
-
-			("en", "Play") => "🔊",
-			("ja", "Play") => "🔊",
-			(_, "Play") => "🔊",
-
-			("en", "Navigate") => "🧭",
-			("ja", "Navigate") => "🧭",
-			(_, "Navigate") => "🧭",
-
-			("en", "GpsChecking") => "Checking GPS...",
-			("ja", "GpsChecking") => "GPSを確認中...",
-			(_, "GpsChecking") => "Đang kiểm tra GPS...",
-
-			("en", "GpsTracking") => "Tracking location...",
-			("ja", "GpsTracking") => "位置追跡中...",
-			(_, "GpsTracking") => "Đang theo dõi vị trí...",
-
-			("en", "GpsStartFailed") => "Cannot start GPS",
-			("ja", "GpsStartFailed") => "GPSを開始できません",
-			(_, "GpsStartFailed") => "Không thể khởi động GPS",
-
-			("en", "LocationUpdated") => "Updated",
-			("ja", "LocationUpdated") => "更新",
-			(_, "LocationUpdated") => "Cập nhật",
-
-			("en", "PermissionRequiredStatus") => "Location permission required",
-			("ja", "PermissionRequiredStatus") => "位置情報の許可が必要です",
-			(_, "PermissionRequiredStatus") => "Cần cấp quyền vị trí",
-
-			("en", "NoLocationPermission") => "No location permission",
-			("ja", "NoLocationPermission") => "位置情報の許可がありません",
-			(_, "NoLocationPermission") => "Chưa có quyền truy cập vị trí",
-
-			("en", "CurrentLocationFetched") => "Current location acquired",
-			("ja", "CurrentLocationFetched") => "現在地を取得しました",
-			(_, "CurrentLocationFetched") => "Đã lấy vị trí hiện tại",
-
-			("en", "GpsNotReady") => "GPS not ready",
-			("ja", "GpsNotReady") => "GPSの準備ができていません",
-			(_, "GpsNotReady") => "GPS chưa sẵn sàng",
-
-			("en", "CenteredToYourLocation") => "Centered to your location",
-			("ja", "CenteredToYourLocation") => "現在地に移動しました",
-			(_, "CenteredToYourLocation") => "Đã căn giữa vị trí của bạn",
-
-			("en", "ErrorTitle") => "Error",
-			("ja", "ErrorTitle") => "エラー",
-			(_, "ErrorTitle") => "Lỗi",
-
-			("en", "InfoTitle") => "Notice",
-			("ja", "InfoTitle") => "お知らせ",
-			(_, "InfoTitle") => "Thông báo",
-
-			("en", "Ok") => "OK",
-			("ja", "Ok") => "OK",
-			(_, "Ok") => "OK",
-
-			("en", "AudioPlayFailed") => "Cannot play audio:",
-			("ja", "AudioPlayFailed") => "音声を再生できません:",
-			(_, "AudioPlayFailed") => "Không thể phát âm thanh:",
-
-			("en", "ReloadByLanguageFailed") => "Cannot reload data for selected language.",
-			("ja", "ReloadByLanguageFailed") => "選択した言語でデータを再読み込みできません。",
-			(_, "ReloadByLanguageFailed") => "Không thể tải lại dữ liệu theo ngôn ngữ mới.",
-
-			("en", "LocationPermissionNeededMessage") => "The app needs location permission to work.",
-			("ja", "LocationPermissionNeededMessage") => "アプリの利用には位置情報の許可が必要です。",
-			(_, "LocationPermissionNeededMessage") => "App cần quyền vị trí để hoạt động",
-
-			("en", "CenterNoPermissionMessage") => "Location permission is required to center map.",
-			("ja", "CenterNoPermissionMessage") => "地図を現在地へ移動するには位置情報の許可が必要です。",
-			(_, "CenterNoPermissionMessage") => "Chưa có quyền vị trí để định vị người dùng.",
-
-			("en", "CannotGetCurrentLocationMessage") => "Cannot get current location.",
-			("ja", "CannotGetCurrentLocationMessage") => "現在地を取得できません。",
-			(_, "CannotGetCurrentLocationMessage") => "Không lấy được vị trí hiện tại.",
-
-			("en", "CannotLocateCurrentPositionMessage") => "Cannot locate current position.",
-			("ja", "CannotLocateCurrentPositionMessage") => "現在地を特定できません。",
-			(_, "CannotLocateCurrentPositionMessage") => "Không thể định vị vị trí hiện tại.",
-
-			("en", "NarrationFallback") => "This is",
-			("ja", "NarrationFallback") => "こちらは",
-			(_, "NarrationFallback") => "Đây là",
-
-			_ => key
-		};
+		return _appLanguageService.T(key, _currentLanguage);
 	}
 
 	public MainPage(
@@ -210,7 +73,8 @@ public partial class MainPage : ContentPage
 		INarrationService narrationService,
 		IDatabaseService databaseService,
 		IAppLanguageService appLanguageService,
-		IServiceProvider serviceProvider)
+		IServiceProvider serviceProvider,
+		AccessService accessService)
 	{
 		InitializeComponent();
 		_geofenceEngine = geofenceEngine;
@@ -219,6 +83,7 @@ public partial class MainPage : ContentPage
 		_databaseService = databaseService;
 		_appLanguageService = appLanguageService;
 		_serviceProvider = serviceProvider;
+		_accessService = accessService;
 		
 		NavigationPage.SetHasNavigationBar(this, false);
 		_viewModel = new MainPageViewModel();
@@ -228,9 +93,9 @@ public partial class MainPage : ContentPage
 		// Gan BindingContext theo MVVM de UI doc du lieu tu ViewModel.
 		BindingContext = _viewModel;
 		_displayItems = _viewModel.DisplayPois;
-		PoiCollectionView.ItemsSource = _viewModel.DisplayPois;
+		PoiCollectionView.ItemsSource = _groupedDisplayItems;
 		SearchContainer.IsVisible = false;
-		InitializeCategoryPicker();
+		InitializeCategoryDropList();
 		ApplyLanguageUi();
 		ResetPoiUiState();
 		SetActiveTab(false);
@@ -259,6 +124,9 @@ public partial class MainPage : ContentPage
 		try
 		{
 			InitializeLanguageFromSystemIfNeeded();
+			
+			// Sync trial status with server
+			_ = _accessService.SyncTrialStatusAsync();
 
 			await _databaseService.SyncPoisFromServerAsync();
 			await LoadMapPinsAndListAsync(reloadFromDatabase: true);
@@ -345,7 +213,7 @@ public partial class MainPage : ContentPage
 	{
 		PoiMap.Pins.Clear();
 		_poiPins.Clear();
-		var filteredPois = GetFilteredPoisForCurrentFilter();
+		var filteredPois = GetPoisFilteredForView(isMap: true);
 
 		await MainThread.InvokeOnMainThreadAsync(() =>
 		{
@@ -376,13 +244,11 @@ public partial class MainPage : ContentPage
 
 	private async Task RefreshMapPinTextsAsync()
 	{
-		var filteredPois = GetFilteredPoisForCurrentFilter();
-
+		var filteredPois = GetPoisFilteredForView(isMap: true);
 		await MainThread.InvokeOnMainThreadAsync(() =>
 		{
 			PoiMap.Pins.Clear();
 			_poiPins.Clear();
-
 			foreach (var poi in filteredPois)
 			{
 				var aggregateId = GetAggregateId(poi);
@@ -567,72 +433,242 @@ public partial class MainPage : ContentPage
 		});
 	}
 
+	private void InitializeCategoryDropList()
+	{
+		CategoryDropList.Children.Clear();
+		foreach (var option in CategoryOptions)
+		{
+			var row = CreateCategoryDropRow(option.Code, T(option.TextKey));
+			CategoryDropList.Children.Add(row);
+		}
+		UpdateMapCategoryListUi();
+	}
+
+	private void InitializeListCategoryChips()
+	{
+		ListCategoryChips.Children.Clear();
+
+		// Add "ALL" chip
+		var allChip = CreateCategoryChip("ALL", T("CategoryAll"));
+		ListCategoryChips.Children.Add(allChip);
+
+		// Add other categories
+		foreach (var opt in CategoryOptions)
+		{
+			if (opt.Code == "ALL") continue;
+			var chip = CreateCategoryChip(opt.Code, T(opt.TextKey));
+			ListCategoryChips.Children.Add(chip);
+		}
+		
+		UpdateListCategoryChipsSelection();
+	}
+
+	private View CreateCategoryChip(string code, string label)
+	{
+		var border = new Border
+		{
+			StrokeShape = new RoundRectangle { CornerRadius = 18 },
+			StrokeThickness = 0,
+			Padding = new Thickness(12, 4),
+			Margin = new Thickness(0, 4),
+			BackgroundColor = Color.FromArgb("#F3F4F6")
+		};
+
+		var stack = new HorizontalStackLayout { Spacing = 6, VerticalOptions = LayoutOptions.Center };
+		
+		if (code != "ALL")
+		{
+			stack.Children.Add(new Label { Text = GetCategoryIcon(code), FontSize = 14, VerticalOptions = LayoutOptions.Center });
+		}
+		
+		stack.Children.Add(new Label { Text = label, FontSize = 12, TextColor = Color.FromArgb("#4B5563"), VerticalOptions = LayoutOptions.Center });
+		
+		border.Content = stack;
+		border.BindingContext = code;
+
+		var tap = new TapGestureRecognizer();
+		tap.Tapped += OnListCategoryChipTapped;
+		border.GestureRecognizers.Add(tap);
+
+		return border;
+	}
+
+	private async void OnListCategoryChipTapped(object? sender, TappedEventArgs e)
+	{
+		if (sender is Border border && border.BindingContext is string code)
+		{
+			if (_listCategoryFilter == code) return;
+
+			_listCategoryFilter = code;
+			UpdateListCategoryChipsSelection();
+			await RefreshCollectionViewAsync();
+		}
+	}
+
+	private void UpdateListCategoryChipsSelection()
+	{
+		foreach (var child in ListCategoryChips.Children)
+		{
+			if (child is Border border && border.BindingContext is string code)
+			{
+				bool isSelected = (code == _listCategoryFilter);
+				border.BackgroundColor = isSelected ? Color.FromArgb("#FF7F50") : Color.FromArgb("#F3F4F6");
+				
+				if (border.Content is HorizontalStackLayout stack)
+				{
+					foreach (var label in stack.Children.OfType<Label>())
+					{
+						label.TextColor = isSelected ? Colors.White : Color.FromArgb("#4B5563");
+					}
+				}
+			}
+		}
+	}
+
+	private string GetCategoryIcon(string code)
+	{
+		return code switch
+		{
+			"ALL" => "🏠",
+			"FOOD_SNAIL" => "🐚",
+			"FOOD_BBQ" => "🔥",
+			"FOOD_STREET" => "🍢",
+			"PHOTO_SPOT" => "📸",
+			"DRINK" => "🥤",
+			"UTILITY" => "🚻",
+			_ => "📍"
+		};
+	}
+
+	private Border CreateCategoryDropRow(string code, string text)
+	{
+		var icon = GetCategoryIcon(code);
+		
+		var grid = new Grid
+		{
+			ColumnDefinitions = new ColumnDefinitionCollection { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) },
+			Padding = new Thickness(12, 10)
+		};
+
+		var iconLabel = new Label { Text = icon, FontSize = 18, VerticalOptions = LayoutOptions.Center, Margin = new Thickness(0,0,12,0) };
+		var textLabel = new Label { Text = text, FontSize = 14, VerticalOptions = LayoutOptions.Center, TextColor = Color.FromArgb("#1A1A1A") };
+
+		grid.Add(iconLabel, 0);
+		grid.Add(textLabel, 1);
+
+		var border = new Border
+		{
+			StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+			StrokeThickness = 0,
+			BackgroundColor = Color.FromArgb("#00000000"), // Transparent
+			Content = grid,
+			BindingContext = code
+		};
+
+		var tap = new TapGestureRecognizer();
+		tap.Tapped += OnCategoryMapRowTapped;
+		border.GestureRecognizers.Add(tap);
+
+		return border;
+	}
+
+	private void UpdateMapCategoryListUi()
+	{
+		foreach (var view in CategoryDropList.Children)
+		{
+			if (view is Border border && border.BindingContext is string code)
+			{
+				var isSelected = (code == _mapCategoryFilter);
+				border.BackgroundColor = isSelected ? Color.FromArgb("#FFF0EB") : Color.FromArgb("#00000000"); // Light coral for selected
+				
+				if (border.Content is Grid grid && grid.Children[1] is Label label)
+				{
+					label.FontAttributes = isSelected ? FontAttributes.Bold : FontAttributes.None;
+					label.TextColor = isSelected ? Color.FromArgb("#FF7F50") : Color.FromArgb("#1A1A1A");
+				}
+			}
+		}
+	}
+
+	private async void OnCategoryMapRowTapped(object? sender, EventArgs e)
+	{
+		if (sender is Border border && border.BindingContext is string code)
+		{
+			_mapCategoryFilter = code;
+			UpdateMapCategoryListUi();
+			AdvancedFilterSection.IsVisible = false; // Auto-close
+			AdvancedFilterButton.TextColor = Color.FromArgb("#666666");
+			
+			await RefreshMapPinTextsAsync();
+			// Note: We do NOT refresh CollectionView here to keep the POI List independent
+		}
+	}
+
+	private void OnToggleAdvancedFilter(object? sender, EventArgs e)
+	{
+		AdvancedFilterSection.IsVisible = !AdvancedFilterSection.IsVisible;
+		AdvancedFilterButton.TextColor = AdvancedFilterSection.IsVisible ? Color.FromArgb("#FF7F50") : Color.FromArgb("#666666");
+	}
+
 	private void HandlePoiExited(POI poi) { }
 
-	private async void OnCategoryPickerChanged(object? sender, EventArgs e)
-	{
-		if (_isUpdatingCategoryPicker || CategoryPicker.SelectedIndex < 0 || CategoryPicker.SelectedIndex >= CategoryOptions.Length)
-		{
-			return;
-		}
 
-		_currentFilter = CategoryOptions[CategoryPicker.SelectedIndex].Code;
-		await RefreshMapPinTextsAsync();
-		await RefreshCollectionViewAsync();
+	private void OnCategoryPickerChanged(object? sender, EventArgs e)
+	{
+		// Method kept for compatibility or removed if not referenced.
 	}
 
 	private void OnMapSearchTextChanged(object? sender, TextChangedEventArgs e)
 	{
-		ApplySearchFilter(e.NewTextValue);
+		_currentSearchText = e.NewTextValue ?? string.Empty;
+		ApplySearchFilter(_currentSearchText);
 	}
 
 	private void OnMapSearchPressed(object? sender, EventArgs e)
 	{
-		ApplySearchFilter(MapSearchBar.Text);
+		_currentSearchText = MapSearchBar.Text ?? string.Empty;
+		ApplySearchFilter(_currentSearchText);
 	}
 
 	private void ApplySearchFilter(string? query)
 	{
-		if (string.IsNullOrWhiteSpace(query))
+		_currentSearchText = query ?? string.Empty;
+		
+		if (string.IsNullOrWhiteSpace(_currentSearchText))
 		{
 			_ = RebuildMapPinsAsync();
 			return;
 		}
 
+		var searchText = _currentSearchText.ToLowerInvariant();
 		var filteredPois = _allPois
-			.Where(p => CategoryMatchesCurrentFilter(p.Category))
-			.Where(p => p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-						(p.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
-			.ToList();
+			.Where(p => CategoryMatchesMapFilter(p.Category))
+			.Where(p => (p.Name?.ToLowerInvariant().Contains(searchText) == true) || 
+						(p.Description?.ToLowerInvariant().Contains(searchText) == true));
 
-		_ = UpdateMapPinsInPlace(filteredPois);
+		// Sort by distance if available
+		if (_currentLocation != null)
+		{
+			foreach (var poi in filteredPois)
+			{
+				poi.Distance = (int)CalculateDistance(_currentLocation.Latitude, _currentLocation.Longitude, poi.Latitude, poi.Longitude);
+			}
+			filteredPois = filteredPois.OrderBy(p => p.Distance);
+		}
+
+		_ = UpdateMapPinsInPlace(filteredPois.ToList());
 	}
 
 	private async void OnSearchPoi(object? sender, EventArgs e)
 	{
-		var query = SearchBarPoi.Text?.Trim();
-		if (string.IsNullOrWhiteSpace(query))
+		_currentSearchText = SearchBarPoi.Text?.Trim() ?? string.Empty;
+		await RefreshCollectionViewAsync();
+		
+		if (!string.IsNullOrWhiteSpace(_currentSearchText))
 		{
-			await RefreshCollectionViewAsync();
-			return;
+			// Optional: Sync map pins with list search if desired
+			// _ = UpdateMapPinsInPlace(GetPoisFilteredForView(isMap: true));
 		}
-
-		_displayItems.Clear();
-		var filteredByCategory = _allPois.Where(p => CategoryMatchesCurrentFilter(p.Category));
-
-		var filtered = filteredByCategory
-			.Where(p => p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-						(p.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
-			.ToList();
-
-		foreach (var poi in filtered)
-		{
-			var item = CreateDisplayPoi(poi);
-			_displayItems.Add(item);
-		}
-
-		PoisCountLabel.Text = $"({_displayItems.Count})";
-		await HighlightNearestPoiAsync();
 	}
 
 	private async Task UpdateMapPinsInPlace(List<POI> filteredPois)
@@ -663,11 +699,37 @@ public partial class MainPage : ContentPage
 	private async Task RefreshCollectionViewAsync()
 	{
 		_displayItems.Clear();
+		_groupedDisplayItems.Clear();
 		
-		// Filter POIs based on _currentFilter
-		var filteredPois = GetFilteredPoisForCurrentFilter();
+		var filteredPois = GetPoisFilteredForView(isMap: false);
+		var displayPois = filteredPois.Select(CreateDisplayPoi).ToList();
+		
+		foreach (var poi in displayPois)
+		{
+			_displayItems.Add(poi);
+		}
 
-		_viewModel.ReplaceDisplayPois(filteredPois.Select(CreateDisplayPoi));
+		// Grouping vs Flat List
+		if (!string.IsNullOrWhiteSpace(_currentSearchText))
+		{
+			// When searching, show a flat list to prioritize global distance sorting
+			var resultsGroupName = T("SearchResults") ?? "Kết quả tìm kiếm";
+			_groupedDisplayItems.Add(new POIGroup(resultsGroupName, resultsGroupName, displayPois));
+		}
+		else
+		{
+			// Group by category for the standard list view
+			var groups = displayPois
+				.GroupBy(p => p.CategoryDisplayName ?? T("CategoryStreet"))
+				.Select(g => new POIGroup(g.Key, g.Key, g.OrderBy(p => p.Distance)))
+				.OrderBy(g => g.GroupDisplayName)
+				.ToList();
+
+			foreach (var group in groups)
+			{
+				_groupedDisplayItems.Add(group);
+			}
+		}
 
 		PoisCountLabel.Text = $"({_displayItems.Count})";
 		await HighlightNearestPoiAsync();
@@ -683,6 +745,8 @@ public partial class MainPage : ContentPage
 		{
 			PinCardNameLabel.Text = poi.Name;
 			PinCardDescriptionLabel.Text = poi.Description;
+			PinCardCategoryLabel.Text = poi.CategoryDisplayName;
+			PinCardDistanceLabel.Text = poi.Distance > 0 ? $"{poi.Distance}m" : string.Empty;
 			PinCardImage.Source = poi.PoiImageSource;
 			PinQuickCard.IsVisible = true;
 		});
@@ -694,19 +758,51 @@ public partial class MainPage : ContentPage
 		var poi = _selectedPinPoi;
 		PinQuickCard.IsVisible = false;
 
+		SetNarratingPoi(poi);
+
 		try
 		{
 			if (!string.IsNullOrWhiteSpace(poi.AudioPath))
 			{
-				try { await _narrationService.PlayAudioAsync(poi.AudioPath); return; }
+				try 
+				{ 
+					await _narrationService.PlayAudioAsync(poi.AudioPath); 
+					// Reset playing state after a reasonable time if we can't detect end event
+					_ = Task.Delay(5000).ContinueWith(_ => SetNarratingPoi(null));
+					return; 
+				}
 				catch (Exception ex) { Debug.WriteLine($"[MainPage] Audio fallback TTS: {ex.Message}"); }
 			}
 			var text = poi.Description ?? $"{T("NarrationFallback")} {poi.Name}";
 			await _narrationService.SpeakAsync(text, _currentLanguage);
+			_ = Task.Delay(5000).ContinueWith(_ => SetNarratingPoi(null));
 		}
 		catch (Exception ex)
 		{
 			Debug.WriteLine($"[MainPage] Loi phat TTS: {ex.Message}");
+		}
+	}
+
+	private async void OnPinCardNavigate(object? sender, EventArgs e)
+	{
+		if (_selectedPinPoi is null) return;
+		var poi = _selectedPinPoi;
+		
+		try
+		{
+			var location = new Location(poi.Latitude, poi.Longitude);
+			var options = new MapLaunchOptions 
+			{ 
+				Name = poi.Name,
+				NavigationMode = NavigationMode.Driving 
+			};
+
+			await Microsoft.Maui.ApplicationModel.Map.Default.OpenAsync(location, options);
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"[MainPage] Loi mo Google Map ngoai: {ex.Message}");
+			await DisplayAlertAsync(T("ErrorTitle"), T("NavigateExternalFailed"), T("Ok"));
 		}
 	}
 
@@ -726,13 +822,14 @@ public partial class MainPage : ContentPage
 			{
 				// Tim POI da localize theo aggregate id tu cache hien tai.
 				var poi = _allPois.FirstOrDefault(p => GetAggregateId(p) == GetAggregateId(displayItem));
-				if (poi != null)
-				{
+					SetNarratingPoi(poi);
+
 					if (!string.IsNullOrWhiteSpace(poi.AudioPath))
 					{
 						try
 						{
 							await _narrationService.PlayAudioAsync(poi.AudioPath);
+							_ = Task.Delay(5000).ContinueWith(_ => SetNarratingPoi(null));
 							return;
 						}
 						catch (Exception audioEx)
@@ -743,7 +840,7 @@ public partial class MainPage : ContentPage
 					
 					var text = poi.Description ?? $"{T("NarrationFallback")} {poi.Name}";
 					await _narrationService.SpeakAsync(text, _currentLanguage);
-				}
+					_ = Task.Delay(5000).ContinueWith(_ => SetNarratingPoi(null));
 			}
 		}
 		catch (Exception ex)
@@ -816,11 +913,12 @@ public partial class MainPage : ContentPage
 		PageTitleLabel.Text = T("AppTitle");
 		MapTabButton.Text = T("MapTab");
 		ListTabButton.Text = T("ListTab");
-		RefreshCategoryPickerTexts();
 		ListHeaderTitleLabel.Text = T("ListHeader");
-		SearchToggleButton.Text = _isSearchExpanded ? "✕" : "🔍";
+		MapSearchBar.Placeholder = T("SearchPlaceholder");
 		SearchBarPoi.Placeholder = T("SearchPlaceholder");
-		LocationStatusLabel.Text = T("GpsChecking");
+		
+		InitializeCategoryDropList();
+		InitializeListCategoryChips();
 		ApplyLocalizedActionTextsToDisplayItems();
 	}
 
@@ -945,6 +1043,7 @@ public partial class MainPage : ContentPage
 	{
 		_isSearchExpanded = !_isSearchExpanded;
 		SearchContainer.IsVisible = _isSearchExpanded;
+		CategoryListContainer.IsVisible = !_isSearchExpanded;
 		SearchToggleButton.Text = _isSearchExpanded ? "✕" : "🔍";
 
 		if (_isSearchExpanded)
@@ -954,6 +1053,7 @@ public partial class MainPage : ContentPage
 		else
 		{
 			SearchBarPoi.Text = string.Empty;
+			_currentSearchText = string.Empty;
 			await RefreshCollectionViewAsync();
 		}
 	}
@@ -997,25 +1097,72 @@ public partial class MainPage : ContentPage
 		_eventsAttached = false;
 	}
 
-	private void InitializeCategoryPicker()
+	private void SetNarratingPoi(POI? activePoi)
 	{
-		RefreshCategoryPickerTexts();
+		MainThread.BeginInvokeOnMainThread(() =>
+		{
+			foreach (var item in _displayItems)
+			{
+				item.IsPlaying = (activePoi != null && item.AggregateId == activePoi.AggregateId);
+			}
+		});
 	}
 
-	private void RefreshCategoryPickerTexts()
+	private void OnMapHandlerChanged(object? sender, EventArgs e)
 	{
-		_isUpdatingCategoryPicker = true;
-
-		var selectedCode = _currentFilter;
-		CategoryPicker.ItemsSource = CategoryOptions
-			.Select(x => T(x.TextKey))
-			.ToList();
-
-		var selectedIndex = Array.FindIndex(CategoryOptions, x => x.Code == selectedCode);
-		CategoryPicker.SelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
-
-		_isUpdatingCategoryPicker = false;
+#if ANDROID
+		if (PoiMap.Handler is Microsoft.Maui.Maps.Handlers.MapHandler mapHandler)
+		{
+			var nativeMap = mapHandler.PlatformView as Android.Gms.Maps.MapView;
+			if (nativeMap != null)
+			{
+				nativeMap.GetMapAsync(new MapCallback(this));
+			}
+		}
+#endif
 	}
+
+#if ANDROID
+	private class MapCallback : Java.Lang.Object, Android.Gms.Maps.IOnMapReadyCallback
+	{
+		private readonly MainPage _page;
+		public MapCallback(MainPage page) => _page = page;
+
+		public void OnMapReady(Android.Gms.Maps.GoogleMap googleMap)
+		{
+			// Wire up direct marker click to avoid double-tap requirement
+			googleMap.MarkerClick += (s, e) =>
+			{
+				var marker = e.Marker;
+				if (marker != null)
+				{
+					// Show info window (default behavior)
+					marker.ShowInfoWindow();
+					
+					// Find the POI associated with this pin by name/position
+					_page.OnMarkerTapped(marker.Title, marker.Position.Latitude, marker.Position.Longitude);
+				}
+				// Set Handled to true instead of returning true (C# event requirement)
+				e.Handled = true; 
+			};
+		}
+	}
+
+	private void OnMarkerTapped(string? title, double lat, double lng)
+	{
+		// Find the POI in our cache that matches this location/name
+		var poi = _allPois.FirstOrDefault(p => 
+			(p.Name == title) && 
+			Math.Abs(p.Latitude - lat) < 1e-5 && 
+			Math.Abs(p.Longitude - lng) < 1e-5);
+			
+		if (poi != null)
+		{
+			OnPinClicked(poi);
+		}
+	}
+#endif
+
 
 	/// <summary>
 	/// Tao doi tuong POI phuc vu hien thi UI, tach biet voi entity goc trong cache.
@@ -1047,40 +1194,103 @@ public partial class MainPage : ContentPage
 		};
 	}
 
+
 	/// <summary>
-	/// Lay tap POI theo filter dang chon de dong bo map va list.
+	/// Lay tap POI sau khi loc theo tim kiem hoac category (tuy theo view).
 	/// </summary>
-	private List<POI> GetFilteredPoisForCurrentFilter()
+	private List<POI> GetPoisFilteredForView(bool isMap)
 	{
-		return _allPois.Where(p => CategoryMatchesCurrentFilter(p.Category)).ToList();
+		var result = _allPois.AsEnumerable();
+
+		// Universal name search (affects both Map and List)
+		if (!string.IsNullOrWhiteSpace(_currentSearchText))
+		{
+			var searchText = _currentSearchText.ToLowerInvariant();
+			result = result.Where(p => (p.Name?.ToLowerInvariant().Contains(searchText) == true) || 
+			                           (p.Description?.ToLowerInvariant().Contains(searchText) == true));
+		}
+
+		// Category filter
+		if (isMap)
+		{
+			if (_mapCategoryFilter != "ALL")
+				result = result.Where(p => NormalizeCategoryCode(p.Category) == _mapCategoryFilter);
+		}
+		else
+		{
+			if (_listCategoryFilter != "ALL")
+				result = result.Where(p => NormalizeCategoryCode(p.Category) == _listCategoryFilter);
+		}
+
+		// Always calculate distance and sort by it if location is available
+		if (_currentLocation != null)
+		{
+			var list = result.ToList();
+			foreach (var p in list)
+			{
+				p.Distance = (int)CalculateDistance(_currentLocation.Latitude, _currentLocation.Longitude, p.Latitude, p.Longitude);
+			}
+			return list.OrderBy(p => p.Distance).ToList();
+		}
+
+		return result.ToList();
 	}
 
-	private bool CategoryMatchesCurrentFilter(string? poiCategory)
+	private bool CategoryMatchesMapFilter(string? poiCategory)
 	{
-		if (_currentFilter == "ALL")
+		if (_mapCategoryFilter == "ALL")
 		{
 			return true;
 		}
 
-		return NormalizeCategoryCode(poiCategory) == _currentFilter;
+		return NormalizeCategoryCode(poiCategory) == _mapCategoryFilter;
 	}
 
 	private static string NormalizeCategoryCode(string? category)
 	{
-		var code = category?.Trim().ToUpperInvariant();
-		return code switch
+		if (string.IsNullOrWhiteSpace(category)) return "FOOD_STREET";
+		
+		var raw = category.Trim().ToUpperInvariant();
+		
+		// Map various string aliases to our internal codes
+		// Using Contains for robustness against variations like "Oyster & Seafood"
+		if (raw.Contains("SNAIL") || raw.Contains("SEA") || raw.Contains("OC") || raw.Contains("HAI SAN") || raw.Contains("OYSTER"))
+			return "FOOD_SNAIL";
+			
+		if (raw.Contains("BBQ") || raw.Contains("NUONG") || raw.Contains("LAU") || raw.Contains("GRILL") || raw.Contains("HOTPOT"))
+			return "FOOD_BBQ";
+			
+		if (raw.Contains("STREET") || raw.Contains("VAT") || raw.Contains("SNACK") || raw.Contains("QUAN AN") || raw.Contains("FOOD"))
+			return "FOOD_STREET";
+			
+		if (raw.Contains("DRINK") || raw.Contains("BEVERAGE") || raw.Contains("CAFE") || raw.Contains("NUOC"))
+			return "DRINK";
+			
+		if (raw.Contains("UTILITY") || raw.Contains("TIEN ICH") || raw.Contains("PARKING") || raw.Contains("TOILET"))
+			return "UTILITY";
+
+		// Direct code matching for cases where DB already has clean codes
+		return raw switch
 		{
 			"FOOD_SNAIL" => "FOOD_SNAIL",
 			"FOOD_BBQ" => "FOOD_BBQ",
 			"FOOD_STREET" => "FOOD_STREET",
 			"DRINK" => "DRINK",
 			"UTILITY" => "UTILITY",
-			"OYSTER" => "FOOD_SNAIL",
-			"BBQ" => "FOOD_BBQ",
-			"BEVERAGE" => "DRINK",
-			"ALL" => "ALL",
-			_ => "FOOD_STREET"
+			_ => "ALL"
 		};
+	}
+}
+
+public class POIGroup : System.Collections.ObjectModel.ObservableCollection<POI>
+{
+	public string Name { get; private set; }
+	public string GroupDisplayName { get; private set; }
+
+	public POIGroup(string name, string displayName, System.Collections.Generic.IEnumerable<POI> pois) : base(pois)
+	{
+		Name = name;
+		GroupDisplayName = displayName;
 	}
 }
 

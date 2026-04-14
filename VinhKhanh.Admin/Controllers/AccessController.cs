@@ -48,8 +48,28 @@ public class AccessController(AppDbContext dbContext) : ControllerBase
 
         // Kiểm tra Access Pass còn hạn
         DateTime? passExpiryDate = null;
+        DateTime? trialExpiryDate = null;
         bool hasActivePass = false;
+        bool isTrialActive = false;
 
+        // 1. Kiểm tra Trial từ thiết bị
+        if (!string.IsNullOrWhiteSpace(deviceId))
+        {
+            var trial = await dbContext.DeviceTrials
+                .FirstOrDefaultAsync(d => d.DeviceId == deviceId, ct);
+
+            if (trial is not null)
+            {
+                trialExpiryDate = trial.ExpiryDate;
+                isTrialActive = trial.ExpiryDate > now;
+                
+                // Update last checked
+                trial.LastCheckedAt = now;
+                await dbContext.SaveChangesAsync(ct);
+            }
+        }
+
+        // 2. Kiểm tra Access Pass mua thực tế
         if (!string.IsNullOrWhiteSpace(userId))
         {
             var activePayment = await dbContext.Payments
@@ -68,8 +88,47 @@ public class AccessController(AppDbContext dbContext) : ControllerBase
         {
             freeTrialUsed,
             freeTrialLimit = FreeTrialLimit,
-            hasActivePass,
-            passExpiryDate
+            hasActivePass = hasActivePass || isTrialActive,
+            passExpiryDate = hasActivePass ? passExpiryDate : trialExpiryDate,
+            isTrial = isTrialActive && !hasActivePass,
+            trialRemainingDays = trialExpiryDate.HasValue && trialExpiryDate > now 
+                ? (int)(trialExpiryDate.Value - now).TotalDays 
+                : 0
+        });
+    }
+
+    /// <summary>
+    /// POST /api/access/start-trial?deviceId=...
+    /// </summary>
+    [HttpPost("start-trial")]
+    public async Task<IActionResult> StartTrial([FromQuery] string deviceId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId))
+            return BadRequest("DeviceId is required");
+
+        var existing = await dbContext.DeviceTrials
+            .FirstOrDefaultAsync(d => d.DeviceId == deviceId, ct);
+
+        if (existing is not null)
+            return BadRequest("Trial already started for this device");
+
+        var now = DateTime.UtcNow;
+        var trial = new DeviceTrial
+        {
+            DeviceId = deviceId,
+            TrialStartDate = now,
+            ExpiryDate = now.AddDays(7),
+            LastCheckedAt = now
+        };
+
+        dbContext.DeviceTrials.Add(trial);
+        await dbContext.SaveChangesAsync(ct);
+
+        return Ok(new
+        {
+            success = true,
+            expiryDate = trial.ExpiryDate,
+            remainingDays = 7
         });
     }
 }
