@@ -14,6 +14,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Payment> Payments { get; set; }
     public DbSet<FreeTrialRecord> FreeTrialRecords { get; set; }
     public DbSet<DeviceTrial> DeviceTrials { get; set; }
+    public DbSet<PoiRating> PoiRatings { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -55,5 +56,18 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .HasIndex(f => new { f.DeviceId, f.PoiId })
             .IsUnique()
             .HasFilter("[DeviceId] IS NOT NULL");
+
+        modelBuilder.Entity<PoiRating>()
+            .HasOne(r => r.Poi)
+            .WithMany()
+            .HasForeignKey(r => r.PoiId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PoiRating>()
+            .HasIndex(r => new { r.DeviceId, r.PoiId })
+            .IsUnique();
+
+        modelBuilder.Entity<PoiRating>()
+            .HasCheckConstraint("CK_PoiRatings_Stars", "[Stars] >= 1 AND [Stars] <= 5");
     }
 }

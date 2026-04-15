@@ -32,6 +32,8 @@ public class AccessService
         _deviceId = GetPersistentDeviceId();
     }
 
+    public string DeviceId => _deviceId;
+
     private string GetPersistentDeviceId()
     {
 #if ANDROID

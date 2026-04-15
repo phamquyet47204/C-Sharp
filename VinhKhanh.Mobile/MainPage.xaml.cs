@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
@@ -11,6 +13,7 @@ using Microsoft.Maui.Controls.Maps;
 using Microsoft.Maui.Devices.Sensors;
 using Microsoft.Maui.Maps;
 using Microsoft.Maui.Controls.Shapes;
+using VinhKhanhFoodStreet.Configuration;
 using VinhKhanhFoodStreet.Models;
 using VinhKhanhFoodStreet.Services;
 using VinhKhanhFoodStreet.ViewModels;
@@ -35,6 +38,7 @@ public partial class MainPage : ContentPage
 	private readonly IServiceProvider _serviceProvider;
 	private readonly AccessService _accessService;
 	private readonly MainPageViewModel _viewModel;
+	private readonly HttpClient _apiHttpClient;
 	
 	private ObservableCollection<POI> _displayItems = new();
 	private ObservableCollection<POIGroup> _groupedDisplayItems = new();
@@ -85,6 +89,11 @@ public partial class MainPage : ContentPage
 		_appLanguageService = appLanguageService;
 		_serviceProvider = serviceProvider;
 		_accessService = accessService;
+		_apiHttpClient = new HttpClient
+		{
+			BaseAddress = new Uri(AppConfig.BaseApiUrl),
+			Timeout = TimeSpan.FromSeconds(10)
+		};
 		
 		NavigationPage.SetHasNavigationBar(this, false);
 		_viewModel = new MainPageViewModel();
@@ -411,11 +420,13 @@ public partial class MainPage : ContentPage
 			try
 			{
 				_geofenceEngine.MarkPoiAsPlayed(poi.Id);
+				await LogPoiEventAsync(poi, "visit");
 				
 				if (!string.IsNullOrWhiteSpace(poi.AudioPath))
 				{
 					try
 					{
+						await LogPoiEventAsync(poi, "narration");
 						await _narrationService.PlayAudioAsync(poi.AudioPath);
 						return;
 					}
@@ -426,6 +437,7 @@ public partial class MainPage : ContentPage
 				}
 
 				var text = poi.Description ?? $"{T("NarrationFallback")} {poi.Name}";
+				await LogPoiEventAsync(poi, "narration");
 				await _narrationService.SpeakAsync(text, _currentLanguage);
 			}
 			catch (Exception ex)
@@ -784,6 +796,7 @@ public partial class MainPage : ContentPage
 	}
 
 	private POI? _selectedPinPoi;
+	private int? _pendingPinCardRatingStars;
 
 	private void OnPinClicked(POI poi)
 	{
@@ -794,17 +807,23 @@ public partial class MainPage : ContentPage
 			PinCardNameLabel.Text = poi.Name;
 			PinCardDescriptionLabel.Text = poi.Description;
 			PinCardCategoryLabel.Text = poi.CategoryDisplayName;
+			PinCardRatingLabel.Text = "★ -- (0 đánh giá)";
+			SetPinCardUserStars(null);
+			_pendingPinCardRatingStars = null;
+			UpdatePinCardRateButtonState();
 			PinCardDistanceLabel.Text = poi.Distance > 0 ? $"{poi.Distance}m" : string.Empty;
 			PinCardImage.Source = poi.PoiImageSource;
 			PinQuickCard.IsVisible = true;
 		});
+
+		_ = LoadRatingSummaryAsync(poi);
 	}
 
 	private async void OnPinCardPlay(object? sender, EventArgs e)
 	{
 		if (_selectedPinPoi is null) return;
 		var poi = _selectedPinPoi;
-		PinQuickCard.IsVisible = false;
+		await LogPoiEventAsync(poi, "narration");
 
 		SetNarratingPoi(poi);
 
@@ -858,6 +877,147 @@ public partial class MainPage : ContentPage
 	{
 		PinQuickCard.IsVisible = false;
 		_selectedPinPoi = null;
+		_pendingPinCardRatingStars = null;
+		UpdatePinCardRateButtonState();
+	}
+
+	private void OnPinCardStarClicked(object? sender, EventArgs e)
+	{
+		if (sender is not Button button || button.CommandParameter is null)
+		{
+			return;
+		}
+
+		if (!int.TryParse(button.CommandParameter.ToString(), out var stars) || stars is < 1 or > 5)
+		{
+			return;
+		}
+
+		_pendingPinCardRatingStars = stars;
+		SetPinCardUserStars(stars);
+		UpdatePinCardRateButtonState();
+	}
+
+	private async void OnPinCardRate(object? sender, EventArgs e)
+	{
+		if (_selectedPinPoi is null || !_pendingPinCardRatingStars.HasValue)
+		{
+			return;
+		}
+
+		await SubmitPoiRatingAsync(_pendingPinCardRatingStars.Value);
+	}
+
+	private async Task SubmitPoiRatingAsync(int stars)
+	{
+		if (_selectedPinPoi is null)
+		{
+			return;
+		}
+
+		_pendingPinCardRatingStars = stars;
+		SetPinCardUserStars(stars);
+		UpdatePinCardRateButtonState();
+
+		var aggregateId = GetAggregateId(_selectedPinPoi);
+		var request = new SubmitRatingRequest
+		{
+			Stars = stars,
+			DeviceId = _accessService.DeviceId,
+			Latitude = _currentLocation?.Latitude,
+			Longitude = _currentLocation?.Longitude
+		};
+
+		try
+		{
+			var response = await _apiHttpClient.PostAsJsonAsync($"api/pois/{aggregateId}/ratings", request);
+			if (response.IsSuccessStatusCode)
+			{
+				await LoadRatingSummaryAsync(_selectedPinPoi);
+				return;
+			}
+
+			await DisplayAlertAsync("Lỗi", "Không thể gửi đánh giá lúc này.", "OK");
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"[MainPage] Loi danh gia: {ex.Message}");
+			await DisplayAlertAsync("Lỗi", "Không thể kết nối máy chủ để gửi đánh giá.", "OK");
+		}
+	}
+
+	private async Task LoadRatingSummaryAsync(POI poi)
+	{
+		try
+		{
+			var aggregateId = GetAggregateId(poi);
+			var summary = await _apiHttpClient.GetFromJsonAsync<RatingSummaryResponse>(
+				$"api/pois/{aggregateId}/ratings?deviceId={Uri.EscapeDataString(_accessService.DeviceId)}");
+
+			if (summary is null)
+			{
+				return;
+			}
+
+			var ratingText = $"★ {summary.AverageStars:0.0} ({summary.RatingCount} đánh giá)";
+			await MainThread.InvokeOnMainThreadAsync(() =>
+			{
+				if (_selectedPinPoi is null || GetAggregateId(_selectedPinPoi) != GetAggregateId(poi))
+				{
+					return;
+				}
+
+				PinCardRatingLabel.Text = ratingText;
+				SetPinCardUserStars(summary.UserStars);
+			});
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"[MainPage] Loi tai tong quan danh gia: {ex.Message}");
+		}
+	}
+
+	private void SetPinCardUserStars(int? stars)
+	{
+		var controls = new[] { PinCardStar1, PinCardStar2, PinCardStar3, PinCardStar4, PinCardStar5 };
+		for (var i = 0; i < controls.Length; i++)
+		{
+			controls[i].Text = stars.HasValue && stars.Value >= i + 1 ? "★" : "☆";
+		}
+	}
+
+	private void UpdatePinCardRateButtonState()
+	{
+		var hasSelection = _pendingPinCardRatingStars.HasValue;
+		PinCardRateButton.IsEnabled = hasSelection;
+		PinCardRateButton.Opacity = hasSelection ? 1 : 0.55;
+		PinCardRateButton.BackgroundColor = hasSelection
+			? Color.FromArgb("#FF7F50")
+			: Color.FromArgb("#F6C8B3");
+		PinCardRateButton.TextColor = hasSelection
+			? Colors.White
+			: Color.FromArgb("#FFF8F4");
+	}
+
+	private async Task LogPoiEventAsync(POI poi, string eventType)
+	{
+		try
+		{
+			var payload = new AnalyticsEventRequest
+			{
+				Latitude = _currentLocation?.Latitude ?? poi.Latitude,
+				Longitude = _currentLocation?.Longitude ?? poi.Longitude,
+				DeviceId = _accessService.DeviceId,
+				PoiId = GetAggregateId(poi),
+				EventType = eventType
+			};
+
+			await _apiHttpClient.PostAsJsonAsync("api/analytics/visit", payload);
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"[MainPage] Loi log analytics {eventType}: {ex.Message}");
+		}
 	}
 
 	private async void OnPlayPoi(object? sender, EventArgs e)
@@ -870,6 +1030,12 @@ public partial class MainPage : ContentPage
 			{
 				// Tim POI da localize theo aggregate id tu cache hien tai.
 				var poi = _allPois.FirstOrDefault(p => GetAggregateId(p) == GetAggregateId(displayItem));
+				if (poi is null)
+				{
+					return;
+				}
+
+				await LogPoiEventAsync(poi, "narration");
 					SetNarratingPoi(poi);
 
 					if (!string.IsNullOrWhiteSpace(poi.AudioPath))
@@ -1154,6 +1320,31 @@ public partial class MainPage : ContentPage
 				item.IsPlaying = (activePoi != null && item.AggregateId == activePoi.AggregateId);
 			}
 		});
+	}
+
+	private sealed class SubmitRatingRequest
+	{
+		public int Stars { get; set; }
+		public string DeviceId { get; set; } = string.Empty;
+		public double? Latitude { get; set; }
+		public double? Longitude { get; set; }
+	}
+
+	private sealed class RatingSummaryResponse
+	{
+		public int PoiId { get; set; }
+		public double AverageStars { get; set; }
+		public int RatingCount { get; set; }
+		public int? UserStars { get; set; }
+	}
+
+	private sealed class AnalyticsEventRequest
+	{
+		public double Latitude { get; set; }
+		public double Longitude { get; set; }
+		public string DeviceId { get; set; } = string.Empty;
+		public int PoiId { get; set; }
+		public string EventType { get; set; } = "visit";
 	}
 
 	private void OnMapHandlerChanged(object? sender, EventArgs e)

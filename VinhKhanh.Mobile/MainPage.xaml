@@ -133,6 +133,7 @@
                         VerticalOptions="End"
                         HorizontalOptions="Fill"
                         Margin="16,0,16,24"
+                        MinimumHeightRequest="280"
                         BackgroundColor="White"
                         StrokeShape="RoundRectangle 20"
                         Stroke="#F0F0F0"
@@ -141,7 +142,7 @@
                         <Shadow Brush="Black" Offset="0,8" Radius="20" Opacity="0.15"/>
                     </Border.Shadow>
                     
-                    <Grid RowDefinitions="Auto, Auto" ColumnDefinitions="110, *, Auto" Padding="12" ColumnSpacing="14" RowSpacing="6">
+                    <Grid RowDefinitions="Auto,*" ColumnDefinitions="110, *, Auto" Padding="12" ColumnSpacing="14" RowSpacing="6">
                         <!-- Image on the left -->
                         <Border Grid.Column="0" Grid.RowSpan="2"
                                 Stroke="#F1F1F1"
@@ -149,6 +150,8 @@
                                 BackgroundColor="#FAFAFA"
                                 StrokeShape="RoundRectangle 16"
                                 Padding="0"
+                                VerticalOptions="Start"
+                                Margin="0,-4,0,0"
                                 WidthRequest="110"
                                 HeightRequest="100">
                             <Image x:Name="PinCardImage"
@@ -163,6 +166,67 @@
                                    TextColor="#1A1A1A"
                                    LineBreakMode="TailTruncation"
                                    MaxLines="1"/>
+                            <Label x:Name="PinCardRatingLabel"
+                                FontSize="12"
+                                TextColor="#666666"
+                                Text="★ -- (0 đánh giá)" />
+                                <HorizontalStackLayout Spacing="4">
+                                <Button x:Name="PinCardStar1"
+                                    Text="☆"
+                                    FontSize="22"
+                                    BackgroundColor="Transparent"
+                                    TextColor="#F59E0B"
+                                    Padding="0"
+                                    WidthRequest="28"
+                                    HeightRequest="28"
+                                    CornerRadius="0"
+                                    CommandParameter="1"
+                                    Clicked="OnPinCardStarClicked" />
+                                <Button x:Name="PinCardStar2"
+                                    Text="☆"
+                                    FontSize="22"
+                                    BackgroundColor="Transparent"
+                                    TextColor="#F59E0B"
+                                    Padding="0"
+                                    WidthRequest="28"
+                                    HeightRequest="28"
+                                    CornerRadius="0"
+                                    CommandParameter="2"
+                                    Clicked="OnPinCardStarClicked" />
+                                <Button x:Name="PinCardStar3"
+                                    Text="☆"
+                                    FontSize="22"
+                                    BackgroundColor="Transparent"
+                                    TextColor="#F59E0B"
+                                    Padding="0"
+                                    WidthRequest="28"
+                                    HeightRequest="28"
+                                    CornerRadius="0"
+                                    CommandParameter="3"
+                                    Clicked="OnPinCardStarClicked" />
+                                <Button x:Name="PinCardStar4"
+                                    Text="☆"
+                                    FontSize="22"
+                                    BackgroundColor="Transparent"
+                                    TextColor="#F59E0B"
+                                    Padding="0"
+                                    WidthRequest="28"
+                                    HeightRequest="28"
+                                    CornerRadius="0"
+                                    CommandParameter="4"
+                                    Clicked="OnPinCardStarClicked" />
+                                <Button x:Name="PinCardStar5"
+                                    Text="☆"
+                                    FontSize="22"
+                                    BackgroundColor="Transparent"
+                                    TextColor="#F59E0B"
+                                    Padding="0"
+                                    WidthRequest="28"
+                                    HeightRequest="28"
+                                    CornerRadius="0"
+                                    CommandParameter="5"
+                                    Clicked="OnPinCardStarClicked" />
+                                </HorizontalStackLayout>
                             <HorizontalStackLayout Spacing="8">
                                 <Label x:Name="PinCardCategoryLabel"
                                        FontSize="11"
@@ -182,7 +246,11 @@
                         </VerticalStackLayout>
 
                         <!-- Actions on the right -->
-                        <VerticalStackLayout Grid.Column="2" Grid.Row="0" Spacing="8" VerticalOptions="Start">
+                        <Grid Grid.Column="2"
+                            Grid.RowSpan="2"
+                            RowDefinitions="Auto,*"
+                            RowSpacing="10"
+                            VerticalOptions="Fill">
                             <Button Text="✕"
                                     FontSize="14"
                                     BackgroundColor="#F5F5F5"
@@ -192,27 +260,43 @@
                                     HeightRequest="32"
                                     Padding="0"
                                     Clicked="OnPinCardClose"/>
-                            <Button x:Name="PinCardPlayButton"
-                                    Text="🔊"
-                                    FontSize="20"
-                                    BackgroundColor="#FF7F50"
-                                    TextColor="White"
-                                    CornerRadius="22"
-                                    WidthRequest="44"
-                                    HeightRequest="44"
-                                    Padding="0"
-                                    Clicked="OnPinCardPlay"/>
-                            <Button x:Name="PinCardNavigateButton"
-                                    Text="↪️"
-                                    FontSize="20"
-                                    BackgroundColor="#6B4C8A"
-                                    TextColor="White"
-                                    CornerRadius="22"
-                                    WidthRequest="44"
-                                    HeightRequest="44"
-                                    Padding="0"
-                                    Clicked="OnPinCardNavigate"/>
-                        </VerticalStackLayout>
+                                    <VerticalStackLayout Grid.Row="1"
+                                             Spacing="8"
+                                             VerticalOptions="End">
+                                    <Button x:Name="PinCardPlayButton"
+                                        Text="🔊"
+                                        FontSize="20"
+                                        BackgroundColor="#FF7F50"
+                                        TextColor="White"
+                                        CornerRadius="22"
+                                        WidthRequest="44"
+                                        HeightRequest="44"
+                                        Padding="0"
+                                        Clicked="OnPinCardPlay"/>
+                                    <Button x:Name="PinCardNavigateButton"
+                                        Text="↪️"
+                                        FontSize="20"
+                                        BackgroundColor="#6B4C8A"
+                                        TextColor="White"
+                                        CornerRadius="22"
+                                        WidthRequest="44"
+                                        HeightRequest="44"
+                                        Padding="0"
+                                        Clicked="OnPinCardNavigate"/>
+                                    <Button x:Name="PinCardRateButton"
+                                        Text="Gửi đánh giá"
+                                        FontSize="11"
+                                        BackgroundColor="#F6C8B3"
+                                        TextColor="White"
+                                        Opacity="0.55"
+                                        IsEnabled="False"
+                                        CornerRadius="8"
+                                        WidthRequest="98"
+                                        HeightRequest="44"
+                                        Padding="0"
+                                        Clicked="OnPinCardRate"/>
+                                    </VerticalStackLayout>
+                                </Grid>
                     </Grid>
                 </Border>
 

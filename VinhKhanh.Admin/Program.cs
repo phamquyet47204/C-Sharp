@@ -37,6 +37,8 @@ builder.Services.AddScoped<AdminApproveUseCase>();
 
 // 5. API CONFIGURATION & CORS
 builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy => {
@@ -72,10 +74,18 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
 app.UseCors("AllowAll");
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapGet("/", () => Results.Ok(new { status = "ok", message = "VinhKhanh.Admin backend is running" }));
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 app.MapControllers();
 
 // SEED DATA: Identity Roles & Default Admin
@@ -128,6 +138,26 @@ END
 IF COL_LENGTH('Pois', 'CategoryCode') IS NULL
 BEGIN
     ALTER TABLE [Pois] ADD [CategoryCode] NVARCHAR(32) NOT NULL CONSTRAINT [DF_Pois_CategoryCode] DEFAULT 'FOOD_STREET';
+END
+
+IF OBJECT_ID('dbo.PoiRatings', 'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[PoiRatings]
+    (
+        [Id] INT IDENTITY(1,1) NOT NULL,
+        [PoiId] INT NOT NULL,
+        [DeviceId] NVARCHAR(128) NOT NULL,
+        [Stars] INT NOT NULL,
+        [RatedAt] DATETIME2 NOT NULL,
+        [Latitude] FLOAT NULL,
+        [Longitude] FLOAT NULL,
+        CONSTRAINT [PK_PoiRatings] PRIMARY KEY ([Id]),
+        CONSTRAINT [CK_PoiRatings_Stars] CHECK ([Stars] >= 1 AND [Stars] <= 5),
+        CONSTRAINT [FK_PoiRatings_Pois_PoiId] FOREIGN KEY ([PoiId]) REFERENCES [dbo].[Pois]([Id]) ON DELETE CASCADE
+    );
+
+    CREATE UNIQUE INDEX [IX_PoiRatings_DeviceId_PoiId] ON [dbo].[PoiRatings]([DeviceId], [PoiId]);
+    CREATE INDEX [IX_PoiRatings_PoiId] ON [dbo].[PoiRatings]([PoiId]);
 END
 ");
     }
