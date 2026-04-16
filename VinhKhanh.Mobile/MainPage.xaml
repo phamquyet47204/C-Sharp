@@ -1,0 +1,435 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:maps="http://schemas.microsoft.com/dotnet/2021/maui/maps"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             x:Class="VinhKhanhFoodStreet.MainPage"
+             BackgroundColor="White">
+
+    <Grid RowDefinitions="Auto,Auto,*">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Padding="20,8" BackgroundColor="#FF7F50">
+            <Label x:Name="PageTitleLabel"
+                   Grid.Column="0"
+                   Text="Vĩnh Khánh Food Street"
+                   TextColor="White"
+                   FontSize="18"
+                   FontAttributes="Bold"
+                   VerticalOptions="Center" />
+            <Button x:Name="QrScannerButton"
+                    Grid.Column="1"
+                    Text="QR"
+                    FontSize="16"
+                    FontAttributes="Bold"
+                    BackgroundColor="Transparent"
+                    TextColor="White"
+                    Clicked="OnQrScannerClicked" />
+            <Button x:Name="SettingsButton"
+                    Grid.Column="2"
+                    Text="⚙️"
+                    FontSize="20"
+                    BackgroundColor="Transparent"
+                    TextColor="White"
+                    Clicked="OnSettingsClicked" />
+        </Grid>
+
+        <Grid Grid.Row="1" ColumnDefinitions="*,*" Padding="16,6" ColumnSpacing="10" BackgroundColor="#F8F8F8">
+            <Button x:Name="MapTabButton" Text="Bản đồ" Clicked="OnSwitchToMapTab" />
+            <Button x:Name="ListTabButton" Grid.Column="1" Text="Danh sách" Clicked="OnSwitchToListTab" />
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <Grid x:Name="MapPanel" RowDefinitions="*,Auto">
+                <maps:Map x:Name="PoiMap"
+                          Grid.Row="0"
+                          IsShowingUser="True"
+                          IsTrafficEnabled="False"
+                          HandlerChanged="OnMapHandlerChanged" />
+                <Grid Grid.Row="0" Margin="16" RowDefinitions="Auto, Auto, *">
+                    <!-- Compact Search Bar with Hamburger -->
+                    <Border Grid.Row="0" Stroke="#E0E0E0" StrokeThickness="1" BackgroundColor="White" Padding="4" StrokeShape="RoundRectangle 24">
+                        <Grid ColumnDefinitions="*, Auto">
+                            <SearchBar x:Name="MapSearchBar"
+                                       Grid.Column="0"
+                                       Placeholder="Tìm quán trên bản đồ..."
+                                       FontSize="14"
+                                       TextColor="#1A1A1A"
+                                       BackgroundColor="Transparent"
+                                       SearchButtonPressed="OnMapSearchPressed"
+                                       TextChanged="OnMapSearchTextChanged"/>
+                            <Button x:Name="AdvancedFilterButton"
+                                    Grid.Column="1"
+                                    Text="☰"
+                                    FontSize="18"
+                                    TextColor="#666666"
+                                    BackgroundColor="Transparent"
+                                    WidthRequest="40"
+                                    HeightRequest="40"
+                                    Padding="0"
+                                    Margin="0,0,4,0"
+                                    Clicked="OnToggleAdvancedFilter" />
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Map Search Results Floating Overlay -->
+                    <Border x:Name="MapSearchResultsContainer"
+                            Grid.Row="1"
+                            IsVisible="False"
+                            Margin="0,8,0,0"
+                            Padding="0"
+                            BackgroundColor="White"
+                            Stroke="#E0E0E0"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 16"
+                            MaximumHeightRequest="400"
+                            VerticalOptions="Start">
+                        <Border.Shadow>
+                            <Shadow Brush="Black" Offset="0,6" Radius="15" Opacity="0.12" />
+                        </Border.Shadow>
+                        <CollectionView x:Name="MapSearchResultsList"
+                                        SelectionMode="Single"
+                                        SelectionChanged="OnMapSearchResultSelected">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid RowDefinitions="Auto, Auto" ColumnDefinitions="60, *" Padding="12" ColumnSpacing="12">
+                                        <Border Grid.Column="0" Grid.RowSpan="2"
+                                                StrokeThickness="0"
+                                                StrokeShape="RoundRectangle 8"
+                                                WidthRequest="60" HeightRequest="60">
+                                            <Image Source="{Binding PoiImageSource}" Aspect="AspectFill" />
+                                        </Border>
+                                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                            <Label Text="{Binding Name}" FontSize="14" FontAttributes="Bold" TextColor="#1A1A1A" MaxLines="1" LineBreakMode="TailTruncation"/>
+                                            <HorizontalStackLayout Spacing="6">
+                                                <Label Text="{Binding Distance, StringFormat='{0}m'}" FontSize="11" TextColor="#FF7F50" FontAttributes="Bold"/>
+                                                <Label Text="•" TextColor="#CCCCCC" FontSize="11"/>
+                                                <Label Text="{Binding CategoryDisplayName}" FontSize="11" TextColor="#666666"/>
+                                            </HorizontalStackLayout>
+                                            <Label Text="{Binding Description}" FontSize="12" TextColor="#888888" MaxLines="1" LineBreakMode="TailTruncation"/>
+                                        </VerticalStackLayout>
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </Border>
+                    
+                    <!-- Advanced Filter 'Drop List' (Hidden by default) -->
+                    <Border x:Name="AdvancedFilterSection"
+                            Grid.Row="1"
+                            IsVisible="False"
+                            Margin="0,8,0,0"
+                            Padding="0"
+                            BackgroundColor="White"
+                            Stroke="#E0E0E0"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 12"
+                            WidthRequest="280"
+                            HorizontalOptions="End"
+                            VerticalOptions="Start">
+                        <Border.Shadow>
+                            <Shadow Brush="Black" Offset="0,4" Radius="8" Opacity="0.15" />
+                        </Border.Shadow>
+                        <VerticalStackLayout x:Name="CategoryDropList" Padding="4">
+                            <!-- Dropdown items generated in code -->
+                        </VerticalStackLayout>
+                    </Border>
+                </Grid>
+
+                <!-- POI Quick Card — hiện khi bấm pin — TO HƠN -->
+                <Border x:Name="PinQuickCard"
+                        Grid.Row="0"
+                        IsVisible="False"
+                        VerticalOptions="End"
+                        HorizontalOptions="Fill"
+                        Margin="16,0,16,24"
+                        MinimumHeightRequest="280"
+                        BackgroundColor="White"
+                        StrokeShape="RoundRectangle 20"
+                        Stroke="#F0F0F0"
+                        StrokeThickness="1">
+                    <Border.Shadow>
+                        <Shadow Brush="Black" Offset="0,8" Radius="20" Opacity="0.15"/>
+                    </Border.Shadow>
+                    
+                    <Grid RowDefinitions="Auto,*" ColumnDefinitions="110, *, Auto" Padding="12" ColumnSpacing="14" RowSpacing="6">
+                        <!-- Image on the left -->
+                        <Border Grid.Column="0" Grid.RowSpan="2"
+                                Stroke="#F1F1F1"
+                                StrokeThickness="1"
+                                BackgroundColor="#FAFAFA"
+                                StrokeShape="RoundRectangle 16"
+                                Padding="0"
+                                VerticalOptions="Start"
+                                Margin="0,-4,0,0"
+                                WidthRequest="110"
+                                HeightRequest="100">
+                            <Image x:Name="PinCardImage"
+                                   Aspect="AspectFill" />
+                        </Border>
+
+                        <!-- Content in the middle -->
+                        <VerticalStackLayout Grid.Column="1" Grid.Row="0" Spacing="4" VerticalOptions="Start">
+                            <Label x:Name="PinCardNameLabel"
+                                   FontSize="18"
+                                   FontAttributes="Bold"
+                                   TextColor="#1A1A1A"
+                                   LineBreakMode="TailTruncation"
+                                   MaxLines="1"/>
+                            <Label x:Name="PinCardRatingLabel"
+                                FontSize="12"
+                                TextColor="#666666"
+                                Text="★ -- (0 đánh giá)" />
+                                <HorizontalStackLayout Spacing="4">
+                                <Button x:Name="PinCardStar1"
+                                    Text="☆"
+                                    FontSize="22"
+                                    BackgroundColor="Transparent"
+                                    TextColor="#F59E0B"
+                                    Padding="0"
+                                    WidthRequest="28"
+                                    HeightRequest="28"
+                                    CornerRadius="0"
+                                    CommandParameter="1"
+                                    Clicked="OnPinCardStarClicked" />
+                                <Button x:Name="PinCardStar2"
+                                    Text="☆"
+                                    FontSize="22"
+                                    BackgroundColor="Transparent"
+                                    TextColor="#F59E0B"
+                                    Padding="0"
+                                    WidthRequest="28"
+                                    HeightRequest="28"
+                                    CornerRadius="0"
+                                    CommandParameter="2"
+                                    Clicked="OnPinCardStarClicked" />
+                                <Button x:Name="PinCardStar3"
+                                    Text="☆"
+                                    FontSize="22"
+                                    BackgroundColor="Transparent"
+                                    TextColor="#F59E0B"
+                                    Padding="0"
+                                    WidthRequest="28"
+                                    HeightRequest="28"
+                                    CornerRadius="0"
+                                    CommandParameter="3"
+                                    Clicked="OnPinCardStarClicked" />
+                                <Button x:Name="PinCardStar4"
+                                    Text="☆"
+                                    FontSize="22"
+                                    BackgroundColor="Transparent"
+                                    TextColor="#F59E0B"
+                                    Padding="0"
+                                    WidthRequest="28"
+                                    HeightRequest="28"
+                                    CornerRadius="0"
+                                    CommandParameter="4"
+                                    Clicked="OnPinCardStarClicked" />
+                                <Button x:Name="PinCardStar5"
+                                    Text="☆"
+                                    FontSize="22"
+                                    BackgroundColor="Transparent"
+                                    TextColor="#F59E0B"
+                                    Padding="0"
+                                    WidthRequest="28"
+                                    HeightRequest="28"
+                                    CornerRadius="0"
+                                    CommandParameter="5"
+                                    Clicked="OnPinCardStarClicked" />
+                                </HorizontalStackLayout>
+                            <HorizontalStackLayout Spacing="8">
+                                <Label x:Name="PinCardCategoryLabel"
+                                       FontSize="11"
+                                       TextColor="#FF7F50"
+                                       FontAttributes="Bold"/>
+                                <Label Text="•" TextColor="#CCCCCC"/>
+                                <Label x:Name="PinCardDistanceLabel"
+                                       FontSize="11"
+                                       TextColor="#666666"/>
+                            </HorizontalStackLayout>
+                            <Label x:Name="PinCardDescriptionLabel"
+                                   FontSize="13"
+                                   TextColor="#555555"
+                                   LineBreakMode="TailTruncation"
+                                   MaxLines="2"
+                                   Margin="0,4,0,0"/>
+                        </VerticalStackLayout>
+
+                        <!-- Actions on the right -->
+                        <Grid Grid.Column="2"
+                            Grid.RowSpan="2"
+                            RowDefinitions="Auto,*"
+                            RowSpacing="10"
+                            VerticalOptions="Fill">
+                            <Button Text="✕"
+                                    FontSize="14"
+                                    BackgroundColor="#F5F5F5"
+                                    TextColor="#999"
+                                    CornerRadius="16"
+                                    WidthRequest="32"
+                                    HeightRequest="32"
+                                    Padding="0"
+                                    Clicked="OnPinCardClose"/>
+                                    <VerticalStackLayout Grid.Row="1"
+                                             Spacing="8"
+                                             VerticalOptions="End">
+                                    <Button x:Name="PinCardPlayButton"
+                                        Text="🔊"
+                                        FontSize="20"
+                                        BackgroundColor="#FF7F50"
+                                        TextColor="White"
+                                        CornerRadius="22"
+                                        WidthRequest="44"
+                                        HeightRequest="44"
+                                        Padding="0"
+                                        Clicked="OnPinCardPlay"/>
+                                    <Button x:Name="PinCardNavigateButton"
+                                        Text="↪️"
+                                        FontSize="20"
+                                        BackgroundColor="#6B4C8A"
+                                        TextColor="White"
+                                        CornerRadius="22"
+                                        WidthRequest="44"
+                                        HeightRequest="44"
+                                        Padding="0"
+                                        Clicked="OnPinCardNavigate"/>
+                                    <Button x:Name="PinCardRateButton"
+                                        Text="Gửi đánh giá"
+                                        FontSize="11"
+                                        BackgroundColor="#F6C8B3"
+                                        TextColor="White"
+                                        Opacity="0.55"
+                                        IsEnabled="False"
+                                        CornerRadius="8"
+                                        WidthRequest="98"
+                                        HeightRequest="44"
+                                        Padding="0"
+                                        Clicked="OnPinCardRate"/>
+                                    </VerticalStackLayout>
+                                </Grid>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="1" Padding="10" Margin="12" IsVisible="False">
+                    <VerticalStackLayout Spacing="2">
+                        <Label x:Name="LocationStatusLabel" Text="Đang kiểm tra GPS..." />
+                        <Label x:Name="LocationLabel" Text="--, --" />
+                    </VerticalStackLayout>
+                </Border>
+
+            </Grid>
+
+            <Grid x:Name="ListPanel" IsVisible="False" RowDefinitions="Auto,Auto,*">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="20,14,20,10">
+                    <Label x:Name="ListHeaderTitleLabel" Grid.Column="0" Text="Danh Sách Quán Ăn" FontSize="16" FontAttributes="Bold"/>
+                    <Label x:Name="PoisCountLabel" Grid.Column="1" Text="(0)" TextColor="#666"/>
+                </Grid>
+
+                <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Padding="20,0,20,10" ColumnSpacing="12">
+                    <Button x:Name="SearchToggleButton" Grid.Column="0" Text="🔍" Clicked="OnToggleSearch" BackgroundColor="#F0F0F0" HeightRequest="36" WidthRequest="36" CornerRadius="18" Padding="0"/>
+                    
+                    <Grid Grid.Column="1">
+                        <!-- Search Bar (Visible when toggled) -->
+                        <Border x:Name="SearchContainer" IsVisible="False" StrokeShape="RoundRectangle 18" StrokeThickness="1" Stroke="#E0E0E0">
+                            <SearchBar x:Name="SearchBarPoi" Placeholder="Tìm quán ăn..." SearchButtonPressed="OnSearchPoi" BackgroundColor="Transparent" FontSize="13"/>
+                        </Border>
+
+                        <!-- Horizontal Category Chips (Visible by default) -->
+                        <ScrollView x:Name="CategoryListContainer" Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
+                            <HorizontalStackLayout x:Name="ListCategoryChips" Spacing="8" VerticalOptions="Center">
+                                <!-- Generated in code-behind -->
+                            </HorizontalStackLayout>
+                        </ScrollView>
+                    </Grid>
+                </Grid>
+
+                <CollectionView x:Name="PoiCollectionView" 
+                                Grid.Row="2" 
+                                SelectionMode="None"
+                                IsGrouped="True">
+                    <CollectionView.ItemsLayout>
+                        <LinearItemsLayout Orientation="Vertical" ItemSpacing="12" />
+                    </CollectionView.ItemsLayout>
+                    <CollectionView.GroupHeaderTemplate>
+                        <DataTemplate>
+                            <Grid Padding="20,12,20,4">
+                                <Label Text="{Binding GroupDisplayName}"
+                                       FontAttributes="Bold"
+                                       FontSize="14"
+                                       TextColor="#666666"
+                                       CharacterSpacing="1"/>
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.GroupHeaderTemplate>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="16,0"
+                                    Padding="14"
+                                    BackgroundColor="White"
+                                    Stroke="{Binding IsNearestCardStroke}"
+                                    StrokeThickness="{Binding IsNearestBorderWidth}"
+                                    StrokeShape="RoundRectangle 18">
+                                <Grid ColumnDefinitions="110,*,Auto" ColumnSpacing="14">
+                                    <Border Stroke="#F1F1F1"
+                                            StrokeThickness="1"
+                                            BackgroundColor="#FAFAFA"
+                                            StrokeShape="RoundRectangle 16"
+                                            Padding="0">
+                                        <Image Source="{Binding PoiImageSource}"
+                                               WidthRequest="110"
+                                               HeightRequest="100"
+                                               Aspect="AspectFill" />
+                                    </Border>
+
+                                    <VerticalStackLayout Grid.Column="1" Spacing="6" VerticalOptions="Center">
+                                        <Label Text="{Binding Name}"
+                                               FontSize="17"
+                                               FontAttributes="Bold"
+                                               TextColor="#1A1A1A"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="2" />
+                                        <Label Text="{Binding Description}"
+                                               FontSize="12"
+                                               TextColor="#666666"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="2" />
+                                        <HorizontalStackLayout Spacing="6">
+                                            <Label Text="{Binding CategoryDisplayName}"
+                                                   FontSize="11"
+                                                   TextColor="#FF7F50" />
+                                        </HorizontalStackLayout>
+                                    </VerticalStackLayout>
+
+                                    <VerticalStackLayout Grid.Column="2"
+                                                         Spacing="8"
+                                                         VerticalOptions="Center"
+                                                         HorizontalOptions="Center">
+                                        <Button Text="🔊"
+                                                WidthRequest="42"
+                                                HeightRequest="42"
+                                                CornerRadius="21"
+                                                BackgroundColor="#FF7F50"
+                                                TextColor="White"
+                                                Clicked="OnPlayPoi" />
+                                        <Button Text="Chỉ đường↪️"
+                                                WidthRequest="42"
+                                                HeightRequest="42"
+                                                CornerRadius="21"
+                                                BackgroundColor="#6B4C8A"
+                                                TextColor="White"
+                                                Clicked="OnNavigatePoi" />
+                                    </VerticalStackLayout>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
+        </Grid>
+
+        <toolkit:MediaElement x:Name="NarrationPlayer"
+                              HeightRequest="1"
+                              WidthRequest="1"
+                              IsVisible="False"
+                              ShouldAutoPlay="False"
+                              ShouldShowPlaybackControls="False" />
+    </Grid>
+</ContentPage>
