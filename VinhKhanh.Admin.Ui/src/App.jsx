@@ -8,16 +8,19 @@ import Login from './pages/Login';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import Approvals from './pages/Approvals';
+import OwnerApprovals from './pages/OwnerApprovals';
 import ShopLayout from './pages/shop/ShopLayout';
 import ShopDashboard from './pages/shop/ShopDashboard';
 import ShopPoiList from './pages/shop/ShopPoiList';
 import ShopPoiForm from './pages/shop/ShopPoiForm';
+import Register from './pages/Register';
 
 function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
 
         {/* Admin routes */}
@@ -29,6 +32,7 @@ function App() {
             <Route path="pois/new" element={<PoiForm />} />
             <Route path="pois/:id" element={<PoiForm />} />
             <Route path="approvals" element={<Approvals />} />
+            <Route path="owner-approvals" element={<OwnerApprovals />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

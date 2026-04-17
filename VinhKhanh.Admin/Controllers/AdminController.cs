@@ -6,6 +6,7 @@ using VinhKhanh.Infrastructure.Data;
 using VinhKhanh.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
+using Microsoft.AspNetCore.Identity;
 
 namespace VinhKhanh.Admin.Controllers;
 
@@ -16,7 +17,8 @@ public class AdminController(
     AdminApproveUseCase approveUseCase, 
     GeminiAiService geminiAiService,
     AppDbContext dbContext,
-    IWebHostEnvironment env) : ControllerBase
+    IWebHostEnvironment env,
+    UserManager<ApplicationUser> userManager) : ControllerBase
 {
     private static readonly HashSet<string> SupportedCategoryCodes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -446,6 +448,50 @@ public class AdminController(
 
         existing.Name = name ?? string.Empty;
         existing.Description = description ?? string.Empty;
+    }
+
+    [HttpGet("users/pending-owners")]
+    public async Task<IActionResult> GetPendingOwners(CancellationToken ct)
+    {
+        var users = await userManager.GetUsersInRoleAsync("ShopOwner");
+        var pending = users.Where(u => !u.IsApproved)
+            .Select(u => new
+            {
+                id = u.Id,
+                fullName = u.FullName,
+                email = u.Email,
+                activationDate = u.ActivationDate
+            })
+            .ToList();
+
+        return Ok(pending);
+    }
+
+    [HttpPost("users/{userId}/approve-owner")]
+    public async Task<IActionResult> ApproveOwner(string userId, CancellationToken ct)
+    {
+        var user = await userManager.FindByIdAsync(userId);
+        if (user == null) return NotFound("Người dùng không tồn tại.");
+
+        user.IsApproved = true;
+        if (user.ActivationDate == default) user.ActivationDate = DateTime.UtcNow;
+
+        var result = await userManager.UpdateAsync(user);
+        if (!result.Succeeded) return Problem("Lỗi khi duyệt chủ quán: " + string.Join(", ", result.Errors.Select(e => e.Description)));
+
+        return Ok(new { success = true, message = "Đã duyệt chủ quán thành công." });
+    }
+
+    [HttpPost("users/{userId}/reject-owner")]
+    public async Task<IActionResult> RejectOwner(string userId, CancellationToken ct)
+    {
+        var user = await userManager.FindByIdAsync(userId);
+        if (user == null) return NotFound("Người dùng không tồn tại.");
+
+        var result = await userManager.DeleteAsync(user);
+        if (!result.Succeeded) return Problem("Lỗi khi từ chối chủ quán: " + string.Join(", ", result.Errors.Select(e => e.Description)));
+
+        return Ok(new { success = true, message = "Đã từ chối ứng viên thành công." });
     }
 }
 

@@ -1,6 +1,6 @@
 $root = $PSScriptRoot
 Write-Host "--- 1. STARTING BACKEND (ASP.NET Core) ---" -ForegroundColor Cyan
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$root\VinhKhanh.Admin'; `$env:ASPNETCORE_URLS='http://localhost:5000'; dotnet run"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$root\VinhKhanh.Admin'; dotnet run --urls http://localhost:5000"
 
 Write-Host "--- 2. STARTING FRONTEND (React + Vite) ---" -ForegroundColor Cyan
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$root\VinhKhanh.Admin.Ui'; npm run dev"

@@ -1,0 +1,85 @@
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="VinhKhanhFoodStreet.RegisterShopPage"
+             Title="Đăng ký Chủ quán"
+             BackgroundColor="White">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="30,40" Spacing="25">
+            <!-- Header -->
+            <VerticalStackLayout Spacing="10" HorizontalOptions="Center">
+                <Label Text="🤝" FontSize="48" HorizontalOptions="Center"/>
+                <Label Text="Trở thành đối tác" 
+                       FontSize="28" 
+                       FontAttributes="Bold" 
+                       TextColor="#FF6B6B"
+                       HorizontalOptions="Center"/>
+                <Label Text="Tham gia cộng đồng kinh doanh tại phố ẩm thực Vĩnh Khánh" 
+                       FontSize="14" 
+                       TextColor="Gray"
+                       HorizontalTextAlignment="Center"
+                       HorizontalOptions="Center"/>
+            </VerticalStackLayout>
+
+            <!-- Form -->
+            <VerticalStackLayout Spacing="15" Margin="0,20,0,0">
+                <VerticalStackLayout Spacing="5">
+                    <Label Text="Họ và tên" FontSize="12" FontAttributes="Bold" TextColor="#444"/>
+                    <Frame Padding="15,0" HasShadow="False" BorderColor="#EEE" CornerRadius="12">
+                        <Entry x:Name="FullNameEntry" Placeholder="Nguyễn Văn A" HeightRequest="45"/>
+                    </Frame>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Spacing="5">
+                    <Label Text="Email" FontSize="12" FontAttributes="Bold" TextColor="#444"/>
+                    <Frame Padding="15,0" HasShadow="False" BorderColor="#EEE" CornerRadius="12">
+                        <Entry x:Name="EmailEntry" Placeholder="email@example.com" Keyboard="Email" HeightRequest="45"/>
+                    </Frame>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Spacing="5">
+                    <Label Text="Mật khẩu" FontSize="12" FontAttributes="Bold" TextColor="#444"/>
+                    <Frame Padding="15,0" HasShadow="False" BorderColor="#EEE" CornerRadius="12">
+                        <Entry x:Name="PasswordEntry" Placeholder="••••••••" IsPassword="True" HeightRequest="45"/>
+                    </Frame>
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+
+            <!-- Info Box -->
+            <Frame BackgroundColor="#FFF5F5" BorderColor="#FFE3E3" CornerRadius="12" Padding="15">
+                <HorizontalStackLayout Spacing="10">
+                    <Label Text="ℹ️" VerticalOptions="Center"/>
+                    <Label Text="Tài khoản của bạn sẽ cần được Admin phê duyệt trước khi có thể quản lý gian hàng." 
+                           FontSize="12" 
+                           TextColor="#E03131"
+                           LineBreakMode="WordWrap"
+                           WidthRequest="250"/>
+                </HorizontalStackLayout>
+            </Frame>
+
+            <!-- Actions -->
+            <VerticalStackLayout Spacing="10">
+                <Button x:Name="SubmitButton"
+                        Text="Gửi yêu cầu đăng ký"
+                        Clicked="OnSubmitClicked"
+                        BackgroundColor="#FF6B6B"
+                        TextColor="White"
+                        CornerRadius="12"
+                        HeightRequest="50"
+                        FontAttributes="Bold"/>
+                
+                <Button Text="Hủy"
+                        Clicked="OnCancelClicked"
+                        BackgroundColor="Transparent"
+                        TextColor="Gray"
+                        FontSize="14"/>
+            </VerticalStackLayout>
+
+            <!-- Activity Indicator -->
+            <ActivityIndicator x:Name="LoadingIndicator" 
+                               IsRunning="False" 
+                               Color="#FF6B6B" 
+                               HorizontalOptions="Center"/>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

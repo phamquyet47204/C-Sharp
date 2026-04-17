@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   ArrowRight,
   Eye,
@@ -195,6 +195,13 @@ const Login = () => {
                 {isLoading ? 'Đang xác thực...' : 'Truy cập hệ thống'}
                 {!isLoading && <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />}
               </button>
+
+              <div className="text-center mt-6">
+                <span className="text-sm text-gray-500">Chưa có tài khoản? </span>
+                <Link to="/register" className="text-sm font-bold text-coral-500 hover:text-coral-600 transition">
+                  Đăng ký làm chủ quán
+                </Link>
+              </div>
             </form>
           </div>
         </section>
