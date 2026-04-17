@@ -319,7 +319,7 @@ public class DatabaseService : IDatabaseService
                 matched.Radius = remotePoi.Radius;
                 matched.AudioPath = localization.AudioFile ?? string.Empty;
                 matched.ImagePath = ResolveRemoteMediaPath(remotePoi.ImageUrl)
-                    ?? matched.ImagePath;
+                    ?? (string.IsNullOrWhiteSpace(matched.ImagePath) ? "dotnet_bot.png" : matched.ImagePath);
                 matched.LanguageCode = normalizedLang;
                 matched.Priority = remotePoi.Priority;
                 

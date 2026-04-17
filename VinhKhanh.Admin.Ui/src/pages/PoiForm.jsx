@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Save, ArrowLeft, UploadCloud, Map as MapIcon, Image as ImageIcon, Sparkles, Copy, Download, QrCode } from 'lucide-react';
+import { Save, ArrowLeft, UploadCloud, Map as MapIcon, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import MapPicker from '../components/MapPicker';
 import api from '../services/api';
@@ -39,9 +39,6 @@ const PoiForm = () => {
   const [existingImageUrl, setExistingImageUrl] = useState('');
   const [selectedImagePreviewUrl, setSelectedImagePreviewUrl] = useState('');
   const [errorMsg, setErrorMsg] = useState(null);
-  const [successMsg, setSuccessMsg] = useState(null);
-  const [qrToken, setQrToken] = useState('');
-  const [qrLink, setQrLink] = useState('');
 
   const getBackendOrigin = () => {
     const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
@@ -108,8 +105,6 @@ const PoiForm = () => {
         });
 
         setExistingImageUrl(resolveImageUrl(detail?.imageUrl));
-        setQrToken(detail?.qrToken || '');
-        setQrLink(detail?.qrLink || '');
       } catch (error) {
         showError('Không tải được dữ liệu POI để chỉnh sửa.');
       } finally {
@@ -131,19 +126,6 @@ const PoiForm = () => {
   const showError = (msg) => {
     setErrorMsg(msg);
     setTimeout(() => setErrorMsg(null), 4000); // Tự tắt sau 4s
-  };
-
-  const showSuccess = (msg) => {
-    setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(null), 3000);
-  };
-
-  const getQrImageUrl = (link) => {
-    if (!link) {
-      return '';
-    }
-
-    return `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(link)}`;
   };
 
   const handleLangChange = (lang, field, value) => {
@@ -248,34 +230,6 @@ const PoiForm = () => {
     }
   };
 
-  const handleCopyQrLink = async () => {
-    if (!qrLink) {
-      showError('POI này chưa có link QR.');
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(qrLink);
-      showSuccess('Đã copy link QR vào clipboard.');
-    } catch (error) {
-      showError('Không thể copy link QR trên trình duyệt này.');
-    }
-  };
-
-  const handleDownloadQr = () => {
-    if (!qrLink) {
-      showError('POI này chưa có link QR.');
-      return;
-    }
-
-    const anchor = document.createElement('a');
-    anchor.href = getQrImageUrl(qrLink);
-    anchor.download = `poi-${id || 'qr'}.png`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-  };
-
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-20 relative">
       {/* Thông báo lỗi dạng Popup mượt mà */}
@@ -283,13 +237,6 @@ const PoiForm = () => {
         <div className="fixed top-8 left-1/2 -translate-x-1/2 z-50 bg-red-50 text-red-600 px-6 py-3 rounded-2xl shadow-lg border border-red-100 font-medium flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
           {errorMsg}
-        </div>
-      )}
-
-      {successMsg && (
-        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-50 bg-emerald-50 text-emerald-700 px-6 py-3 rounded-2xl shadow-lg border border-emerald-100 font-medium flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-          {successMsg}
         </div>
       )}
 
@@ -305,36 +252,14 @@ const PoiForm = () => {
             <p className="text-gray-500 mt-1">Sử dụng AI để dịch thuật & tự động hóa nội dung đa ngôn ngữ.</p>
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-          {isEditMode && qrLink && (
-            <>
-              <button
-                type="button"
-                onClick={handleCopyQrLink}
-                className="bg-white border border-gray-200 text-gray-700 px-5 py-3 rounded-2xl font-semibold flex items-center justify-center gap-2 transition-all shadow-sm hover:border-coral-200 hover:text-coral-600"
-              >
-                <Copy size={18} />
-                <span>Copy Link QR</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleDownloadQr}
-                className="bg-white border border-gray-200 text-gray-700 px-5 py-3 rounded-2xl font-semibold flex items-center justify-center gap-2 transition-all shadow-sm hover:border-coral-200 hover:text-coral-600"
-              >
-                <Download size={18} />
-                <span>Tải ảnh QR</span>
-              </button>
-            </>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className={`${isSaving ? 'bg-gray-400' : 'bg-coral-500 hover:bg-coral-600 shadow-coral-500/30'} text-white px-8 py-3 rounded-2xl font-semibold flex items-center justify-center gap-2 transition-all shadow-sm w-full md:w-auto`}
-          >
-            <Save size={20} />
-            <span>{isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}</span>
-          </button>
-        </div>
+        <button 
+          onClick={handleSave}
+          disabled={isSaving}
+          className={`${isSaving ? 'bg-gray-400' : 'bg-coral-500 hover:bg-coral-600 shadow-coral-500/30'} text-white px-8 py-3 rounded-2xl font-semibold flex items-center justify-center gap-2 transition-all shadow-sm w-full md:w-auto`}
+        >
+          <Save size={20} />
+          <span>{isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}</span>
+        </button>
       </div>
 
       {isLoadingDetail && (
@@ -410,20 +335,6 @@ const PoiForm = () => {
         </div>
 
         <div className="space-y-6">
-          {isEditMode && qrLink && (
-            <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-              <div className="flex items-center gap-2 mb-4">
-                <QrCode className="text-coral-500" size={22} />
-                <h3 className="text-lg font-bold text-gray-900">QR Activation</h3>
-              </div>
-              <img
-                src={getQrImageUrl(qrLink)}
-                alt="QR code for POI activation"
-                className="mx-auto h-44 w-44 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm"
-              />
-              <p className="mt-3 text-xs font-medium text-gray-500 break-all">{qrLink}</p>
-            </div>
-          )}
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
             <h3 className="text-lg font-bold text-gray-900 mb-4">Phân loại địa điểm</h3>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Loại POI</label>

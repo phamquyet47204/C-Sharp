@@ -23,25 +23,12 @@ public class AuthController(
             return Unauthorized("Tài khoản hoặc mật khẩu không chính xác.");
         }
 
-        var userRoles = await userManager.GetRolesAsync(user);
-        var isAdmin = userRoles.Any(role => string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase));
-
-        if (!user.IsApproved && !isAdmin)
+        if (!user.IsApproved)
         {
             return StatusCode(403, "Tài khoản của bạn đang chờ Admin duyệt.");
         }
 
-        if (isAdmin && !user.IsApproved)
-        {
-            user.IsApproved = true;
-            if (user.ActivationDate == default)
-            {
-                user.ActivationDate = DateTime.UtcNow;
-            }
-
-            await userManager.UpdateAsync(user);
-        }
-
+        var userRoles = await userManager.GetRolesAsync(user);
         var authClaims = new List<Claim>
         {
             new Claim(ClaimTypes.Name, user.UserName ?? string.Empty),

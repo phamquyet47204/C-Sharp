@@ -5,7 +5,6 @@ using Microsoft.Maui.Controls.Maps;
 using Microsoft.Maui.Maps.Handlers;
 using VinhKhanhFoodStreet.Extensions;
 using VinhKhanhFoodStreet.Services;
-using ZXing.Net.Maui.Controls;
 
 namespace VinhKhanhFoodStreet;
 
@@ -22,7 +21,6 @@ public static class MauiProgram
 
 		builder
 			.UseMauiApp<App>()
-			.UseBarcodeReader()
 
 #if WINDOWS
 			.UseMauiCommunityToolkitMaps(string.Empty)
@@ -44,7 +42,6 @@ public static class MauiProgram
 			.AddSingleton<INarrationService, NarrationService>()
 			.AddSingleton<AccessService>()
 			.AddTransient<SettingsPage>()
-			.AddTransient<QrScannerPage>()
 			.AddSingleton<MainPage>();
 
 #if ANDROID

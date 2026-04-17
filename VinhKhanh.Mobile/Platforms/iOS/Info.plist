@@ -8,9 +8,6 @@
   <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
   <string>App cần theo dõi vị trí ngay cả khi tắt màn hình để tự động phát thuyết minh.</string>
 
-  <key>NSCameraUsageDescription</key>
-  <string>App cáº§n camera Ä‘á»ƒ quÃ©t QR vÃ  kÃ­ch hoáº¡t thuyáº¿t minh tá»± Ä‘á»™ng.</string>
-
   <key>UIBackgroundModes</key>
   <array>
     <string>location</string>

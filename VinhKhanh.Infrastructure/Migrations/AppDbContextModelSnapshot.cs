@@ -168,7 +168,8 @@ namespace VinhKhanh.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("EventType")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<double>("Latitude")
                         .HasColumnType("float");
@@ -265,25 +266,6 @@ namespace VinhKhanh.Infrastructure.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
-            modelBuilder.Entity("VinhKhanh.Domain.Entities.DeviceTrial", b =>
-                {
-                    b.Property<string>("DeviceId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("ExpiryDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("LastCheckedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("TrialStartDate")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("DeviceId");
-
-                    b.ToTable("DeviceTrials");
-                });
-
             modelBuilder.Entity("VinhKhanh.Domain.Entities.FreeTrialRecord", b =>
                 {
                     b.Property<int>("Id")
@@ -293,7 +275,8 @@ namespace VinhKhanh.Infrastructure.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("DeviceId")
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<DateTime>("FirstHeardAt")
                         .HasColumnType("datetime2");
@@ -306,13 +289,13 @@ namespace VinhKhanh.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DeviceId", "PoiId")
-                        .IsUnique()
-                        .HasFilter("[DeviceId] IS NOT NULL");
-
                     b.HasIndex("UserId", "PoiId")
                         .IsUnique()
                         .HasFilter("[UserId] IS NOT NULL");
+
+                    b.HasIndex("DeviceId", "PoiId")
+                        .IsUnique()
+                        .HasFilter("[DeviceId] IS NOT NULL");
 
                     b.ToTable("FreeTrialRecords");
                 });
@@ -339,7 +322,8 @@ namespace VinhKhanh.Infrastructure.Migrations
 
                     b.Property<string>("TransactionId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<int>("Type")
                         .HasColumnType("int");
@@ -372,7 +356,9 @@ namespace VinhKhanh.Infrastructure.Migrations
 
                     b.Property<string>("CategoryCode")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("FOOD_STREET");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -400,10 +386,6 @@ namespace VinhKhanh.Infrastructure.Migrations
 
                     b.Property<int>("Priority")
                         .HasColumnType("int");
-
-                    b.Property<string>("QrToken")
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
 
                     b.Property<double>("Radius")
                         .HasColumnType("float");
@@ -457,46 +439,7 @@ namespace VinhKhanh.Infrastructure.Migrations
                     b.ToTable("PoiLocalizations");
                 });
 
-            modelBuilder.Entity("VinhKhanh.Domain.Entities.PoiRating", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("DeviceId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<double?>("Latitude")
-                        .HasColumnType("float");
-
-                    b.Property<double?>("Longitude")
-                        .HasColumnType("float");
-
-                    b.Property<int>("PoiId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("RatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("Stars")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PoiId");
-
-                    b.HasIndex("DeviceId", "PoiId")
-                        .IsUnique();
-
-                    b.ToTable("PoiRatings", t =>
-                        {
-                            t.HasCheckConstraint("CK_PoiRatings_Stars", "[Stars] >= 1 AND [Stars] <= 5");
-                        });
-                });
-
+            // Relationships
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -573,17 +516,6 @@ namespace VinhKhanh.Infrastructure.Migrations
                 {
                     b.HasOne("VinhKhanh.Domain.Entities.Poi", "Poi")
                         .WithMany("Localizations")
-                        .HasForeignKey("PoiId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Poi");
-                });
-
-            modelBuilder.Entity("VinhKhanh.Domain.Entities.PoiRating", b =>
-                {
-                    b.HasOne("VinhKhanh.Domain.Entities.Poi", "Poi")
-                        .WithMany()
                         .HasForeignKey("PoiId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

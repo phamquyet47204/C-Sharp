@@ -14,6 +14,7 @@ namespace VinhKhanhFoodStreet.Services;
 
 /// <summary>
 /// Narration engine:
+/// - Phat MP3 qua CommunityToolkit MediaElement.
 /// - Doc TTS qua Microsoft.Maui.Media.TextToSpeech.
 /// - Dam bao chi co 1 narration dang phat tai mot thoi diem.
 /// - Co preemption: narration moi se dung narration cu de tranh de giọng.

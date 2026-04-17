@@ -7,7 +7,7 @@
              BackgroundColor="White">
 
     <Grid RowDefinitions="Auto,Auto,*">
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Padding="20,8" BackgroundColor="#FF7F50">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="20,8" BackgroundColor="#FF7F50">
             <Label x:Name="PageTitleLabel"
                    Grid.Column="0"
                    Text="Vĩnh Khánh Food Street"
@@ -15,16 +15,8 @@
                    FontSize="18"
                    FontAttributes="Bold"
                    VerticalOptions="Center" />
-            <Button x:Name="QrScannerButton"
-                    Grid.Column="1"
-                    Text="QR"
-                    FontSize="16"
-                    FontAttributes="Bold"
-                    BackgroundColor="Transparent"
-                    TextColor="White"
-                    Clicked="OnQrScannerClicked" />
             <Button x:Name="SettingsButton"
-                    Grid.Column="2"
+                    Grid.Column="1"
                     Text="⚙️"
                     FontSize="20"
                     BackgroundColor="Transparent"

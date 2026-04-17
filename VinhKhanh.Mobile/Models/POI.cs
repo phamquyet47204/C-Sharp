@@ -256,12 +256,7 @@ public class POI : INotifyPropertyChanged
 
         if (string.IsNullOrWhiteSpace(normalizedPath))
         {
-            return new FontImageSource
-            {
-                Glyph = "\u25A3",
-                Color = Color.FromArgb("#F97316"),
-                Size = 48
-            };
+            return ImageSource.FromFile("dotnet_bot.png");
         }
 
         if (Uri.TryCreate(normalizedPath, UriKind.Absolute, out var absoluteUri))

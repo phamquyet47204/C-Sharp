@@ -114,9 +114,4 @@ public partial class SettingsPage : ContentPage
             await DisplayAlert(T("Success"), T("BuySuccess"), T("Ok"));
         }
     }
-
-    private async void OnRegisterShopClicked(object? sender, EventArgs e)
-    {
-        await Navigation.PushAsync(new RegisterShopPage());
-    }
 }

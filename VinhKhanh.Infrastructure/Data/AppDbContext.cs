@@ -25,9 +25,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .WithOne(l => l.Poi)
             .HasForeignKey(l => l.PoiId)
             .OnDelete(DeleteBehavior.Cascade);
-        modelBuilder.Entity<Poi>()
-            .Property(p => p.QrToken)
-            .HasMaxLength(128);
 
         // Poi.OwnerId → ApplicationUser (no cascade, nullable)
         modelBuilder.Entity<Poi>()

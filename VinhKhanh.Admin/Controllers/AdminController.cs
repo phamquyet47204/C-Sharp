@@ -6,7 +6,6 @@ using VinhKhanh.Infrastructure.Data;
 using VinhKhanh.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
-using Microsoft.AspNetCore.Identity;
 
 namespace VinhKhanh.Admin.Controllers;
 
@@ -17,8 +16,7 @@ public class AdminController(
     AdminApproveUseCase approveUseCase, 
     GeminiAiService geminiAiService,
     AppDbContext dbContext,
-    IWebHostEnvironment env,
-    UserManager<ApplicationUser> userManager) : ControllerBase
+    IWebHostEnvironment env) : ControllerBase
 {
     private static readonly HashSet<string> SupportedCategoryCodes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -91,33 +89,6 @@ public class AdminController(
         }
 
         return InferCategory(nameFallback, descriptionFallback);
-    }
-
-    private async Task EnsureQrTokenAsync(Poi poi, CancellationToken cancellationToken)
-    {
-        if (!string.IsNullOrWhiteSpace(poi.QrToken))
-        {
-            return;
-        }
-
-        string token;
-        do
-        {
-            token = $"poi-{Guid.NewGuid():N}"[..20].ToLowerInvariant();
-        }
-        while (await dbContext.Pois.AnyAsync(p => p.QrToken == token, cancellationToken));
-
-        poi.QrToken = token;
-    }
-
-    private string? BuildQrLink(string? qrToken)
-    {
-        if (string.IsNullOrWhiteSpace(qrToken))
-        {
-            return null;
-        }
-
-        return $"{Request.Scheme}://{Request.Host}/api/qr/{qrToken}";
     }
 
     [HttpGet("dashboard-summary")]
@@ -281,7 +252,6 @@ public class AdminController(
             var poi = new Poi
             {
                 BasePoiId = Guid.NewGuid().ToString("N").Substring(0, 10).ToLower(),
-                QrToken = $"poi-{Guid.NewGuid():N}"[..20].ToLowerInvariant(),
                 CategoryCode = NormalizeCategoryCode(request.CategoryCode, request.NameVi, request.DescVi),
                 Latitude = request.Lat,
                 Longitude = request.Lng,
@@ -346,9 +316,6 @@ public class AdminController(
             return NotFound("Không tìm thấy POI.");
         }
 
-        await EnsureQrTokenAsync(poi, cancellationToken);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
         string GetName(string languageCode) => poi.Localizations
             .FirstOrDefault(l => l.LanguageCode == languageCode)?.Name ?? string.Empty;
 
@@ -363,8 +330,6 @@ public class AdminController(
             lng = poi.Longitude,
             radius = poi.Radius,
             imageUrl = poi.ImageUrl,
-            qrToken = poi.QrToken,
-            qrLink = BuildQrLink(poi.QrToken),
             vi = new { name = GetName("vi"), description = GetDescription("vi") },
             en = new { name = GetName("en"), description = GetDescription("en") },
             ja = new { name = GetName("ja"), description = GetDescription("ja") }
@@ -448,50 +413,6 @@ public class AdminController(
 
         existing.Name = name ?? string.Empty;
         existing.Description = description ?? string.Empty;
-    }
-
-    [HttpGet("users/pending-owners")]
-    public async Task<IActionResult> GetPendingOwners(CancellationToken ct)
-    {
-        var users = await userManager.GetUsersInRoleAsync("ShopOwner");
-        var pending = users.Where(u => !u.IsApproved)
-            .Select(u => new
-            {
-                id = u.Id,
-                fullName = u.FullName,
-                email = u.Email,
-                activationDate = u.ActivationDate
-            })
-            .ToList();
-
-        return Ok(pending);
-    }
-
-    [HttpPost("users/{userId}/approve-owner")]
-    public async Task<IActionResult> ApproveOwner(string userId, CancellationToken ct)
-    {
-        var user = await userManager.FindByIdAsync(userId);
-        if (user == null) return NotFound("Người dùng không tồn tại.");
-
-        user.IsApproved = true;
-        if (user.ActivationDate == default) user.ActivationDate = DateTime.UtcNow;
-
-        var result = await userManager.UpdateAsync(user);
-        if (!result.Succeeded) return Problem("Lỗi khi duyệt chủ quán: " + string.Join(", ", result.Errors.Select(e => e.Description)));
-
-        return Ok(new { success = true, message = "Đã duyệt chủ quán thành công." });
-    }
-
-    [HttpPost("users/{userId}/reject-owner")]
-    public async Task<IActionResult> RejectOwner(string userId, CancellationToken ct)
-    {
-        var user = await userManager.FindByIdAsync(userId);
-        if (user == null) return NotFound("Người dùng không tồn tại.");
-
-        var result = await userManager.DeleteAsync(user);
-        if (!result.Succeeded) return Problem("Lỗi khi từ chối chủ quán: " + string.Join(", ", result.Errors.Select(e => e.Description)));
-
-        return Ok(new { success = true, message = "Đã từ chối ứng viên thành công." });
     }
 }
 

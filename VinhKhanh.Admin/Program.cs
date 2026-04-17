@@ -128,7 +128,38 @@ using (var scope = app.Services.CreateScope())
 
         dbContext.Database.Migrate(); // Tự động áp dụng Migration
 
-        dbContext.Database.Migrate(); // Tự động áp dụng Migration
+        // Tu dong va schema cu: bo sung cot ImageUrl neu DB cu chua co.
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('Pois', 'ImageUrl') IS NULL
+BEGIN
+    ALTER TABLE [Pois] ADD [ImageUrl] NVARCHAR(MAX) NULL;
+END
+
+IF COL_LENGTH('Pois', 'CategoryCode') IS NULL
+BEGIN
+    ALTER TABLE [Pois] ADD [CategoryCode] NVARCHAR(32) NOT NULL CONSTRAINT [DF_Pois_CategoryCode] DEFAULT 'FOOD_STREET';
+END
+
+IF OBJECT_ID('dbo.PoiRatings', 'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[PoiRatings]
+    (
+        [Id] INT IDENTITY(1,1) NOT NULL,
+        [PoiId] INT NOT NULL,
+        [DeviceId] NVARCHAR(128) NOT NULL,
+        [Stars] INT NOT NULL,
+        [RatedAt] DATETIME2 NOT NULL,
+        [Latitude] FLOAT NULL,
+        [Longitude] FLOAT NULL,
+        CONSTRAINT [PK_PoiRatings] PRIMARY KEY ([Id]),
+        CONSTRAINT [CK_PoiRatings_Stars] CHECK ([Stars] >= 1 AND [Stars] <= 5),
+        CONSTRAINT [FK_PoiRatings_Pois_PoiId] FOREIGN KEY ([PoiId]) REFERENCES [dbo].[Pois]([Id]) ON DELETE CASCADE
+    );
+
+    CREATE UNIQUE INDEX [IX_PoiRatings_DeviceId_PoiId] ON [dbo].[PoiRatings]([DeviceId], [PoiId]);
+    CREATE INDEX [IX_PoiRatings_PoiId] ON [dbo].[PoiRatings]([PoiId]);
+END
+");
     }
     catch (Exception ex)
     {

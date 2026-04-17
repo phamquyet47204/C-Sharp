@@ -1,25 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, MapPin, BarChart3, Settings, LogOut, ClipboardCheck, UserCheck } from 'lucide-react';
+import { LayoutDashboard, MapPin, BarChart3, Settings, LogOut, ClipboardCheck } from 'lucide-react';
 import api from '../services/api';
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const [pendingCount, setPendingCount] = useState(0);
-  const [pendingOwnerCount, setPendingOwnerCount] = useState(0);
 
   useEffect(() => {
     const fetchPendingCount = async () => {
       try {
-        const [poiRes, ownerRes] = await Promise.all([
-          api.get('/admin/pois/pending'),
-          api.get('/admin/users/pending-owners')
-        ]);
-        setPendingCount(poiRes.data.length);
-        setPendingOwnerCount(ownerRes.data.length);
+        const res = await api.get('/admin/pois/pending');
+        setPendingCount(res.data.length);
       } catch { /* ignore */ }
     };
-
     fetchPendingCount();
     const interval = setInterval(fetchPendingCount, 60000);
     return () => clearInterval(interval);
@@ -28,17 +22,11 @@ const Sidebar = () => {
   const menuItems = [
     { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/dashboard' },
     { icon: <MapPin size={20} />, label: 'Quản lý POI', path: '/pois' },
-    { 
-      icon: <ClipboardCheck size={20} />, 
-      label: 'Duyệt POI', 
+    {
+      icon: <ClipboardCheck size={20} />,
+      label: 'Duyệt POI',
       path: '/approvals',
       badge: pendingCount > 0 ? pendingCount : null
-    },
-    {
-      icon: <UserCheck size={20} />,
-      label: 'Duyệt Chủ Quán',
-      path: '/owner-approvals',
-      badge: pendingOwnerCount > 0 ? pendingOwnerCount : null
     },
     { icon: <BarChart3 size={20} />, label: 'Phân tích', path: '/analytics' },
     { icon: <Settings size={20} />, label: 'Cài đặt', path: '/settings' },

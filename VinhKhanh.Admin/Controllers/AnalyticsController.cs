@@ -118,15 +118,15 @@ public class AnalyticsController(AnalyticsVisitUseCase visitUseCase, AppDbContex
             toDate = parsedTo.ToUniversalTime();
         }
 
-        var eventsQuery = dbContext.AnalyticsEvents.Where(e => e.PoiId != null);
+        var eventsQuery = dbContext.AnalyticsEvents.Where(e => e.PoiId.HasValue);
         if (fromDate.HasValue) eventsQuery = eventsQuery.Where(e => e.Timestamp >= fromDate.Value);
         if (toDate.HasValue) eventsQuery = eventsQuery.Where(e => e.Timestamp <= toDate.Value);
 
         var grouped = await eventsQuery
-            .GroupBy(e => e.PoiId)
+            .GroupBy(e => e.PoiId!.Value)
             .Select(g => new
             {
-                poiId = g.Key!.Value,
+                poiId = g.Key,
                 totalVisits = g.Count(e => e.EventType == "visit"),
                 totalNarrations = g.Count(e => e.EventType == "narration")
             })

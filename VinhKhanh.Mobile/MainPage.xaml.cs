@@ -126,20 +126,6 @@ public partial class MainPage : ContentPage
 		}
 	}
 
-	private async void OnQrScannerClicked(object? sender, EventArgs e)
-	{
-		try
-		{
-			var qrScannerPage = _serviceProvider.GetRequiredService<QrScannerPage>();
-			await Navigation.PushAsync(qrScannerPage);
-		}
-		catch (Exception ex)
-		{
-			Debug.WriteLine($"[MainPage] Loi mo QrScannerPage: {ex.Message}");
-			await DisplayAlertAsync("Lỗi", "Không thể mở màn hình quét QR.", "OK");
-		}
-	}
-
 	protected override async void OnAppearing()
 	{
 		base.OnAppearing();
@@ -1546,3 +1532,4 @@ public class POIGroup : System.Collections.ObjectModel.ObservableCollection<POI>
 		GroupDisplayName = displayName;
 	}
 }
+
