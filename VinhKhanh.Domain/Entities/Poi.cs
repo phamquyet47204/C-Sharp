@@ -15,13 +15,15 @@ public class Poi
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public string? OwnerSecretInfo { get; set; } // Sẽ được mã hóa
 
-    // New fields
+    // Các trường mới / bổ sung
+
     public PoiStatus Status { get; set; } = PoiStatus.Draft;
     public bool IsPremium { get; set; } = false;
     public string? OwnerId { get; set; }
     public string? RejectionReason { get; set; }
 
-    // Navigation properties
+    // Các thuộc tính điều hướng (Navigation properties)
+
     public ICollection<PoiLocalization> Localizations { get; set; } = new List<PoiLocalization>();
     public ApplicationUser? Owner { get; set; }
 }

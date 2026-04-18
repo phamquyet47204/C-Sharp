@@ -6,9 +6,9 @@ public class Poi
     public string BasePoiId { get; set; } = string.Empty;
     public double Latitude { get; set; }
     public double Longitude { get; set; }
-    public double Radius { get; set; } = 50; // meters
+    public double Radius { get; set; } = 50; // Đơn vị: mét
     public string? ImageUrl { get; set; }
-    public int Priority { get; set; } = 0;   // higher = plays first
+    public int Priority { get; set; } = 0;   // Cao hơn = Ưu tiên phát tiếng trước
     public bool IsActive { get; set; } = true;
     public bool IsPremium { get; set; } = false;
     public string CategoryCode { get; set; } = "FOOD_STREET";
@@ -23,5 +23,4 @@ public class PoiLocalizationDto
     public string LanguageCode { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
-    public string? AudioFile { get; set; }
 }

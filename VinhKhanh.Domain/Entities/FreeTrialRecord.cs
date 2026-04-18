@@ -6,10 +6,10 @@ public class FreeTrialRecord
 {
     public int Id { get; set; }
 
-    // Null for anonymous users
+    // Giá trị null nếu là khách ẩn danh
     public string? UserId { get; set; }
 
-    // Null when user is logged in (identified by UserId instead)
+    // Giá trị null khi người dùng đã đăng nhập (định danh bằng UserId thay thế)
     public string? DeviceId { get; set; }
 
     public int PoiId { get; set; }

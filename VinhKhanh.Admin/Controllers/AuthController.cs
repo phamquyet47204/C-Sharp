@@ -14,6 +14,10 @@ public class AuthController(
     UserManager<ApplicationUser> userManager,
     IConfiguration configuration) : ControllerBase
 {
+    /// <summary>
+    /// POST /api/auth/login
+    /// Đăng nhập hệ thống trả về JWT Token.
+    /// </summary>
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
@@ -58,6 +62,10 @@ public class AuthController(
         });
     }
 
+    /// <summary>
+    /// POST /api/auth/register-shop
+    /// Đăng ký tài khoản dành cho Chủ quán (ShopOwner). Yêu cầu Admin phê duyệt để có thể đăng nhập.
+    /// </summary>
     [HttpPost("register-shop")]
     public async Task<IActionResult> RegisterShop([FromBody] RegisterShopRequest request)
     {
@@ -83,6 +91,10 @@ public class AuthController(
         return Ok(new { success = true, message = "Đăng ký thành công! Vui lòng chờ Admin duyệt để có thể đăng nhập." });
     }
 
+    /// <summary>
+    /// POST /api/auth/register-visitor
+    /// Đăng ký tài khoản cho Khách du lịch (Visitor). Tự động kích hoạt.
+    /// </summary>
     [HttpPost("register-visitor")]
     public async Task<IActionResult> RegisterVisitor([FromBody] RegisterVisitorRequest request)
     {

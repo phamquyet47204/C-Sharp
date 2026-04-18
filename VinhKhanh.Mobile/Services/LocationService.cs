@@ -9,32 +9,56 @@ using Microsoft.Maui.Devices.Sensors;
 namespace VinhKhanhFoodStreet.Services;
 
 /// <summary>
-/// Service theo doi vi tri theo thoi gian thuc cho module thuyet minh.
-/// - Dung Geolocation voi do chinh xac cao (Best).
-/// - Co bo loc khoang cach toi thieu 5m de tranh ban su kien qua nhieu.
-/// - Co co che thich nghi tan suat lay vi tri de toi uu pin.
+/// LocationService: Dịch vụ quản lý và theo dõi tọa độ người dùng theo thời gian thực.
+/// 
+/// Chức năng chính:
+/// - Lắng nghe tọa độ GPS từ phần cứng thiết bị.
+/// - Áp dụng bộ lọc khoảng cách (Distance Filter) để tiết kiệm tài nguyên.
+/// - Tự động điều chỉnh tần suất lấy mẫu (Adaptive Interval) dựa trên trạng thái di chuyển để tối ưu hóa thời lượng Pin.
+/// - Hỗ trợ chạy nền (Background Mode) trên cả Android và iOS để đảm bảo thuyết minh không bị ngắt quãng khi tắt màn hình.
 /// </summary>
 public class LocationService : ILocationService
 {
+    // Khoảng cách tối thiểu giữa 2 lần cập nhật (mét). Nếu di chuyển ít hơn 5m thì sẽ không phát sự kiện thay đổi.
     private const double DistanceFilterMeters = 5d;
+    
+    // Ngưỡng tốc độ để coi là đứng yên (1 km/h). Tốc độ dưới mức này sẽ được tính vào thời gian dừng.
     private const double StationarySpeedThresholdKmh = 1d;
+    
+    // Thời gian tối đa giữ im lặng (10 giây). Nếu người dùng đứng yên quá 10s, vẫn phát một sự kiện "Heartbeat" 
+    // để Geofence Engine có dữ liệu duy trì trạng thái ổn định.
     private static readonly TimeSpan MaxSilentEmitInterval = TimeSpan.FromSeconds(10);
+    
+    // Chu kỳ lấy mẫu khi đang di chuyển (2 giây/lần). Đảm bảo độ nhạy cao khi đang đi bộ.
     private static readonly TimeSpan ActiveInterval = TimeSpan.FromSeconds(2);
+    
+    // Chu kỳ lấy mẫu khi đứng yên (10 giây/lần). Giúp giảm tải CPU và tiết kiệm Pin đáng kể.
     private static readonly TimeSpan IdleInterval = TimeSpan.FromSeconds(10);
+    
+    // Ngưỡng thời gian để xác nhận trạng thái đứng yên (1 phút).
     private static readonly TimeSpan StationaryDurationThreshold = TimeSpan.FromMinutes(1);
 
     private readonly IGeolocation _geolocation;
+    
+    // Khóa trạng thái để đảm bảo Start/Stop diễn ra an toàn, không bị tranh chấp luồng.
     private readonly SemaphoreSlim _stateLock = new(1, 1);
 
     private CancellationTokenSource? _cts;
     private Task? _listeningTask;
     private bool _isListening;
 
+    // Lưu trữ tọa độ thô vừa nhận được từ GPS
     private Location? _lastRawLocation;
     private DateTimeOffset? _lastRawTimestampUtc;
+    
+    // Lưu trữ tọa độ cuối cùng mà Service đã phát (Emit) sự kiện ra bên ngoài
     private Location? _lastEmittedLocation;
     private DateTimeOffset? _lastEmittedAtUtc;
+    
+    // Tổng thời gian người dùng đứng yên liên tục
     private TimeSpan _stationaryDuration = TimeSpan.Zero;
+    
+    // Khoảng thời gian nghỉ hiện tại giữa các lần lấy mẫu
     private TimeSpan _currentInterval = ActiveInterval;
 
     public event Action<Location>? LocationChanged;
@@ -45,7 +69,10 @@ public class LocationService : ILocationService
     }
 
     /// <summary>
-    /// Bat dau theo doi vi tri va kich hoat che do background mode theo tung nen tang.
+    /// Kích hoạt dịch vụ theo dõi vị trí.
+    /// - Kiểm tra và xin quyền truy cập GPS.
+    /// - Cấu hình chế độ chạy nền đặc thù cho từng nền tảng (Foreground Service trên Android).
+    /// - Bắt đầu vòng lặp lấy mẫu tọa độ.
     /// </summary>
     public async Task StartListeningAsync()
     {
@@ -59,7 +86,10 @@ public class LocationService : ILocationService
 
             Debug.WriteLine("[LocationService] Bắt đầu Service");
 
+            // 1. Kiểm tra quyền
             await EnsureLocationPermissionsAsync();
+            
+            // 2. Cấu hình chế độ chạy nền (Hệ điều hành yêu cầu cấu hình trước khi Start)
             await ConfigurePlatformBackgroundModeAsync();
             await StartPlatformBackgroundModeAsync();
 
@@ -68,6 +98,7 @@ public class LocationService : ILocationService
             _currentInterval = ActiveInterval;
             _stationaryDuration = TimeSpan.Zero;
 
+            // Chạy vòng lặp lấy mẫu trên một Task riêng biệt
             _listeningTask = ListenLoopAsync(_cts.Token);
         }
         finally
@@ -77,7 +108,7 @@ public class LocationService : ILocationService
     }
 
     /// <summary>
-    /// Dung theo doi vi tri va tat che do background mode.
+    /// Ngừng theo dõi vị trí và giải phóng các tài nguyên nền.
     /// </summary>
     public async Task StopListeningAsync()
     {
@@ -98,6 +129,8 @@ public class LocationService : ILocationService
 
             _cts = null;
             _listeningTask = null;
+            
+            // Reset trạng thái
             _lastRawLocation = null;
             _lastRawTimestampUtc = null;
             _lastEmittedLocation = null;
@@ -112,6 +145,7 @@ public class LocationService : ILocationService
 
         try
         {
+            // Hủy bỏ Task vòng lặp
             ctsToCancel?.Cancel();
             if (listeningTask is not null)
             {
@@ -120,17 +154,20 @@ public class LocationService : ILocationService
         }
         catch (OperationCanceledException)
         {
-            // Hanh vi mong doi khi stop service.
+            // Đây là hành vi bình thường khi Task bị Cancel
         }
         finally
         {
             ctsToCancel?.Dispose();
+            
+            // Tắt chế độ chạy nền để tiết kiệm tài nguyên hệ thống
             await StopPlatformBackgroundModeAsync();
         }
     }
 
     /// <summary>
-    /// Vong lap lay vi tri lien tuc theo chu ky thich nghi.
+    /// Vòng lặp chính thực hiện truy vấn tọa độ GPS.
+    /// Tần suất vòng lặp được thay đổi linh hoạt thông qua biến _currentInterval.
     /// </summary>
     private async Task ListenLoopAsync(CancellationToken cancellationToken)
     {
@@ -138,6 +175,7 @@ public class LocationService : ILocationService
         {
             try
             {
+                // Cấu hình yêu cầu GPS: Ưu tiên Best (độ chính xác cao nhất) và Timeout 15s
                 var request = new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(15));
                 var location = await _geolocation.GetLocationAsync(request, cancellationToken);
 
@@ -145,8 +183,10 @@ public class LocationService : ILocationService
                 {
                     Debug.WriteLine($"[LocationService] Lấy tọa độ thành công: Lat={location.Latitude}, Lng={location.Longitude}");
 
+                    // Phân tích trạng thái di chuyển để điều chỉnh chu kỳ lấy mẫu tiếp theo
                     UpdateAdaptiveInterval(location);
 
+                    // Kiểm tra xem tọa độ mới có đủ điều kiện để phát sự kiện hay không (Lọc nhiễu)
                     if (ShouldEmitLocationChanged(location))
                     {
                         _lastEmittedLocation = location;
@@ -169,7 +209,6 @@ public class LocationService : ILocationService
             }
             catch (OperationCanceledException)
             {
-                // Ket thuc vong lap khi service bi huy.
                 break;
             }
             catch (Exception ex)
@@ -177,6 +216,7 @@ public class LocationService : ILocationService
                 Debug.WriteLine($"[LocationService] Loi khong xac dinh khi lay vi tri: {ex.Message}");
             }
 
+            // Nghỉ một khoảng thời gian trước khi lấy mẫu tiếp theo
             try
             {
                 await Task.Delay(_currentInterval, cancellationToken);
@@ -189,9 +229,8 @@ public class LocationService : ILocationService
     }
 
     /// <summary>
-    /// Bo loc su kien vi tri:
-    /// - Neu di chuyen >= 5m thi ban ngay.
-    /// - Neu dung yen qua lau, van ban heartbeat dinh ky de geofence debounce co du du lieu kich hoat.
+    /// Bộ lọc sự kiện tọa độ: 
+    /// Ngăn chặn việc bắn quá nhiều sự kiện khi người dùng chỉ xê dịch nhẹ (nhiễu GPS).
     /// </summary>
     private bool ShouldEmitLocationChanged(Location location)
     {
@@ -200,6 +239,7 @@ public class LocationService : ILocationService
             return true;
         }
 
+        // 1. Nếu di chuyển vượt ngưỡng DistanceFilterMeters (5m) thì chấp nhận dữ liệu mới
         var distanceKm = Location.CalculateDistance(_lastEmittedLocation, location, DistanceUnits.Kilometers);
         var distanceMeters = distanceKm * 1000d;
 
@@ -208,6 +248,8 @@ public class LocationService : ILocationService
             return true;
         }
 
+        // 2. Nếu đứng yên quá MaxSilentEmitInterval (10s), vẫn phát sự kiện (Heartbeat). 
+        // Điều này rất quan trọng cho GeofenceEngine để thực hiện giải thuật Debounce (cần N lần tọa độ nằm trong vùng liên tiếp).
         if (_lastEmittedAtUtc.HasValue && DateTimeOffset.UtcNow - _lastEmittedAtUtc.Value >= MaxSilentEmitInterval)
         {
             Debug.WriteLine("[LocationService] Heartbeat vi tri khi dung yen de cap nhat geofence");
@@ -218,9 +260,9 @@ public class LocationService : ILocationService
     }
 
     /// <summary>
-    /// Dieu chinh tan suat lay vi tri:
-    /// - Dung yen >= 1 phut (toc do &lt; 1km/h): 10s/lan.
-    /// - Co di chuyen: 2s/lan.
+    /// Thuật toán Thích nghi tần suất (Adaptive Sampling):
+    /// - Nếu người dùng đang di chuyển: Lấy mẫu dầy (2s/lần) để đảm bảo không bỏ lỡ quán nào khi đi nhanh.
+    /// - Nếu người dùng đứng yên (ở trong quán/dừng đèn đỏ) trên 1 phút: Giãn tần suất (10s/lần) để tiết kiệm Pin.
     /// </summary>
     private void UpdateAdaptiveInterval(Location location)
     {
@@ -231,16 +273,19 @@ public class LocationService : ILocationService
             var elapsed = now - _lastRawTimestampUtc.Value;
             var speedKmh = ResolveSpeedKmh(location, elapsed);
 
+            // Nếu tốc độ < 1km/h thì được coi là đang đứng yên
             if (speedKmh < StationarySpeedThresholdKmh)
             {
                 _stationaryDuration += elapsed;
             }
             else
             {
+                // Reset bộ đếm đứng yên ngay khi có dấu hiệu di chuyển
                 _stationaryDuration = TimeSpan.Zero;
             }
         }
 
+        // Xác định chu kỳ dựa trên thời gian đứng yên
         var newInterval = _stationaryDuration >= StationaryDurationThreshold
             ? IdleInterval
             : ActiveInterval;
@@ -256,13 +301,15 @@ public class LocationService : ILocationService
     }
 
     /// <summary>
-    /// Tinh van toc km/h uu tien tu GPS speed, fallback bang quang duong/thoi gian.
+    /// Tính toán vận tốc km/h. 
+    /// Ưu tiên lấy trực tiếp từ phần cứng (máy xịn có cảm biến gia tốc/GPS xịn), 
+    /// nếu không có thì tính bằng công thức chia quãng đường/thời gian.
     /// </summary>
     private double ResolveSpeedKmh(Location currentLocation, TimeSpan elapsed)
     {
         if (currentLocation.Speed.HasValue && currentLocation.Speed.Value >= 0)
         {
-            return currentLocation.Speed.Value * 3.6d;
+            return currentLocation.Speed.Value * 3.6d; // m/s -> km/h
         }
 
         if (_lastRawLocation is null || elapsed.TotalSeconds <= 0)
@@ -275,9 +322,9 @@ public class LocationService : ILocationService
     }
 
     /// <summary>
-    /// Xin quyen vi tri:
-    /// - Bat buoc LocationWhenInUse.
-    /// - Co gang xin LocationAlways nhung khong crash neu bi tu choi (chi warn).
+    /// Xử lý cấp quyền truy cập vị trí một cách nghiêm ngặt.
+    /// - Yêu cầu "While in use" để đảm bảo tính năng cơ bản.
+    /// - Cố gắng xin thêm "Always" để hỗ trợ chạy nền khi tắt màn hình.
     /// </summary>
     private static async Task EnsureLocationPermissionsAsync()
     {
@@ -292,7 +339,8 @@ public class LocationService : ILocationService
             throw new PermissionException("Nguoi dung tu choi quyen LocationWhenInUse.");
         }
 
-        // LocationAlways la tuy chon: neu bi tu choi thi app van chay binh thuong khi o foreground.
+        // Quyền "Always Allow" là tùy chọn nâng cao. Nếu bị từ chối, ứng dụng vẫn hoạt động 
+        // nhưng có thể bị hệ điều hành tạm dừng khi người dùng thoát ra màn hình chính quá lâu.
         try
         {
             var alwaysStatus = await Permissions.CheckStatusAsync<Permissions.LocationAlways>();
@@ -309,13 +357,13 @@ public class LocationService : ILocationService
         }
         catch (Exception ex)
         {
-            // Khong crash neu quyen Always khong kha dung (emulator, mot so thiet bi).
             Debug.WriteLine($"[LocationService] Khong the xin quyen LocationAlways: {ex.Message}");
         }
     }
 
     /// <summary>
-    /// Thong bao ro ly do can quyen Always de nguoi dung hieu va cap lai quyen.
+    /// Hiển thị thông báo giải thích vì sao cần quyền "Always".
+    /// Giúp tăng tỷ lệ người dùng mở cài đặt để cho phép ứng dụng chạy ổn định hơn.
     /// </summary>
     private static async Task ShowAlwaysPermissionExplanationAsync()
     {
@@ -330,9 +378,9 @@ public class LocationService : ILocationService
             await MainThread.InvokeOnMainThreadAsync(async () =>
             {
                 await page.DisplayAlertAsync(
-                    "Can quyen Vi tri Luon luon",
-                    "Ung dung can quyen vi tri Always de tiep tuc thuyet minh khi ban tat man hinh hoac chuyen ung dung sang nen.",
-                    "Da hieu");
+                    "Cần quyền Vị trí Luôn luôn",
+                    "Ứng dụng cần quyền vị trí Always để tiếp tục thuyết minh khi bạn tắt màn hình hoặc chuyển ứng dụng sang ứng dụng khác.",
+                    "Đã hiểu");
             });
         }
         catch (Exception ex)
@@ -342,9 +390,7 @@ public class LocationService : ILocationService
     }
 
     /// <summary>
-    /// Khoi dong che do background mode theo nen tang.
-    /// Android se chay Foreground Service de tranh bi he dieu hanh kill khi tat man hinh.
-    /// iOS se bat co cho phep cap nhat vi tri nen thong qua CLLocationManager.
+    /// Đăng ký cấu hình chạy nền đặc thù theo Platform.
     /// </summary>
     private static Task ConfigurePlatformBackgroundModeAsync()
     {
@@ -355,7 +401,8 @@ public class LocationService : ILocationService
     }
 
     /// <summary>
-    /// Bat co che background sau khi da xin quyen thanh cong.
+    /// Kích hoạt trạng thái Foreground cho phép ứng dụng chiếm dụng GPS khi ở chế độ nền.
+    /// Đối với Android, điều này thường đi kèm với việc hiển thị một Thông báo (Notification) không thể xóa.
     /// </summary>
     private static Task StartPlatformBackgroundModeAsync()
     {
@@ -366,7 +413,7 @@ public class LocationService : ILocationService
     }
 
     /// <summary>
-    /// Dung co che background khi khong con tracking.
+    /// Ngừng chiếm dụng GPS ở chế độ nền.
     /// </summary>
     private static Task StopPlatformBackgroundModeAsync()
     {

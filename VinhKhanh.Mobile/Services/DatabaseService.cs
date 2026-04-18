@@ -16,24 +16,36 @@ using VinhKhanhFoodStreet.Models;
 namespace VinhKhanhFoodStreet.Services;
 
 /// <summary>
-/// Service thao tác SQLite cho POI.
-/// Thiết kế theo hướng async để không chặn UI thread trong .NET MAUI.
+/// DatabaseService: Dịch vụ quản lý cơ sở dữ liệu SQLite cục bộ (Offline Storage).
+/// 
+/// Vai trò:
+/// - Lưu trữ thông tin POI (Point of Interest) đã đồng bộ từ Server để app hoạt động Offline.
+/// - Thực hiện đồng bộ Delta (Delta-Sync) để cập nhật dữ liệu mới nhất từ backend SQL Server.
+/// - Áp dụng cơ chế Fallback ngôn ngữ (Tiếng bản địa -> Tiếng Anh -> Tiếng Việt) tại tầng dữ liệu.
+/// - Xử lý chuẩn hóa dữ liệu cũ (Legacy Data) và di chuyển Schema (Migration).
 /// </summary>
 public class DatabaseService : IDatabaseService
 {
     private readonly string _databasePath;
     private readonly HttpClient _httpClient;
+    
+    // Kết nối Async tới SQLite (SQLite-net-pcl)
     private SQLiteAsyncConnection? _database;
+    
+    // Lock khởi tạo để tránh việc tạo bảng song song gây lỗi DB Locked
     private readonly SemaphoreSlim _initLock = new(1, 1);
+    
+    // Lock đồng bộ để đảm bảo chỉ có 1 tiến trình Sync chạy tại một thời điểm
     private readonly SemaphoreSlim _syncLock = new(1, 1);
+
     private bool _isInitialized;
     private const string UpdatesEndpoint = "api/pois/updates";
     private const string LastSyncPreferenceKey = "root_last_sync_utc";
 
     /// <summary>
-    /// Nhận đường dẫn database từ DI để dễ cấu hình theo từng môi trường.
+    /// Khởi cấu hình DatabaseService.
     /// </summary>
-    /// <param name="databasePath">Đường dẫn file SQLite (.db3).</param>
+    /// <param name="databasePath">Đường dẫn đầy đủ tới file .db3 trên bộ nhớ thiết bị.</param>
     public DatabaseService(string databasePath)
     {
         _databasePath = databasePath;
@@ -45,8 +57,8 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Khởi tạo kết nối SQLite và tạo bảng POI nếu chưa tồn tại.
-    /// Hàm an toàn khi được gọi nhiều lần nhờ cơ chế khóa và cờ trạng thái.
+    /// Khởi tạo kết nối DB và tạo bảng.
+    /// Bao gồm các bước dọn dẹp dữ liệu cũ và chuẩn hóa Schema nếu cần.
     /// </summary>
     public async Task InitializeAsync()
     {
@@ -64,20 +76,26 @@ public class DatabaseService : IDatabaseService
             }
 
             _database = new SQLiteAsyncConnection(_databasePath);
+            
+            // Tạo bảng POI dựa trên Model định nghĩa (Class-to-Table Mapping)
             await _database.CreateTableAsync<POI>();
+            
+            // Migration: Đảm bảo Schema đủ các cột cần thiết cho các bản cập nhật mới
             await EnsureSchemaCompatibilityAsync();
+            
+            // Dọn dẹp: Xóa các dữ liệu mẫu (Seed) không còn cần thiết
             await RemoveSeedPoisAsync();
+            
+            // Chuẩn hóa: Gán BasePoiId cho các bản ghi cũ chưa có thông tin gom nhóm đa ngôn ngữ
             await NormalizeBasePoiIdsAsync();
+            
             _isInitialized = true;
 
-            // Ghi log de de dang kiem tra qua trinh khoi tao DB khi debug/chay app.
             var successMessage = $"[DatabaseService] Khoi tao SQLite thanh cong. DB Path: {_databasePath}";
             Debug.WriteLine(successMessage);
-            Console.WriteLine(successMessage);
         }
         catch (Exception ex)
         {
-            // Ném lỗi lên tầng trên để ViewModel/UseCase quyết định thông báo UI phù hợp.
             throw new InvalidOperationException("Khong the khoi tao co so du lieu SQLite.", ex);
         }
         finally
@@ -87,7 +105,7 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Thêm mới một POI.
+    /// Thêm một POI mới vào Local DB.
     /// </summary>
     public async Task<int> AddPoiAsync(POI poi)
     {
@@ -105,7 +123,7 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Cập nhật thông tin POI theo Id.
+    /// Cập nhật thông tin POI hiện có.
     /// </summary>
     public async Task<int> UpdatePoiAsync(POI poi)
     {
@@ -123,7 +141,7 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Xóa POI theo khóa chính Id.
+    /// Xóa POI khỏi LOCAL DB theo Id.
     /// </summary>
     public async Task<int> DeletePoiAsync(int poiId)
     {
@@ -145,7 +163,11 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Đồng bộ POI từ backend SQL Server về SQLite local theo cơ chế delta-sync.
+    /// Cơ chế Đồng bộ Delta (Delta Synchronization):
+    /// 1. Lấy thời điểm đồng bộ thành công cuối cùng (LastSyncTime) từ Preference.
+    /// 2. Gửi request lên Server để lấy các thay đổi (Update/Delete) kể từ thời điểm đó.
+    /// 3. Cập nhật các bản ghi mới/sửa và xóa các bản ghi bị hủy bỏ trên Server vào SQLite cục bộ.
+    /// 4. Lưu lại thời điểm máy chủ (ServerTime) làm mốc cho lần đồng bộ sau.
     /// </summary>
     public async Task<bool> SyncPoisFromServerAsync(CancellationToken cancellationToken = default)
     {
@@ -163,8 +185,10 @@ public class DatabaseService : IDatabaseService
             try
             {
                 var lastSync = GetLastSyncTime();
+                
+                // Sử dụng định dạng ISO "O" (Roundtrip) để đảm bảo độ chính xác của DateTime qua HTTP
                 var requestUrl =
-                    $"{UpdatesEndpoint}?lastSync={Uri.EscapeDataString(lastSync.ToString("O", CultureInfo.InvariantCulture))}&includeAudio=true";
+                    $"{UpdatesEndpoint}?lastSync={Uri.EscapeDataString(lastSync.ToString("O", CultureInfo.InvariantCulture))}";
 
                 using var response = await _httpClient.GetAsync(requestUrl, cancellationToken);
                 if (!response.IsSuccessStatusCode)
@@ -180,7 +204,10 @@ public class DatabaseService : IDatabaseService
                     return false;
                 }
 
+                // Thực thi việc cập nhật các thay đổi vào DB
                 await ApplyServerChangesAsync(payload, cancellationToken);
+                
+                // Lưu mốc thời gian đồng bộ
                 SaveLastSyncTime(payload.ServerTime);
 
                 Debug.WriteLine(
@@ -205,7 +232,7 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Lấy toàn bộ POI để hiển thị đầy đủ trên bản đồ.
+    /// Lấy toàn bộ danh sách POI thô (Raw Data) có trong cơ sở dữ liệu.
     /// </summary>
     public async Task<List<POI>> GetAllPoisAsync()
     {
@@ -225,10 +252,9 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Lay danh sach POI da duoc gom theo BasePoiId va localize theo 3-tier fallback.
-    /// Tier 1: ngon ngu duoc yeu cau.
-    /// Tier 2: tieng Anh.
-    /// Tier 3: tieng Viet.
+    /// Lấy danh sách POI đã được xử lý hiển thị:
+    /// 1. Gom nhóm (Group by BasePoiId): gom nhiều bản dịch của cùng một quán vào một đại diện duy nhất.
+    /// 2. Áp dụng Fallback: Chọn ngôn ngữ tốt nhất để hiển thị dựa trên yêu cầu của người dùng.
     /// </summary>
     public async Task<List<POI>> GetLocalizedPoisAsync(string langCode)
     {
@@ -242,6 +268,7 @@ public class DatabaseService : IDatabaseService
                 .OrderByDescending(x => x.Priority)
                 .ToListAsync();
 
+            // Nhóm các bản dịch dựa trên BasePoiId (Trường do Server định nghĩa)
             var grouped = allPois
                 .GroupBy(p => p.BasePoiId > 0 ? p.BasePoiId : p.Id)
                 .ToList();
@@ -251,6 +278,8 @@ public class DatabaseService : IDatabaseService
             foreach (var group in grouped)
             {
                 var variants = group.ToList();
+                
+                // Áp dụng thuật toán chọn lọc ngôn ngữ Fallback
                 var selected = SelectByFallback(variants, targetLang);
 
                 if (selected is null)
@@ -258,6 +287,7 @@ public class DatabaseService : IDatabaseService
                     continue;
                 }
 
+                // Sao chép sang Object mới để tránh side-effect khi hiển thị ở UI
                 localized.Add(CloneForDisplay(selected));
             }
 
@@ -272,7 +302,7 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Đảm bảo database đã được khởi tạo trước khi thao tác CRUD.
+    /// Đảm bảo kết nối DB sẵn sàng.
     /// </summary>
     private async Task EnsureInitializedAsync()
     {
@@ -287,6 +317,12 @@ public class DatabaseService : IDatabaseService
         }
     }
 
+    /// <summary>
+    /// Xử lý cập nhật các bản ghi từ Server vào Local.
+    /// - Cập nhật thông tin thực tế (Kinh độ, Vĩ độ, Bán kính) cho từng bản ghi.
+    /// - Đồng bộ các bản dịch Localization.
+    /// - Xử lý xóa POI nếu Server báo ID đó đã bị hủy.
+    /// </summary>
     private async Task ApplyServerChangesAsync(RemoteSyncResponse payload, CancellationToken cancellationToken)
     {
         var existingPois = await _database!.Table<POI>().ToListAsync();
@@ -301,6 +337,8 @@ public class DatabaseService : IDatabaseService
             foreach (var localization in localizations)
             {
                 var normalizedLang = NormalizeLanguageCode(localization.LanguageCode);
+                
+                // Tìm xem Local đã có bản dịch ngôn ngữ này cho Quán này chưa
                 var matched = existingPois.FirstOrDefault(x =>
                     x.BasePoiId == basePoiId &&
                     string.Equals(NormalizeLanguageCode(x.LanguageCode), normalizedLang, StringComparison.OrdinalIgnoreCase));
@@ -311,23 +349,27 @@ public class DatabaseService : IDatabaseService
                     existingPois.Add(matched);
                 }
 
+                // Cập nhật thông tin dùng chung từ remote POI
                 matched.BasePoiId = basePoiId;
-                matched.Name = localization.Name?.Trim() ?? string.Empty;
-                matched.Description = localization.Description?.Trim() ?? string.Empty;
                 matched.Latitude = remotePoi.Latitude;
                 matched.Longitude = remotePoi.Longitude;
                 matched.Radius = remotePoi.Radius;
-                matched.AudioPath = localization.AudioFile ?? string.Empty;
-                matched.ImagePath = ResolveRemoteMediaPath(remotePoi.ImageUrl)
-                    ?? (string.IsNullOrWhiteSpace(matched.ImagePath) ? "dotnet_bot.png" : matched.ImagePath);
-                matched.LanguageCode = normalizedLang;
                 matched.Priority = remotePoi.Priority;
                 
-                // Prioritize official CategoryCode from server, fallback to inference
+                // Ưu tiên CategoryCode do Server quy định, nếu không có thì tự suy luận từ Text Content
                 matched.Category = !string.IsNullOrWhiteSpace(remotePoi.CategoryCode)
                     ? remotePoi.CategoryCode
                     : InferCategory(localization.Name, localization.Description);
 
+                // Cập nhật thông tin bản dịch cụ thể
+                matched.Name = localization.Name?.Trim() ?? string.Empty;
+                matched.Description = localization.Description?.Trim() ?? string.Empty;
+                matched.AudioPath = localization.AudioFile ?? string.Empty;
+                matched.LanguageCode = normalizedLang;
+                
+                // Chuẩn hóa đường dẫn hình ảnh (Hỗ trợ URL tuyệt đối hoặc tương đối)
+                matched.ImagePath = ResolveRemoteMediaPath(remotePoi.ImageUrl) ?? matched.ImagePath;
+                
                 matched.IsDownloaded = !string.IsNullOrWhiteSpace(matched.AudioPath);
 
                 if (matched.Id > 0)
@@ -341,13 +383,20 @@ public class DatabaseService : IDatabaseService
             }
         }
 
+        // Thực hiện xóa các POI mà Server báo đã bị gỡ
         foreach (var deletedId in payload.DeletedIds)
         {
+            // Xóa tất cả các bản dịch liên quan đến BasePoiId này
             await _database.ExecuteAsync("DELETE FROM POI WHERE BasePoiId = ?", deletedId);
+            
+            // Xóa theo ID nếu nó là ID trực tiếp (hỗ trợ dữ liệu cũ)
             await _database.ExecuteAsync("DELETE FROM POI WHERE Id = ?", deletedId);
         }
     }
 
+    /// <summary>
+    /// Trình phân tích BasePoiId: Đảm bảo lấy ID gốc của quán để gom nhóm.
+    /// </summary>
     private static int ParseBasePoiId(RemotePoi remotePoi)
     {
         if (int.TryParse(remotePoi.BasePoiId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedBasePoiId) &&
@@ -359,6 +408,10 @@ public class DatabaseService : IDatabaseService
         return remotePoi.Id > 0 ? remotePoi.Id : 0;
     }
 
+    /// <summary>
+    /// Logic suy luận Category dữ liệu dựa trên nội dung mô tả (AI-like Inference).
+    /// Dùng làm Fallback khi Server không cung cấp CategoryCode cụ thể.
+    /// </summary>
     private static string InferCategory(string? name, string? description)
     {
         var source = $"{name} {description}".ToLowerInvariant();
@@ -382,9 +435,13 @@ public class DatabaseService : IDatabaseService
             return "FOOD_STREET";
         }
 
-        return "FOOD_STREET"; // Align with backend default
+        return "FOOD_STREET";
     }
 
+    /// <summary>
+    /// Chuyển đổi đường dẫn media từ Server thành URL hoàn chỉnh có thể truy cập được từ Mobile.
+    /// Xử lý đặc thù cho Android Emulator khi trỏ vào localhost (127.0.0.1 -> 10.0.2.2).
+    /// </summary>
     private static string? ResolveRemoteMediaPath(string? mediaPath)
     {
         if (string.IsNullOrWhiteSpace(mediaPath))
@@ -397,10 +454,15 @@ public class DatabaseService : IDatabaseService
             return NormalizeAndroidLoopbackUri(absoluteUri).ToString();
         }
 
+        // Nếu là đường dẫn tương đối, ghép với Base Address của API
         var baseUri = new Uri(AppConfig.BaseApiUrl, UriKind.Absolute);
         return new Uri(baseUri, mediaPath).ToString();
     }
 
+    /// <summary>
+    /// Hack Android Loopback: Android Emulator không hiểu localhost là máy Host, 
+    /// cần chuyển thành IP đặc biệt 10.0.2.2.
+    /// </summary>
     private static Uri NormalizeAndroidLoopbackUri(Uri uri)
     {
         if (string.Equals(uri.Scheme, Uri.UriSchemeFile, StringComparison.OrdinalIgnoreCase) &&
@@ -409,6 +471,7 @@ public class DatabaseService : IDatabaseService
             return BuildBackendMediaUri(uri.AbsolutePath);
         }
 
+        // Chỉ áp dụng cho môi trường DI của Android Emulator.
         if (DeviceInfo.Current.Platform != DevicePlatform.Android)
         {
             return uri;
@@ -435,6 +498,9 @@ public class DatabaseService : IDatabaseService
         return new Uri(baseUri, mediaPath.TrimStart('/'));
     }
 
+    /// <summary>
+    /// Đọc mốc thời gian đồng bộ thành công gần nhất.
+    /// </summary>
     private static DateTime GetLastSyncTime()
     {
         var stored = Preferences.Get(LastSyncPreferenceKey, string.Empty);
@@ -452,7 +518,7 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Kiểm tra dữ liệu đầu vào POI để tránh lưu dữ liệu không hợp lệ.
+    /// Xác thực dữ liệu POI trước khi ghi xuống đĩa để tránh hỏng DB (Data Integrity).
     /// </summary>
     private static void ValidatePoiInput(POI poi)
     {
@@ -478,7 +544,7 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Xoa du lieu mau co san trong cac ban build cu de app chi hien thi du lieu dong bo tu backend.
+    /// Dọn dẹp dữ liệu rác từ các phiên bản thử nghiệm trước đó.
     /// </summary>
     private async Task RemoveSeedPoisAsync()
     {
@@ -486,7 +552,7 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Dam bao schema co du cot can thiet cho gom nhom da ngon ngu.
+    /// Nâng cấp Schema DB: Thêm cột BasePoiId nếu nó chưa tồn tại mà không làm mất dữ liệu cũ.
     /// </summary>
     private async Task EnsureSchemaCompatibilityAsync()
     {
@@ -497,13 +563,15 @@ public class DatabaseService : IDatabaseService
         }
         catch (Exception ex)
         {
-            // Neu cot da ton tai thi bo qua, tranh lam fail qua trinh khoi tao.
-            Debug.WriteLine($"[DatabaseService] Skip migrate BasePoiId: {ex.Message}");
+            // SQLite không hỗ trợ IF NOT EXISTS cho cột, nên ta dựa vào Exception để biết cột đã tồn tại.
+            Debug.WriteLine($"[DatabaseService] Skip migrate BasePoiId (Already exists): {ex.Message}");
         }
     }
 
     /// <summary>
-    /// Chuan hoa BasePoiId cho du lieu cu de cac ban dich cung quan duoc gom nhom dung.
+    /// Logic sửa lỗi dữ liệu (Data Healing): 
+    /// Tự động gán BasePoiId cho các bản ghi đơn lẻ dựa trên vị trí địa lý (Lat/Lng) và Category 
+    /// để App có thể gom nhóm đa ngôn ngữ cho các dữ liệu cũ.
     /// </summary>
     private async Task NormalizeBasePoiIdsAsync()
     {
@@ -513,20 +581,13 @@ public class DatabaseService : IDatabaseService
         foreach (var group in grouped)
         {
             var groupList = group.ToList();
-            var existingBase = groupList
-                .Select(p => p.BasePoiId)
-                .FirstOrDefault(x => x > 0);
+            var existingBase = groupList.Select(p => p.BasePoiId).FirstOrDefault(x => x > 0);
 
-            var effectiveBaseId = existingBase > 0
-                ? existingBase
-                : groupList.Min(p => p.Id);
+            var effectiveBaseId = existingBase > 0 ? existingBase : groupList.Min(p => p.Id);
 
             foreach (var poi in groupList)
             {
-                if (poi.BasePoiId == effectiveBaseId)
-                {
-                    continue;
-                }
+                if (poi.BasePoiId == effectiveBaseId) continue;
 
                 poi.BasePoiId = effectiveBaseId;
                 await _database.UpdateAsync(poi);
@@ -536,43 +597,41 @@ public class DatabaseService : IDatabaseService
 
     private static string BuildLegacyGroupKey(POI poi)
     {
-        if (poi.BasePoiId > 0)
-        {
-            return $"base:{poi.BasePoiId}";
-        }
+        if (poi.BasePoiId > 0) return $"base:{poi.BasePoiId}";
 
         var category = poi.Category?.Trim().ToLowerInvariant() ?? "all";
+        // Làm tròn 4 chữ số thập phân (độ chính xác ~10m) để gom nhóm các quán cùng vị trí
         var roundedLat = Math.Round(poi.Latitude, 4);
         var roundedLng = Math.Round(poi.Longitude, 4);
         return $"{category}:{roundedLat}:{roundedLng}";
     }
 
+    /// <summary>
+    /// Thuật toán Chọn lọc Ngôn ngữ (Language Fallback Algorithm):
+    /// 1. Tìm bản dịch trùng khớp hoàn toàn với ngôn ngữ yêu cầu (targetLang).
+    /// 2. Nếu không có, tìm bản dịch Tiếng Anh (en).
+    /// 3. Nếu không có, tìm bản dịch Tiếng Việt (vi - Mặc định của dự án).
+    /// 4. Cuối cùng, lấy bất kỳ bản dịch nào có độ ưu tiên (Priority) cao nhất.
+    /// </summary>
     private static POI? SelectByFallback(List<POI> variants, string targetLang)
     {
+        // Tier 1: Ưu tiên ngôn ngữ đích
         var primary = variants.FirstOrDefault(p =>
             string.Equals(NormalizeLanguageCode(p.LanguageCode), targetLang, StringComparison.OrdinalIgnoreCase));
-        if (primary is not null)
-        {
-            return primary;
-        }
+        if (primary is not null) return primary;
 
+        // Tier 2: Tiếng Anh là ngôn ngữ trung gian phổ biến nhất
         var english = variants.FirstOrDefault(p =>
             string.Equals(NormalizeLanguageCode(p.LanguageCode), "en", StringComparison.OrdinalIgnoreCase));
-        if (english is not null)
-        {
-            return english;
-        }
+        if (english is not null) return english;
 
+        // Tier 3: Tiếng Việt là gốc của hệ thống
         var vietnamese = variants.FirstOrDefault(p =>
             string.Equals(NormalizeLanguageCode(p.LanguageCode), "vi", StringComparison.OrdinalIgnoreCase));
-        if (vietnamese is not null)
-        {
-            return vietnamese;
-        }
+        if (vietnamese is not null) return vietnamese;
 
-        return variants
-            .OrderByDescending(p => p.Priority)
-            .FirstOrDefault();
+        // Cuối cùng: Lấy bản ghi có trọng số cao nhất
+        return variants.OrderByDescending(p => p.Priority).FirstOrDefault();
     }
 
     private static POI CloneForDisplay(POI source)
@@ -595,18 +654,20 @@ public class DatabaseService : IDatabaseService
         };
     }
 
+    /// <summary>
+    /// Chuẩn hóa mã ngôn ngữ về dạng 2 ký tự (ISO 639-1).
+    /// Ví dụ: vi-VN -> vi, ja-JP -> ja, jp -> ja.
+    /// </summary>
     private static string NormalizeLanguageCode(string? languageCode)
     {
-        if (string.IsNullOrWhiteSpace(languageCode))
-        {
-            return "vi";
-        }
+        if (string.IsNullOrWhiteSpace(languageCode)) return "vi";
 
         var normalized = languageCode.Trim().Replace('_', '-').ToLowerInvariant();
         var shortCode = normalized.Split('-')[0];
         return shortCode == "jp" ? "ja" : shortCode;
     }
 
+    // Các lớp nội bộ phục vụ việc ánh xạ dữ liệu nhận được từ JSON API
     private sealed class RemoteSyncResponse
     {
         public List<RemotePoi> UpdatedPois { get; set; } = new();

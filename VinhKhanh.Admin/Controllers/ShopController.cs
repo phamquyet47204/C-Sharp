@@ -49,6 +49,10 @@ public class ShopController(
         existing.Description = description ?? string.Empty;
     }
 
+    /// <summary>
+    /// GET /api/shop/pois/{id}
+    /// Lấy chi tiết một POI do Chủ quán sở hữu.
+    /// </summary>
     [HttpGet("pois/{id:int}")]
     public async Task<IActionResult> GetMyPoi(int id, CancellationToken ct)
     {
@@ -69,6 +73,10 @@ public class ShopController(
         });
     }
 
+    /// <summary>
+    /// GET /api/shop/pois
+    /// Lấy danh sách toàn bộ POI của Chủ quán hiện tại.
+    /// </summary>
     [HttpGet("pois")]
     public async Task<IActionResult> GetMyPois(CancellationToken ct)
     {
@@ -83,6 +91,10 @@ public class ShopController(
         }));
     }
 
+    /// <summary>
+    /// POST /api/shop/pois
+    /// Tạo mới một POI nháp (Draft) chờ Admin duyệt.
+    /// </summary>
     [HttpPost("pois")]
     public async Task<IActionResult> CreatePoi([FromForm] CreateShopPoiRequest request, CancellationToken ct)
     {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Search, Edit2, Trash2 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import api from '../services/api';
 
 const PoiManager = () => {
@@ -121,6 +122,52 @@ const PoiManager = () => {
     }
   };
 
+  const handleDelete = async (poiId, poiName) => {
+    const result = await Swal.fire({
+      title: 'Xác nhận xóa?',
+      text: `Bạn có chắc chắn muốn xóa "${poiName}"? Hành động này không thể hoàn tác!`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ff5a5f', // coral-500
+      cancelButtonColor: '#9ca3af', // gray-400
+      confirmButtonText: 'Vâng, xóa nó!',
+      cancelButtonText: 'Hủy',
+      background: '#ffffff',
+      borderRadius: '24px',
+      customClass: {
+        popup: 'rounded-3xl shadow-xl border-none',
+        confirmButton: 'rounded-xl px-6 py-2.5 font-semibold text-white',
+        cancelButton: 'rounded-xl px-6 py-2.5 font-semibold text-gray-600'
+      }
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await api.delete(`/admin/pois/${poiId}`);
+        // Cập nhật state local để UI thay đổi ngay lập tức
+        setPois(prev => prev.filter(p => p.id !== poiId));
+        
+        Swal.fire({
+          title: 'Đã xóa!',
+          text: 'Địa điểm đã được loại bỏ khỏi hệ thống.',
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false,
+          borderRadius: '24px'
+        });
+      } catch (err) {
+        console.error('Lỗi khi xóa POI:', err);
+        Swal.fire({
+          title: 'Thất bại',
+          text: 'Không thể xóa địa điểm này. Vui lòng thử lại sau.',
+          icon: 'error',
+          confirmButtonColor: '#ff5a5f',
+          borderRadius: '24px'
+        });
+      }
+    }
+  };
+
   useEffect(() => {
     fetchPois();
   }, []);
@@ -233,7 +280,11 @@ const PoiManager = () => {
                         <Link to={`/pois/${poi.id}`} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors">
                           <Edit2 size={18} />
                         </Link>
-                        <button className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+                        <button 
+                          onClick={() => handleDelete(poi.id, poi.name)}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                          title="Xóa địa điểm"
+                        >
                           <Trash2 size={18} />
                         </button>
                       </div>

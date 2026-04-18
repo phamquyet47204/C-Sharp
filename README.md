@@ -1,13 +1,14 @@
-# VinhKhanh — Nền tảng Du lịch Ẩm thực Thông minh
+# Tài liệu Hệ thống VinhKhanh Food Street
 
-![ASP.NET Core](https://img.shields.io/badge/ASP.NET_Core-8.0-blue) ![.NET MAUI](https://img.shields.io/badge/.NET_MAUI-Android-green) ![React](https://img.shields.io/badge/React-Vite-61DAFB) ![EF Core](https://img.shields.io/badge/EF_Core-SQLite%2FPostgres-orange)
-
-VinhKhanh là nền tảng du lịch ẩm thực thông minh (Food Street / POI — Point of Interest) cho phép du khách khám phá các điểm ăn uống đặc sắc thông qua thuyết minh tự động khi đến gần địa điểm. Hệ thống gồm ba thành phần chính: **Backend API** (ASP.NET Core), **Admin Web UI** (React + Vite), và **Mobile App** (.NET MAUI Android).
+> Phiên bản: 1.0 | Cập nhật: 04/2026
 
 ---
 
-## Mục lục
+## 1. Tổng quan hệ thống
 
+<<<<<<< Updated upstream
+VinhKhanh Food Street là nền tảng du lịch ẩm thực thông minh gồm 3 thành phần chính:
+=======
 1. [Tổng quan dự án](#1-tổng-quan-dự-án)
 2. [Kiến trúc hệ thống](#2-kiến-trúc-hệ-thống)
 3. [Chức năng hệ thống](#3-chức-năng-hệ-thống)
@@ -17,6 +18,11 @@ VinhKhanh là nền tảng du lịch ẩm thực thông minh (Food Street / POI 
 7. [Sequence Diagrams](#7-sequence-diagrams)
 8. [Activity Diagrams](#8-activity-diagrams)
 9. [API Reference](#9-api-reference)
+10. [Hướng dẫn cài đặt nhanh (Quick Start)](#10-hướng-dẫn-cài-đặt-nhanh-quick-start)
+11. [Cấu hình hệ thống (Configuration)](#11-cấu-hình-hệ-thống-configuration)
+12. [Cấu trúc thư mục (Workspace Structure)](#12-cấu-trúc-thư-mục-workspace-structure)
+13. [Luồng phát triển (Dev Workflow)](#13-luồng-phát-triển-dev-workflow)
+14. [Tầm nhìn & Roadmap](#14-tầm-nhìn--roadmap)
 
 ---
 
@@ -27,68 +33,116 @@ VinhKhanh là nền tảng du lịch ẩm thực thông minh (Food Street / POI 
 VinhKhanh là ứng dụng hướng dẫn du lịch ẩm thực tự động. Khi du khách đến gần một điểm ăn uống (POI) đã đăng ký, ứng dụng mobile tự động phát thuyết minh bằng giọng nói (MP3 hoặc TTS) giới thiệu về địa điểm đó. Nội dung hỗ trợ đa ngôn ngữ (Tiếng Việt, Tiếng Anh, Tiếng Nhật) nhờ tích hợp Google Gemini AI.
 
 ### 1.2 Thành phần hệ thống
+>>>>>>> Stashed changes
 
 | Thành phần | Công nghệ | Mô tả |
-|-----------|-----------|-------|
-| **VinhKhanh.Admin** | ASP.NET Core 8 Web API | Backend API chính, xử lý toàn bộ nghiệp vụ |
-| **VinhKhanh.Admin.Ui** | React + Vite + TailwindCSS | Giao diện quản trị cho Admin và ShopOwner |
-| **VinhKhanh.Mobile** | .NET MAUI Android | Ứng dụng mobile cho Visitor |
-| **VinhKhanh.Application** | C# Class Library | Use Cases (Clean Architecture) |
-| **VinhKhanh.Domain** | C# Class Library | Entities + Interfaces |
-| **VinhKhanh.Infrastructure** | EF Core + SQLite/PostgreSQL | Repository, GeminiAiService, EncryptionUtility |
+|---|---|---|
+| **Backend API** | ASP.NET Core 10, EF Core, SQL Server | REST API trung tâm |
+| **Admin Web UI** | React 18, Vite, Tailwind CSS | Quản trị & cổng chủ quán |
+| **Mobile App** | .NET MAUI (Android) | App du khách |
 
-### 1.3 Thuật ngữ
-
-| Thuật ngữ | Ý nghĩa |
-|-----------|---------|
-| **POI** | Point of Interest — điểm tham quan / quán ăn đăng ký trên hệ thống |
-| **PoiStatus** | Trạng thái vòng đời POI: Draft → Pending_Approval → Approved / Rejected / Hidden |
-| **ShopOwner** | Chủ quán — role cần Admin duyệt trước khi sử dụng |
-| **Admin** | Quản trị viên — toàn quyền quản lý POI, người dùng, analytics |
-| **Visitor** | Du khách — dùng thử 3 POI miễn phí hoặc mua Access Pass |
-| **DeviceTrial** | Bản ghi thử nghiệm 7 ngày gắn với DeviceId |
-| **FreeTrialRecord** | Bản ghi lần đầu nghe thuyết minh một POI (giới hạn 3 POI miễn phí) |
-| **AccessPass** | Gói trả phí 7 ngày cho phép nghe không giới hạn |
-| **GeofenceEngine** | Dịch vụ mobile phát hiện khi người dùng vào vùng bán kính POI |
-| **NarrationService** | Dịch vụ mobile phát thuyết minh (MP3 hoặc TTS) |
-| **GeminiAiService** | Dịch vụ backend gọi Google Gemini API dịch vi → en, ja |
-| **QrToken** | Mã token duy nhất gắn với POI để tra cứu qua QR code |
-| **AnalyticsEvent** | Sự kiện ghi nhận lượt xem (visit) hoặc lượt nghe thuyết minh (narration) |
+**Domain:** `https://enormitpham.me`  
+**Server:** AWS EC2 t3.medium, Singapore (`ap-southeast-1`)  
+**SSL:** AWS ALB + ACM Certificate
 
 ---
 
 ## 2. Kiến trúc hệ thống
 
-### 2.1 Clean Architecture
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        INTERNET                             │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ HTTPS
+              ┌────────▼────────┐
+              │   AWS ALB       │  (enormitpham.me)
+              │   + ACM SSL     │
+              └────────┬────────┘
+                       │ HTTP :80
+              ┌────────▼────────┐
+              │   EC2 t3.medium │
+              │   Ubuntu 22.04  │
+              │                 │
+              │  ┌───────────┐  │
+              │  │   Nginx   │  │  port 80
+              │  │           │  │
+              │  │ /         │  │──► React SPA (static files)
+              │  │ /api/     │  │──► ASP.NET Core :5000
+              │  │ /media/   │  │──► ASP.NET Core :5000
+              │  └───────────┘  │
+              │                 │
+              │  ┌───────────┐  │
+              │  │ ASP.NET   │  │  port 5000 (systemd service)
+              │  │ Core API  │  │
+              │  └─────┬─────┘  │
+              │        │        │
+              │  ┌─────▼─────┐  │
+              │  │SQL Server │  │  port 1433 (Docker container)
+              │  │  Docker   │  │
+              │  └───────────┘  │
+              └─────────────────┘
 
-Dự án theo mô hình **Clean Architecture** với 4 tầng tách biệt:
+Mobile App (Android)
+  └── HTTPS ──► enormitpham.me/api/
+```
+
+### 2.1 Kiến trúc Clean Architecture (Backend)
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  Presentation Layer                  │
-│  VinhKhanh.Admin (ASP.NET Core Web API)             │
-│  VinhKhanh.Admin.Ui (React + Vite + TailwindCSS)    │
-│  VinhKhanh.Mobile (.NET MAUI Android)               │
-├─────────────────────────────────────────────────────┤
-│                 Application Layer                    │
-│  VinhKhanh.Application (Use Cases)                  │
-│  AdminApproveUseCase / AnalyticsVisitUseCase        │
-│  PoiSyncUseCase                                     │
-├─────────────────────────────────────────────────────┤
-│                   Domain Layer                       │
-│  VinhKhanh.Domain (Entities + Interfaces)           │
-│  IPoiRepository / IAnalyticsRepository              │
-├─────────────────────────────────────────────────────┤
-│               Infrastructure Layer                   │
-│  VinhKhanh.Infrastructure (EF Core, SQLite/SQL)     │
-│  PoiRepository / AnalyticsRepository                │
-│  GeminiAiService / EncryptionUtility                │
-└─────────────────────────────────────────────────────┘
-```
-
-### 2.2 Luồng dữ liệu tổng quát
-
-```
+<<<<<<< Updated upstream
+VinhKhanhFoodStreet/
+├── VinhKhanh.Domain/          # Entities, Interfaces (không phụ thuộc gì)
+│   └── Entities/
+│       ├── Poi.cs             # Điểm tham quan
+│       ├── PoiLocalization.cs # Nội dung đa ngôn ngữ
+│       ├── ApplicationUser.cs # User (Identity)
+│       ├── AnalyticsEvent.cs  # Sự kiện analytics
+│       ├── Payment.cs         # Thanh toán
+│       └── FreeTrialRecord.cs # Lịch sử dùng thử
+│
+├── VinhKhanh.Application/     # Use Cases (business logic)
+│   └── UseCases/
+│       ├── PoiSyncUseCase.cs       # Đồng bộ POI cho mobile
+│       ├── AnalyticsVisitUseCase.cs # Ghi nhận lượt xem
+│       └── AdminApproveUseCase.cs  # Duyệt POI
+│
+├── VinhKhanh.Infrastructure/  # EF Core, Migrations, Repositories
+│   ├── Data/AppDbContext.cs
+│   ├── Repositories/
+│   └── Migrations/
+│
+├── VinhKhanh.Shared/          # DTOs dùng chung (API ↔ Mobile)
+│   └── Models/
+│       ├── SyncRequest.cs
+│       ├── SyncResponse.cs
+│       └── Poi.cs (DTO)
+│
+├── VinhKhanh.Admin/           # ASP.NET Core Web API
+│   ├── Controllers/
+│   │   ├── AuthController.cs      # Đăng nhập, đăng ký
+│   │   ├── AdminController.cs     # Quản lý POI, duyệt
+│   │   ├── ShopController.cs      # Cổng chủ quán
+│   │   ├── AnalyticsController.cs # Thống kê
+│   │   └── PoisController.cs      # Sync endpoint cho mobile
+│   └── Program.cs
+│
+├── VinhKhanh.Admin.Ui/        # React SPA
+│   └── src/pages/
+│       ├── Dashboard.jsx      # Tổng quan
+│       ├── PoiManager.jsx     # Quản lý POI
+│       ├── Approvals.jsx      # Duyệt POI
+│       ├── Analytics.jsx      # Thống kê
+│       └── shop/              # Cổng chủ quán
+│
+└── VinhKhanh.Mobile/          # .NET MAUI Android
+    ├── Services/
+    │   ├── SyncService.cs     # Đồng bộ từ server
+    │   ├── NarrationEngine.cs # TTS / phát audio
+    │   ├── AuthService.cs     # Đăng nhập
+    │   └── GeofenceService.cs # Phát hiện vị trí
+    └── ViewModels/
+        └── MapViewModel.cs    # Logic bản đồ
+=======
 Mobile App ──sync──► Backend API ──query──► Database (EF Core)
                           │
                      GeminiAiService ──► Google Gemini API
@@ -98,6 +152,15 @@ Admin Web UI ──manage──► Backend API
 
 ---
 ## 3. Chức năng hệ thống
+
+> [!NOTE]
+> **Cập nhật Tiến độ Hoàn thiện Code (Version Mới nhất)**
+> Hệ thống Backend vừa được lập trình bổ sung đầy đủ các tính năng nâng cao theo đúng thiết kế:
+> - [x] **Duyệt ShopOwner**: Đã hoàn thiện API `POST /api/admin/approve-owner/{userId}` để Admin kích hoạt tài khoản chủ quán.
+> - [x] **Nâng cấp Premium**: Đã nâng cấp DB (bảng `Payment`) và `PaymentController` thêm loại `PaymentType = PremiumUpgrade`, tự động bật `IsPremium = true` khi giao dịch thành công.
+> - [x] **Mức độ ưu tiên (Priority)** & **QR Code**: API cập nhật POI đã cấu hình tham số `Priority`. Có thêm API `POST /api/admin/pois/{id}/reset-qr` để tạo mới lại mã QR.
+> - [x] **Cấu hình hệ thống (Settings)**: Đã triển khai bảng `SystemSettings` trong DB kết hợp Endpoint `GET|PUT /api/admin/settings` để quản lý các biến hệ thống trực tiếp từ UI.
+
 
 ### 3.1 Xác thực & Phân quyền
 
@@ -489,7 +552,7 @@ sequenceDiagram
   participant DB as Database
   participant SQLite as SQLite Local
 
-  Mobile->>API: GET /api/pois/updates?lastSync=2026-01-01T00:00:00Z&includeAudio=true
+  Mobile->>API: GET /api/pois/updates?lastSync=2026-01-01T00:00:00Z
   API->>DB: SELECT Poi WHERE UpdatedAt > lastSync AND Status=Approved
   DB-->>API: List Poi + Localizations
   API->>API: Map entities sang SyncResponse DTO
@@ -523,16 +586,10 @@ sequenceDiagram
         alt Hết cooldown
           GE->>GE: Chọn POI ưu tiên cao nhất (Priority)
           GE->>NS: OnPoiEntered(poi)
-          NS->>NS: Kiểm tra AudioUrl
-          alt Có AudioUrl (MP3)
-            NS->>NS: PlayAudioAsync(audioUrl)
-          else Không có audio
-            NS->>NS: TextToSpeech(description)
-          end
+          NS->>NS: TextToSpeech(description)
           NS->>NS: Audio ducking Android
           NS->>API: POST /api/analytics/visit (eventType=narration, poiId, lat, lng)
           API->>DB: Lưu AnalyticsEvent
-          API->>DB: Upsert FreeTrialRecord nếu lần đầu nghe POI này
           DB-->>API: OK
           API-->>NS: 200 - success
         end
@@ -574,10 +631,7 @@ sequenceDiagram
   participant DB as Database
 
   Mobile->>API: GET /api/access/check?deviceId=ABC123
-  API->>DB: Đếm FreeTrialRecord theo deviceId (distinct PoiId)
-  DB-->>API: freeTrialUsed = N
-
-  API->>DB: Tìm DeviceTrial theo deviceId
+  API->>DB: Tìm DeviceTrial theo deviceId (Mặc định 7 ngày dùng thử)
   DB-->>API: DeviceTrial (ExpiryDate)
   API->>API: isTrialActive = ExpiryDate > now
 
@@ -587,7 +641,7 @@ sequenceDiagram
     API->>API: hasActivePass = payment != null
   end
 
-  API-->>Mobile: 200 - freeTrialUsed, freeTrialLimit=3, hasActivePass, passExpiryDate, isTrial, trialRemainingDays
+  API-->>Mobile: 200 - isTrialActive, trialRemainingDays, hasActivePass, passExpiryDate
 
   alt Cần mua Access Pass
     Mobile->>API: POST /api/payments/initiate (transactionId)
@@ -761,6 +815,29 @@ flowchart TD
   StartGeo2 --> End2([Ứng dụng hoạt động - dữ liệu mới nhất])
 ```
 
+### 8.6 Quy trình xử lý Analytics
+
+```mermaid
+flowchart TD
+    Start([Bắt đầu]) --> Action[Visitor: Quét QR/Nghe Audio]
+    Action --> CreateEvent[Mobile: Tạo Event object]
+    CreateEvent --> SendEvent[Gửi Event lên Server]
+    
+    subgraph Backend [Xử lý tại Server]
+        Validate[Validate JWT & PoiId]
+        LogDB[Ghi log vào Database]
+        UpdateCache[Cập nhật Cache thống kê]
+    end
+    
+    SendEvent --> Validate
+    Validate --> LogDB
+    LogDB --> UpdateCache
+    
+    UpdateCache --> AdminView[Admin xem Dashboard]
+    AdminView --> ShowCharts[Hiển thị biểu đồ xu hướng]
+    ShowCharts --> End([Kết thúc])
+```
+
 ---
 ## 9. API Reference
 
@@ -796,207 +873,635 @@ Response `200 OK`:
 Response `403 Forbidden` (chưa được duyệt):
 ```json
 "Tài khoản của bạn đang chờ Admin duyệt."
+>>>>>>> Stashed changes
 ```
 
 ---
 
-### 9.2 Admin API
+## 3. Cơ sở dữ liệu
 
-Base path: `/api/admin` | Yêu cầu: `Bearer Token [role: Admin]`
+### 3.1 Sơ đồ bảng chính
 
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| GET | `/api/admin/pois` | Lấy tất cả POI kèm thông tin chủ quán |
-| GET | `/api/admin/pois/pending` | Lấy danh sách POI chờ duyệt |
-| GET | `/api/admin/pois/{id}` | Chi tiết POI kèm QR link |
-| POST | `/api/admin/pois` | Tạo POI mới (multipart/form-data) |
-| PUT | `/api/admin/pois/{id}` | Cập nhật POI (multipart/form-data) |
-| POST | `/api/admin/pois/{id}/approve` | Duyệt POI |
-| POST | `/api/admin/pois/{id}/reject` | Từ chối POI kèm lý do |
-| POST | `/api/admin/pois/{id}/hide` | Ẩn POI |
-| GET | `/api/admin/dashboard-summary` | Tổng quan số liệu dashboard |
-| POST | `/api/admin/ai/generate` | Dịch nội dung vi → en, ja qua Gemini |
+```
+AspNetUsers (Identity)
+├── Id (PK)
+├── Email, PasswordHash
+├── FullName, IsApproved
+├── ActivationDate
+├── IsPremium, PremiumExpiry
+├── ShopName, ShopAddress, ShopPhone
+└── PoiId (FK → Pois, nullable)
 
-**Ví dụ: POST /api/admin/pois/{id}/reject**
+Pois
+├── Id (PK, IDENTITY)
+├── BasePoiId (string, unique slug)
+├── Latitude, Longitude, Radius
+├── CategoryCode (FOOD_STREET | FOOD_SNAIL | FOOD_BBQ | DRINK | UTILITY)
+├── Status (0=Draft | 1=Pending_Approval | 2=Approved | 3=Rejected | 4=Hidden)
+├── IsApproved (bit, sync với Status)
+├── IsPremium (bit)
+├── OwnerId (FK → AspNetUsers, nullable)
+├── ImageUrl
+├── RejectionReason
+├── CreatedAt, UpdatedAt
+└── Priority
 
-Request:
-```json
-{
-  "reason": "Thông tin địa chỉ không chính xác, vui lòng cập nhật lại tọa độ."
-}
+PoiLocalizations
+├── Id (PK)
+├── PoiId (FK → Pois, CASCADE DELETE)
+├── LanguageCode (vi | en | ja)
+├── Name, Description
+└── AudioUrl (đường dẫn file MP3)
+
+AnalyticsEvents
+├── Id (PK)
+├── Latitude, Longitude
+├── Timestamp
+├── DeviceId
+├── PoiId (FK → Pois, nullable)
+└── EventType (visit | narration)
+
+FreeTrialRecords
+├── Id (PK)
+├── DeviceId
+├── PoiId (FK → Pois)
+└── FirstHeardAt
+
+Payments
+├── Id (PK)
+├── UserId (FK → AspNetUsers)
+├── TransactionId (UNIQUE)
+├── Amount, Currency
+└── CreatedAt
 ```
 
-Response `200 OK`:
-```json
-{
-  "success": true
-}
+### 3.2 Phân quyền người dùng
+
+| Role | Quyền |
+|---|---|
+| **Admin** | Toàn quyền: quản lý POI, duyệt, xem analytics, quản lý users |
+| **ShopOwner** | Tạo/sửa/xóa POI của mình, xem thống kê POI của mình |
+| **Visitor** | Chỉ đọc: sync POI, nghe thuyết minh |
+
+---
+
+## 4. Luồng hoạt động
+
+### 4.1 Luồng đăng ký & duyệt tài khoản ShopOwner
+
+```
+ShopOwner                    Backend                    Admin
+    │                           │                          │
+    │── POST /api/auth/         │                          │
+    │   register-shop ─────────►│                          │
+    │                           │ Tạo user, IsApproved=false│
+    │◄── 200 "Chờ duyệt" ───────│                          │
+    │                           │                          │
+    │                           │◄── GET /api/admin/       │
+    │                           │    shop-owners ──────────│
+    │                           │──► Danh sách chờ duyệt ──►│
+    │                           │                          │
+    │                           │◄── POST /api/admin/      │
+    │                           │    approve/{userId} ─────│
+    │                           │ IsApproved = true        │
+    │                           │──► 200 OK ───────────────►│
+    │                           │                          │
+    │── POST /api/auth/login ──►│                          │
+    │◄── JWT Token ─────────────│                          │
+```
+
+### 4.2 Luồng tạo & duyệt POI
+
+```
+ShopOwner                    Backend                    Admin
+    │                           │                          │
+    │── POST /api/shop/pois ───►│                          │
+    │   (form: tên, mô tả,      │ Status = Pending_Approval│
+    │    ảnh, tọa độ, AI dịch)  │                          │
+    │◄── 200 {poiId} ───────────│                          │
+    │                           │                          │
+    │                           │◄── GET /api/admin/       │
+    │                           │    pois/pending ─────────│
+    │                           │──► Danh sách chờ duyệt ──►│
+    │                           │                          │
+    │                           │◄── POST /api/admin/      │
+    │                           │    pois/{id}/approve ────│
+    │                           │ Status = Approved        │
+    │                           │ IsApproved = true        │
+    │                           │──► 200 OK ───────────────►│
+    │                           │                          │
+    │                           │◄── POST /api/admin/      │
+    │                           │    pois/{id}/reject ─────│
+    │                           │ Status = Rejected        │
+    │                           │ RejectionReason = "..."  │
+```
+
+### 4.3 Luồng đồng bộ Mobile App
+
+```
+Mobile App                   Backend                  SQL Server
+    │                           │                          │
+    │ Khởi động app             │                          │
+    │── GET /api/pois/updates   │                          │
+    │   ?lastSync=<timestamp>   │                          │
+    │   &includeAudio=true ────►│                          │
+    │                           │── SELECT Pois WHERE      │
+    │                           │   Status=Approved AND    │
+    │                           │   UpdatedAt > lastSync ─►│
+    │                           │◄── Danh sách POI ────────│
+    │◄── SyncResponse ──────────│                          │
+    │   {updatedPois, deletedIds│                          │
+    │    serverTime}            │                          │
+    │                           │                          │
+    │ Lưu vào SQLite local      │                          │
+    │ (vinhkhanh.db)            │                          │
+```
+
+### 4.4 Luồng thuyết minh tự động (Geofence)
+
+```
+Mobile App (Background)
+    │
+    │ GPS cập nhật vị trí liên tục
+    │
+    ▼
+GeofenceService.CheckGeofencesAsync(lat, lon)
+    │
+    │ Duyệt qua tất cả POI trong SQLite
+    │ Tính khoảng cách Haversine
+    │
+    ├── Khoảng cách ≤ Radius POI?
+    │       │
+    │       ▼ YES
+    │   NarrationEngine.EnqueueAsync(poi)
+    │       │
+    │       ├── Đang cooldown (20 phút)? → Bỏ qua
+    │       ├── Đã trong queue? → Bỏ qua
+    │       │
+    │       ▼
+    │   PlayNextAsync()
+    │       │
+    │       ├── Có AudioPath (MP3)? → PlayAudioAsync()
+    │       └── Không có? → TextToSpeech.SpeakAsync()
+    │               │
+    │               └── Locale: LanguageCode POI → Preferences → System
+    │
+    └── POST /api/analytics/visit
+        {eventType: "narration", poiId, deviceId}
+```
+
+### 4.5 Luồng AI dịch thuật
+
+```
+Admin/ShopOwner UI           Backend                  Gemini API
+    │                           │                          │
+    │ Nhập tên + mô tả tiếng Việt│                         │
+    │── POST /api/admin/ai/     │                          │
+    │   generate (hoặc          │                          │
+    │   /api/shop/ai/generate) ►│                          │
+    │                           │── POST Gemini API ───────►│
+    │                           │   Prompt: dịch vi→en,ja  │
+    │                           │◄── JSON {en, ja} ────────│
+    │◄── {nameEn, descEn,       │                          │
+    │     nameJa, descJa} ──────│                          │
+    │                           │                          │
+    │ Tự động điền form         │                          │
 ```
 
 ---
 
-### 9.3 Shop API
+## 5. API Reference
 
-Base path: `/api/shop` | Yêu cầu: `Bearer Token [role: ShopOwner, IsApproved=true]`
-
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| GET | `/api/shop/pois` | Danh sách POI của ShopOwner hiện tại |
-| GET | `/api/shop/pois/{id}` | Chi tiết POI của mình |
-| POST | `/api/shop/pois` | Tạo POI mới (Status=Draft) |
-| PUT | `/api/shop/pois/{id}` | Cập nhật POI (chỉ Draft/Rejected) |
-| DELETE | `/api/shop/pois/{id}` | Xóa POI (không xóa khi Pending) |
-| POST | `/api/shop/pois/{id}/submit` | Gửi POI để Admin duyệt |
-| POST | `/api/shop/ai/generate` | Dịch nội dung vi → en, ja |
-| GET | `/api/shop/analytics` | Thống kê visit/narration 30 ngày |
-
----
-### 9.4 Mobile API
-
-#### POI Sync
+### 5.1 Authentication
 
 | Method | Endpoint | Auth | Mô tả |
-|--------|----------|------|-------|
-| GET | `/api/pois/updates` | Không | Sync POI theo timestamp |
-| GET | `/api/pois/sync` | Không | Alias của /updates |
+|---|---|---|---|
+| POST | `/api/auth/login` | Public | Đăng nhập, trả về JWT |
+| POST | `/api/auth/register-shop` | Public | Đăng ký chủ quán |
+| POST | `/api/auth/register-visitor` | Public | Đăng ký du khách |
 
-**Query params:** `lastSync` (DateTime ISO 8601), `includeAudio` (bool, default=true)
+**Login Response:**
+```json
+{
+  "token": "eyJhbGci...",
+  "expiration": "2026-04-05T07:30:49Z",
+  "roles": ["Admin"]
+}
+```
 
-**Ví dụ: GET /api/pois/updates?lastSync=2026-01-01T00:00:00Z&includeAudio=true**
+### 5.2 Admin API (`/api/admin/*`)
 
-Response `200 OK`:
+> Yêu cầu: `Authorization: Bearer <token>` + Role = Admin
+
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| GET | `/api/admin/pois` | Danh sách tất cả POI |
+| GET | `/api/admin/pois/{id}` | Chi tiết POI |
+| POST | `/api/admin/pois` | Tạo POI mới |
+| PUT | `/api/admin/pois/{id}` | Cập nhật POI |
+| GET | `/api/admin/pois/pending` | POI chờ duyệt |
+| POST | `/api/admin/pois/{id}/approve` | Duyệt POI |
+| POST | `/api/admin/pois/{id}/reject` | Từ chối POI |
+| POST | `/api/admin/pois/{id}/hide` | Ẩn POI |
+| GET | `/api/admin/dashboard-summary` | Thống kê tổng quan |
+| POST | `/api/admin/ai/generate` | AI dịch thuật |
+
+### 5.3 Shop API (`/api/shop/*`)
+
+> Yêu cầu: Role = ShopOwner
+
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| GET | `/api/shop/pois` | POI của chủ quán |
+| GET | `/api/shop/pois/{id}` | Chi tiết POI |
+| POST | `/api/shop/pois` | Tạo POI mới |
+| PUT | `/api/shop/pois/{id}` | Cập nhật POI |
+| DELETE | `/api/shop/pois/{id}` | Xóa POI |
+| POST | `/api/shop/ai/generate` | AI dịch thuật |
+
+### 5.4 Mobile Sync API
+
+| Method | Endpoint | Auth | Mô tả |
+|---|---|---|---|
+| GET | `/api/pois/updates` | Public | Đồng bộ POI |
+| POST | `/api/analytics/visit` | Public | Ghi nhận lượt xem |
+| GET | `/api/access/check` | Public | Kiểm tra quyền truy cập |
+
+**Sync Request:**
+```
+GET /api/pois/updates?lastSync=2026-01-01T00:00:00Z&includeAudio=true
+```
+
+**Sync Response:**
 ```json
 {
   "updatedPois": [
     {
-      "id": 1,
-      "basePoiId": "abc123def4",
-      "latitude": 10.7769,
-      "longitude": 106.7009,
+      "id": 5,
+      "basePoiId": "demo-001",
+      "latitude": 10.763,
+      "longitude": 106.702,
       "radius": 50,
-      "imageUrl": "/media/img_abc123.jpg",
-      "priority": 1,
       "isActive": true,
       "isPremium": false,
-      "categoryCode": "FOOD_STREET",
-      "updatedAt": "2026-04-17T10:00:00Z",
       "localizations": [
         {
           "languageCode": "vi",
-          "name": "Quán Ốc Bà Năm",
-          "description": "Quán ốc nổi tiếng với hơn 20 năm kinh nghiệm",
-          "audioFile": "/media/audio_vi_abc123.mp3"
-        },
-        {
-          "languageCode": "en",
-          "name": "Ba Nam Snail Restaurant",
-          "description": "Famous snail restaurant with over 20 years of experience",
-          "audioFile": null
+          "name": "Quán Ốc Bà Nam",
+          "description": "Quán ốc nổi tiếng...",
+          "audioFile": "/media/audio_vi_5.mp3"
         }
       ]
     }
   ],
   "deletedIds": [],
-  "serverTime": "2026-04-17T12:00:00Z"
+  "serverTime": "2026-04-04T07:00:00Z"
 }
 ```
 
-#### Analytics
+### 5.5 Analytics API
 
 | Method | Endpoint | Auth | Mô tả |
-|--------|----------|------|-------|
-| POST | `/api/analytics/visit` | Không | Ghi nhận sự kiện visit/narration |
-| GET | `/api/analytics/heatmap` | Admin | Dữ liệu heatmap theo tọa độ |
-| GET | `/api/analytics/content-performance` | Admin | Top POI theo lượt nghe |
-
-**Ví dụ: POST /api/analytics/visit**
-
-Request:
-```json
-{
-  "latitude": 10.7769,
-  "longitude": 106.7009,
-  "deviceId": "device-uuid-abc123",
-  "poiId": 1,
-  "eventType": "narration"
-}
-```
-
-Response `200 OK`:
-```json
-{
-  "success": true
-}
-```
-
-#### Access Control
-
-| Method | Endpoint | Auth | Mô tả |
-|--------|----------|------|-------|
-| GET | `/api/access/check` | Tùy chọn JWT | Kiểm tra trạng thái truy cập |
-| POST | `/api/access/start-trial` | Không | Bắt đầu DeviceTrial 7 ngày |
-
-**Ví dụ: GET /api/access/check?deviceId=device-uuid-abc123**
-
-Response `200 OK`:
-```json
-{
-  "freeTrialUsed": 2,
-  "freeTrialLimit": 3,
-  "hasActivePass": false,
-  "passExpiryDate": null,
-  "isTrial": false,
-  "trialRemainingDays": 0
-}
-```
-
-Response khi có DeviceTrial:
-```json
-{
-  "freeTrialUsed": 5,
-  "freeTrialLimit": 3,
-  "hasActivePass": true,
-  "passExpiryDate": "2026-04-24T10:00:00Z",
-  "isTrial": true,
-  "trialRemainingDays": 6
-}
-```
-
-#### QR Code
-
-| Method | Endpoint | Auth | Mô tả |
-|--------|----------|------|-------|
-| GET | `/api/qr/{token}` | Không | Tra cứu POI theo QrToken |
-
-#### POI Ratings
-
-| Method | Endpoint | Auth | Mô tả |
-|--------|----------|------|-------|
-| GET | `/api/pois/{id}/ratings` | Không | Xem điểm trung bình và rating của thiết bị |
-| POST | `/api/pois/{id}/ratings` | Không | Gửi hoặc cập nhật rating |
-
-#### Payments
-
-| Method | Endpoint | Auth | Mô tả |
-|--------|----------|------|-------|
-| POST | `/api/payments/initiate` | JWT | Khởi tạo giao dịch Access Pass |
-| POST | `/api/payments/callback` | JWT | Xác nhận thanh toán thành công |
-| GET | `/api/payments/status` | JWT | Kiểm tra trạng thái Access Pass |
+|---|---|---|---|
+| POST | `/api/analytics/visit` | Public | Ghi nhận sự kiện |
+| GET | `/api/analytics/heatmap` | Admin | Bản đồ nhiệt |
+| GET | `/api/analytics/content-performance` | Admin | Hiệu suất nội dung |
 
 ---
 
-### 9.5 HTTP Status Codes
+## 6. Hạ tầng & Vận hành
 
-| Status | Ý nghĩa |
-|--------|---------|
-| 200 OK | Thành công |
-| 400 Bad Request | Dữ liệu đầu vào không hợp lệ |
-| 401 Unauthorized | Chưa xác thực (thiếu hoặc sai JWT) |
-| 403 Forbidden | Không có quyền (tài khoản chưa duyệt, sai role) |
-| 404 Not Found | Không tìm thấy resource |
-| 409 Conflict | Trùng lặp (email đã tồn tại, giao dịch đã tồn tại) |
-| 500 Internal Server Error | Lỗi server |
+### 6.1 Cấu hình server EC2
+
+```
+IP:           18.139.184.43
+Domain:       enormitpham.me
+OS:           Ubuntu 22.04 LTS
+Instance:     t3.medium (2 vCPU, 4GB RAM)
+Disk:         30GB gp3
+Region:       ap-southeast-1 (Singapore)
+```
+
+**Các service đang chạy:**
+
+| Service | Mô tả | Lệnh kiểm tra |
+|---|---|---|
+| `nginx` | Reverse proxy + static files | `sudo systemctl status nginx` |
+| `vinhkhanh` | ASP.NET Core API | `sudo systemctl status vinhkhanh` |
+| `docker` | SQL Server container | `docker ps` |
+| `sqlserver` | SQL Server 2022 | `docker exec sqlserver ...` |
+
+### 6.2 Cấu trúc thư mục trên EC2
+
+```
+/home/ubuntu/vinhkhanh/
+├── backend/                  # ASP.NET Core publish output
+│   ├── VinhKhanh.Admin.dll
+│   ├── appsettings.Production.json
+│   └── wwwroot/media/        # File ảnh, audio upload
+├── frontend/                 # React build output
+│   ├── index.html
+│   └── assets/
+└── app.env                   # Environment variables
+
+/etc/nginx/sites-enabled/vinhkhanh  # Nginx config
+/etc/systemd/system/vinhkhanh.service  # Systemd service
+```
+
+### 6.3 Environment Variables (`app.env`)
+
+```env
+ASPNETCORE_ENVIRONMENT=Production
+ASPNETCORE_URLS=http://localhost:5000
+DOTNET_ROOT=/home/ubuntu/.dotnet
+ConnectionStrings__Default=Server=localhost,1433;Database=VinhKhanhCleanDb;...
+AllowedHosts=*
+```
+
+### 6.4 Nginx Configuration
+
+```nginx
+server {
+    listen 80;
+    server_name _;
+
+    root /home/ubuntu/vinhkhanh/frontend;
+
+    location / {
+        try_files $uri $uri/ /index.html;  # SPA routing
+    }
+
+    location /api/ {
+        proxy_pass http://localhost:5000;  # Backend API
+    }
+
+    location /media/ {
+        proxy_pass http://localhost:5000;  # Media files
+    }
+}
+```
 
 ---
 
-*Tài liệu được tạo tự động từ spec `project-documentation`. Cập nhật lần cuối: 2026.*
+<<<<<<< Updated upstream
+## 7. Hướng dẫn vận hành
+
+### 7.1 Deploy cập nhật
+
+```powershell
+# Từ máy local Windows
+.\deploy\deploy.ps1
+
+# Script sẽ tự động:
+# 1. Build backend (dotnet publish)
+# 2. Build frontend (npm run build)
+# 3. Upload lên EC2 qua SCP (tar.gz)
+# 4. Restart service
+# 5. Health check
+```
+
+### 7.2 Migrate data từ local lên EC2
+
+```powershell
+.\deploy\migrate-data.ps1
+
+# Script sẽ:
+# 1. Export Pois + PoiLocalizations + ShopOwners từ SQL Server local
+# 2. Tạo SQL INSERT script
+# 3. Upload và chạy trên EC2
+```
+
+### 7.3 SSH vào server
+
+```bash
+ssh -i "C:\Users\phamq\Documents\key\cs.pem" ubuntu@18.139.184.43
+```
+
+### 7.4 Xem logs
+
+```bash
+# API logs
+sudo journalctl -u vinhkhanh -n 50 --no-pager
+
+# Nginx logs
+sudo tail -50 /var/log/nginx/error.log
+
+# SQL Server logs
+docker logs sqlserver --tail 20
+```
+
+### 7.5 Restart services
+
+```bash
+# Restart API
+sudo systemctl restart vinhkhanh
+
+# Restart Nginx
+sudo systemctl reload nginx
+
+# Restart SQL Server
+docker restart sqlserver
+```
+
+### 7.6 Chạy SQL trực tiếp trên EC2
+
+```bash
+# Kết nối SQL Server
+docker exec -it sqlserver /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P 'VinhKhanh@Ec2Strong2026!' -C -d VinhKhanhCleanDb
+
+# Hoặc chạy file SQL
+docker cp myfile.sql sqlserver:/myfile.sql
+docker exec sqlserver /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P 'VinhKhanh@Ec2Strong2026!' -C -i /myfile.sql
+```
+
+### 7.7 Build & cài APK lên Android
+
+```powershell
+# Build Release APK
+dotnet publish VinhKhanhFoodStreet.csproj -f net10.0-android -c Release
+
+# Cài lên thiết bị qua ADB
+$adb = "$env:USERPROFILE\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+& $adb install -r "bin\Release\net10.0-android\com.companyname.vinhkhanhfoodstreet-Signed.apk"
+=======
+*Tài liệu được cập nhật lần cuối: 2026.*
+
+---
+
+## 10. Hướng dẫn cài đặt nhanh (Quick Start)
+
+### 10.1 Yêu cầu hệ thống
+- **.NET SDK**: Phiên bản và 10.0 (cho Mobile).
+- **Node.js**: Phiên bản 18.x trở lên.
+- **Android SDK**: Để chạy ứng dụng .NET MAUI.
+- **IDE**: Visual Studio 2022 (với Workload .NET MAUI) hoặc VS Code.
+
+### 10.2 Chạy ứng dụng bằng Script (Ưu tiên)
+Dự án cung cấp sẵn hai script PowerShell để khởi động nhanh:
+- **Admin & API**: Chạy `powershell ./run-admin.ps1`
+- **Mobile App**: Chạy `powershell ./run-mobile-fast.ps1` (Yêu cầu đã mở sẵn Emulator).
+
+### 10.3 Chạy thủ công từng phần
+
+#### 1. Backend (API)
+```bash
+cd VinhKhanh.Admin
+dotnet restore
+dotnet run
+# API sẽ chạy tại: http://localhost:5000
+# Swagger: http://localhost:5000/swagger
+```
+
+#### 2. Admin UI (React)
+```bash
+cd VinhKhanh.Admin.Ui
+npm install
+npm run dev
+# Dashboard sẽ chạy tại: http://localhost:5173
+```
+
+#### 3. Mobile App (.NET MAUI)
+```bash
+cd VinhKhanh.Mobile
+dotnet build -c Debug -f net10.0-android
+# Sau đó cài đặt APK vào thiết bị/emulator qua adb
+>>>>>>> Stashed changes
+```
+
+---
+
+<<<<<<< Updated upstream
+## 8. Tài khoản mặc định
+
+| Tài khoản | Email | Mật khẩu | Role |
+|---|---|---|---|
+| Admin | `admin@vinhkhanh.vn` | `Admin123!` | Admin |
+| ShopOwner demo 1 | `shopowner1@vinhkhanh.vn` | `ShopOwner@123` | ShopOwner |
+| ShopOwner demo 2 | `shopowner2@vinhkhanh.vn` | `ShopOwner@123` | ShopOwner |
+
+---
+
+## 9. Cấu hình Mobile App
+
+### 9.1 API URL
+
+File `Configuration/AppConfig.cs`:
+
+```csharp
+public static string BaseApiUrl =>
+#if DEBUG
+    DeviceInfo.Platform == Android ? "http://10.0.2.2:5000/" : "http://localhost:5000/";
+#else
+    "https://enormitpham.me/";  // Production
+#endif
+```
+
+- **Debug** (emulator): `http://10.0.2.2:5000/` (loopback Android → máy host)
+- **Release** (thiết bị thật): `https://enormitpham.me/`
+
+### 9.2 Ngôn ngữ hỗ trợ
+
+| Code | Ngôn ngữ |
+|---|---|
+| `vi` | Tiếng Việt |
+| `en` | Tiếng Anh |
+| `ja` | Tiếng Nhật |
+
+### 9.3 Chế độ đồng bộ
+
+- **Full sync**: Tải cả text + audio MP3
+- **Text-only mode**: Khi dung lượng trống < 200MB, chỉ tải text, dùng TTS thay MP3
+
+---
+
+## 10. Xử lý sự cố thường gặp
+
+| Triệu chứng | Nguyên nhân | Cách xử lý |
+|---|---|---|
+| API trả về 400 "Invalid Hostname" | `AllowedHosts` không bao gồm `localhost` | Thêm `AllowedHosts=*` vào `app.env` |
+| API trả về 500 "Invalid column name" | DB thiếu cột mới từ migration | Chạy ALTER TABLE thủ công hoặc `dotnet ef database update` |
+| Service crash loop | Connection string sai hoặc DB chưa tạo | Kiểm tra `app.env`, tạo DB trong Docker |
+| White screen trên browser | Assets 404 hoặc JS runtime error | Kiểm tra permissions `chmod -R o+rx ~/vinhkhanh/frontend` |
+| Mobile không sync được | URL hardcode `10.0.2.2` trong Release | Build với `-c Release` để dùng `AppConfig` production URL |
+| Login 403 "Chờ duyệt" | `IsApproved = false` | Admin duyệt tài khoản trong trang Approvals |
+=======
+## 11. Cấu hình hệ thống (Configuration)
+
+Các cấu hình quan trọng nằm trong tệp `VinhKhanh.Admin/appsettings.json`:
+
+### 11.1 Google Gemini AI
+Cần có API Key từ [Google AI Studio](https://aistudio.google.com/) để sử dụng tính năng dịch thuật:
+```json
+"Gemini": {
+  "ApiKey": "YOUR_GEMINI_API_KEY",
+  "Model": "gemini-pro"
+}
+```
+
+### 11.2 Cơ sở dữ liệu
+Mặc định hệ thống sử dụng SQLite để phát triển nhanh. Bạn có thể thay đổi sang PostgreSQL trong `ConnectionStrings`:
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Data Source=vinhkhanh.db"
+}
+```
+
+### 11.3 JWT Security
+Cấu hình Token bảo mật cho hệ thống đăng nhập:
+```json
+"JwtSettings": {
+  "Secret": "A_VERY_SECRET_KEY_MIN_32_CHARS",
+  "Issuer": "VinhKhanh",
+  "Audience": "VinhKhanhUsers"
+}
+```
+
+---
+
+## 12. Cấu trúc thư mục (Workspace Structure)
+
+Hệ thống được tổ chức theo mô hình Multi-Project Solution:
+
+```text
+VinhKhanh/
+├── VinhKhanh.Admin/          # ASP.NET Core Web API (Presentation)
+├── VinhKhanh.Admin.Ui/       # React Admin Dashboard (Frontend)
+├── VinhKhanh.Mobile/         # .NET MAUI App (Android Presentation)
+├── VinhKhanh.Application/    # Business Logic & Use Cases
+├── VinhKhanh.Domain/         # Entities, Interfaces & Domain Exceptions
+├── VinhKhanh.Infrastructure/ # Data Access, AI Service & Utilities
+├── VinhKhanh.Shared/         # DTOs & Constants dùng chung
+├── VinhKhanh.Tests/          # Unit & Integration Tests
+└── Docs.md                   # Tài liệu chi tiết kỹ thuật
+```
+
+---
+
+## 13. Luồng phát triển (Dev Workflow)
+
+Quy trình chuẩn khi phát triển tính năng mới:
+1.  **Định nghĩa thực thể**: Thêm Entity mới vào `VinhKhanh.Domain`.
+2.  **Cấu hình DB**: Cập nhật `VinhKhanhDbContext` trong `Infrastructure` và chạy `dotnet ef migrations add`.
+3.  **Viết Logic**: Tạo UseCase trong `VinhKhanh.Application`.
+4.  **Expose API**: Tạo Controller trong `VinhKhanh.Admin`.
+5.  **Cập nhật UI**: Thêm View/Component trong `VinhKhanh.Admin.Ui`.
+6.  **Mobile Sync**: Cập nhật logic đồng bộ trong `VinhKhanh.Mobile`.
+
+---
+
+## 14. Tầm nhìn & Roadmap
+
+### 14.1 Tầm nhìn
+Trở thành nền tảng du lịch ẩm thực số 1 cho các khu phố đi bộ tại Việt Nam, giúp số hóa trải nghiệm thực tế thông qua Audio Tour và AI.
+
+### 14.2 Roadmap phát triển
+- [ ] **Giai đoạn 1**: Hoàn thiện lõi Geofence và AI Translation (Hiện tại).
+- [ ] **Giai đoạn 2**: Tích hợp thanh toán QR qua Momo, VNPAY cho Access Pass.
+- [ ] **Giai đoạn 3**: Hệ thống tư vấn lộ trình du lịch cá nhân hóa (Personalized Itinerary).
+- [ ] **Giai đoạn 4**: Hỗ trợ môi trường thực tế ảo tăng cường (AR - Augmented Reality).
+
+---
+
+>>>>>>> Stashed changes

@@ -3,7 +3,6 @@ namespace VinhKhanh.Shared.Models;
 public class SyncRequest
 {
     public DateTime LastSyncAt { get; set; } = DateTime.MinValue;
-    public bool IncludeAudio { get; set; } = true;
 }
 
 public class SyncResponse

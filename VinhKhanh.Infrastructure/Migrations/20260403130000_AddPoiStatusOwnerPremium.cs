@@ -43,7 +43,7 @@ BEGIN
     ALTER TABLE [Pois] ADD [CategoryCode] NVARCHAR(32) NOT NULL CONSTRAINT [DF_Pois_CategoryCode2] DEFAULT 'FOOD_STREET';
 END");
 
-            // Data migration: map IsApproved → Status
+            // Migration dữ liệu: map IsApproved → Status
             migrationBuilder.Sql(
                 "UPDATE Pois SET Status = CASE WHEN IsApproved = 1 THEN 2 ELSE 1 END");
 

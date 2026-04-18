@@ -12,12 +12,14 @@ import ShopLayout from './pages/shop/ShopLayout';
 import ShopDashboard from './pages/shop/ShopDashboard';
 import ShopPoiList from './pages/shop/ShopPoiList';
 import ShopPoiForm from './pages/shop/ShopPoiForm';
+import QrPoiPublic from './pages/QrPoiPublic';
 
 function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/qr/:token" element={<QrPoiPublic />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
 
         {/* Admin routes */}

@@ -13,6 +13,28 @@ public class AnalyticsController(AnalyticsVisitUseCase visitUseCase, AppDbContex
 {
     private const int HeatmapMaxPoints = 500;
     private const double HeatmapClusterRadiusMeters = 10.0;
+    private static readonly TimeSpan OnlineThreshold = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Đếm số DeviceId duy nhất đã gửi sự kiện trong vòng 5 phút qua.
+    /// </summary>
+    private async Task<int> GetOnlineUserCountInternal(CancellationToken cancellationToken)
+    {
+        var threshold = DateTime.UtcNow.Subtract(OnlineThreshold);
+        return await dbContext.AnalyticsEvents
+            .Where(e => e.Timestamp >= threshold)
+            .Select(e => e.DeviceId)
+            .Distinct()
+            .CountAsync(cancellationToken);
+    }
+
+    [HttpGet("online-count")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetOnlineCount(CancellationToken cancellationToken)
+    {
+        var count = await GetOnlineUserCountInternal(cancellationToken);
+        return Ok(new { onlineCount = count });
+    }
 
     [HttpPost("visit")]
     public async Task<IActionResult> LogVisit([FromBody] AnalyticsVisitCommand command, CancellationToken cancellationToken)
@@ -77,7 +99,7 @@ public class AnalyticsController(AnalyticsVisitUseCase visitUseCase, AppDbContex
 
         var events = await query.Select(e => new { e.Latitude, e.Longitude }).ToListAsync(cancellationToken);
 
-        // Cluster events within HeatmapClusterRadiusMeters
+        // Gom nhóm các sự kiện trong bán kính HeatmapClusterRadiusMeters
         var points = events
             .GroupBy(e => (
                 lat: Math.Round(e.Latitude, 4),

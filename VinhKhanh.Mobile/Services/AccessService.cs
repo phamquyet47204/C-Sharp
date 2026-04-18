@@ -14,9 +14,20 @@ using Android.Provider;
 
 namespace VinhKhanhFoodStreet.Services;
 
+/// <summary>
+/// AccessService: Dịch vụ quản lý quyền truy cập và gói dùng thử (Free Trial).
+/// 
+/// Chức năng chính:
+/// - Định danh thiết bị (Device Identification) để quản lý dùng thử không cần đăng nhập.
+/// - Kiểm tra trạng thái gói dùng thử (7 ngày) hoặc gói VIP từ Server.
+/// - Đồng bộ thời hạn truy cập giữa Local và Server.
+/// - Tự động kích hoạt gói dùng thử cho người dùng mới lần đầu mở app.
+/// </summary>
 public class AccessService
 {
+    // Key lưu trữ ngày hết hạn truy cập trong bộ nhớ Preferences của thiết bị
     private const string AccessPassExpiryKey = "access_pass_expiry";
+    
     private readonly HttpClient _httpClient;
     private readonly string _deviceId;
 
@@ -28,12 +39,20 @@ public class AccessService
             Timeout = TimeSpan.FromSeconds(10)
         };
         
-        // Use a persistent GUID for device ID if hardware ID is unavailable
+        // Tạo định danh duy nhất cho thiết bị
         _deviceId = GetPersistentDeviceId();
     }
 
+    /// <summary>
+    /// ID định danh của thiết bị hiện tại.
+    /// </summary>
     public string DeviceId => _deviceId;
 
+    /// <summary>
+    /// Thuật toán lấy Device ID bền vững:
+    /// 1. Với Android: Ưu tiên lấy ANDROID_ID (duy nhất theo phần cứng/người dùng).
+    /// 2. Với các nền tảng khác hoặc khi lỗi: Sinh một GUID ngẫu nhiên và lưu vào Preferences để dùng lại.
+    /// </summary>
     private string GetPersistentDeviceId()
     {
 #if ANDROID
@@ -48,16 +67,21 @@ public class AccessService
             Debug.WriteLine($"[AccessService] Error getting AndroidId: {ex.Message}");
         }
 #endif
-        // Fallback for other platforms or if AndroidId fails
+        // Fallback: Tìm trong bộ nhớ app xem đã từng sinh ID chưa
         var prefId = Preferences.Get("device_id_guid", string.Empty);
         if (string.IsNullOrWhiteSpace(prefId))
         {
+            // Lần đầu mở app: sinh ID mới
             prefId = Guid.NewGuid().ToString();
             Preferences.Set("device_id_guid", prefId);
         }
         return prefId;
     }
 
+    /// <summary>
+    /// Kiểm tra xem người dùng hiện có quyền truy cập thuyết minh hay không.
+    /// So sánh ngày hết hạn lưu ở Local với thời gian thực của hệ thống.
+    /// </summary>
     public bool HasActivePass()
     {
         var expiryStr = Preferences.Get(AccessPassExpiryKey, string.Empty);
@@ -69,6 +93,9 @@ public class AccessService
         return false;
     }
 
+    /// <summary>
+    /// Lấy ngày hết hạn quyền truy cập.
+    /// </summary>
     public DateTime? GetExpiryDate()
     {
         var expiryStr = Preferences.Get(AccessPassExpiryKey, string.Empty);
@@ -79,6 +106,9 @@ public class AccessService
         return null;
     }
 
+    /// <summary>
+    /// Tính số ngày sử dụng còn lại.
+    /// </summary>
     public int GetRemainingDays()
     {
         var expiry = GetExpiryDate();
@@ -88,11 +118,17 @@ public class AccessService
         return remaining > 0 ? (int)Math.Ceiling(remaining) : 0;
     }
 
+    /// <summary>
+    /// Đồng bộ trạng thái dùng thử/gói cước từ Server.
+    /// - Gửi DeviceId lên Server để truy vấn hạn dùng.
+    /// - Nếu Server trả về hạn dùng mới (ví dụ: vừa mua gói nâng cấp), cập nhật vào Local.
+    /// - Nếu là người dùng hoàn toàn mới (chưa dùng pass, chưa dùng trial), tiến hành StartTrial tự động.
+    /// </summary>
     public async Task SyncTrialStatusAsync()
     {
         try
         {
-            // 1. Check current status from server
+            // 1. Kiểm tra trạng thái hiện tại từ backend
             var checkUrl = $"api/access/check?deviceId={_deviceId}";
             var response = await _httpClient.GetAsync(checkUrl);
             
@@ -101,13 +137,13 @@ public class AccessService
                 var data = await response.Content.ReadFromJsonAsync<AccessCheckResponse>();
                 if (data != null)
                 {
-                    // If server has an expiry date, sync it locally
+                    // Đồng bộ ngày hết hạn nếu server có thông tin mới hơn
                     if (data.PassExpiryDate.HasValue)
                     {
                         Preferences.Set(AccessPassExpiryKey, data.PassExpiryDate.Value.ToString("O"));
                     }
                     
-                    // If trial not started yet and they don't have a pass, auto-start it
+                    // Logic tự động bắt đầu dùng thử cho máy mới
                     if (!data.HasActivePass && data.TrialRemainingDays == 0 && data.FreeTrialUsed == 0)
                     {
                         await StartTrialAsync();
@@ -121,6 +157,9 @@ public class AccessService
         }
     }
 
+    /// <summary>
+    /// Gọi API Server để kích hoạt gói dùng thử lần đầu tiên cho thiết bị này.
+    /// </summary>
     private async Task StartTrialAsync()
     {
         try
@@ -133,6 +172,7 @@ public class AccessService
                 var data = await response.Content.ReadFromJsonAsync<TrialStartResponse>();
                 if (data != null && data.ExpiryDate.HasValue)
                 {
+                    // Lưu lại ngày hết hạn dùng thử (Server thường trả về Now + 7 days)
                     Preferences.Set(AccessPassExpiryKey, data.ExpiryDate.Value.ToString("O"));
                 }
             }
@@ -143,13 +183,16 @@ public class AccessService
         }
     }
 
+    /// <summary>
+    /// Xử lý giả lập sau khi thanh toán thành công (Mục đích Demo/Testing).
+    /// </summary>
     public void PurchaseSuccess(int days = 7)
     {
         var newExpiry = DateTime.UtcNow.AddDays(days);
         Preferences.Set(AccessPassExpiryKey, newExpiry.ToString("O"));
-        // TODO: Sync purchase to server in a real app
     }
 
+    // Các class DTO để Deserialization dữ liệu JSON từ API Access
     private class AccessCheckResponse
     {
         public int FreeTrialUsed { get; set; }

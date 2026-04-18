@@ -8,15 +8,17 @@ namespace VinhKhanh.Admin.Controllers;
 [Route("api/pois")]
 public class PoisController(PoiSyncUseCase syncUseCase) : ControllerBase
 {
+    /// <summary>
+    /// API cho Mobile truy xuất danh sách POI bị thay đổi/cập nhật kể từ lần đồng bộ cuối cùng.
+    /// </summary>
     [HttpGet("updates")]
-    public async Task<ActionResult<SyncResponse>> GetUpdates([FromQuery] DateTime lastSync, [FromQuery] bool includeAudio = true, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<SyncResponse>> GetUpdates([FromQuery] DateTime lastSync, CancellationToken cancellationToken = default)
     {
         try
         {
             var req = new SyncRequest
             {
-                LastSyncAt = DateTime.SpecifyKind(lastSync, DateTimeKind.Utc),
-                IncludeAudio = includeAudio
+                LastSyncAt = DateTime.SpecifyKind(lastSync, DateTimeKind.Utc)
             };
 
             var result = await syncUseCase.ExecuteAsync(req, cancellationToken);
@@ -28,7 +30,10 @@ public class PoisController(PoiSyncUseCase syncUseCase) : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Alias của API /updates, dùng để Mobile đồng bộ dữ liệu Offline.
+    /// </summary>
     [HttpGet("sync")]
-    public Task<ActionResult<SyncResponse>> Sync([FromQuery] DateTime lastSync, [FromQuery] bool includeAudio = true, CancellationToken cancellationToken = default)
-        => GetUpdates(lastSync, includeAudio, cancellationToken);
+    public Task<ActionResult<SyncResponse>> Sync([FromQuery] DateTime lastSync, CancellationToken cancellationToken = default)
+        => GetUpdates(lastSync, cancellationToken);
 }

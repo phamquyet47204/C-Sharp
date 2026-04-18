@@ -13,10 +13,10 @@ namespace VinhKhanh.Admin.Controllers;
 [Route("api/admin")]
 [Authorize(Roles = "Admin")]
 public class AdminController(
-    AdminApproveUseCase approveUseCase, 
     GeminiAiService geminiAiService,
     AppDbContext dbContext,
-    IWebHostEnvironment env) : ControllerBase
+    IWebHostEnvironment env,
+    Microsoft.AspNetCore.Identity.UserManager<ApplicationUser> userManager) : ControllerBase
 {
     private static readonly HashSet<string> SupportedCategoryCodes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -27,6 +27,28 @@ public class AdminController(
         "UTILITY"
     };
 
+    /// <summary>
+    /// POST /api/admin/approve-owner/{userId}
+    /// Phê duyệt tài khoản Chủ quán (ShopOwner).
+    /// </summary>
+    [HttpPost("approve-owner/{userId}")]
+    public async Task<IActionResult> ApproveOwner(string userId)
+    {
+        var user = await userManager.FindByIdAsync(userId);
+        if (user == null) return NotFound("Không tìm thấy người dùng.");
+        if (user.IsApproved) return BadRequest("Tài khoản đã được duyệt từ trước.");
+        
+        user.IsApproved = true;
+        var result = await userManager.UpdateAsync(user);
+        if (!result.Succeeded) return Problem("Có lỗi xảy ra khi duyệt tài khoản.");
+        
+        return Ok(new { success = true, message = "Đã duyệt ShopOwner thành công." });
+    }
+
+    /// <summary>
+    /// GET /api/admin/pois
+    /// Lấy danh sách toàn bộ các địa điểm (POI) bao gồm thông tin chi tiết và ngôn ngữ.
+    /// </summary>
     [HttpGet("pois")]
     public async Task<IActionResult> GetPois(CancellationToken cancellationToken)
     {
@@ -102,6 +124,14 @@ public class AdminController(
         var visitCount = await dbContext.AnalyticsEvents.CountAsync(cancellationToken);
         var narrationCount = await dbContext.AnalyticsEvents.CountAsync(e => e.EventType == "narration", cancellationToken);
 
+        // Đếm số người online (active trong 5 phút qua)
+        var onlineThreshold = nowUtc.Subtract(TimeSpan.FromMinutes(5));
+        var onlineCount = await dbContext.AnalyticsEvents
+            .Where(e => e.Timestamp >= onlineThreshold)
+            .Select(e => e.DeviceId)
+            .Distinct()
+            .CountAsync(cancellationToken);
+
         var hourlyActivity = await dbContext.AnalyticsEvents
             .Where(e => e.Timestamp >= startHourUtc)
             .GroupBy(e => e.Timestamp.Hour)
@@ -111,7 +141,7 @@ public class AdminController(
                 count = g.Count()
             })
             .ToListAsync(cancellationToken);
-
+// ... existing logic to populate activityMap ...
         var activityMap = hourlyActivity.ToDictionary(item => item.hour, item => item.count);
         var activitySeries = Enumerable.Range(0, 8)
             .Select(offset =>
@@ -133,11 +163,16 @@ public class AdminController(
             visitCount,
             narrationCount,
             visitsToday,
+            onlineCount,
             activitySeries
         });
     }
 
-    [HttpPost("approve/{poiId:int}")]  // legacy route
+    /// <summary>
+    /// POST /api/admin/pois/{poiId}/approve
+    /// Phê duyệt một POI đang ở trạng thái Nháp (Draft).
+    /// </summary>
+    [HttpPost("approve/{poiId:int}")]  // Đường dẫn cũ để tương thích với FE
     [HttpPost("pois/{poiId:int}/approve")]
     public async Task<IActionResult> Approve(int poiId, CancellationToken cancellationToken)
     {
@@ -286,14 +321,12 @@ public class AdminController(
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
 
-            var localizations = new List<PoiLocalization>
-            {
-                new PoiLocalization { PoiId = poi.Id, LanguageCode = "vi", Name = request.NameVi ?? "", Description = request.DescVi ?? "", AudioUrl = null },
-                new PoiLocalization { PoiId = poi.Id, LanguageCode = "en", Name = request.NameEn ?? "", Description = request.DescEn ?? "", AudioUrl = null },
-                new PoiLocalization { PoiId = poi.Id, LanguageCode = "ja", Name = request.NameJa ?? "", Description = request.DescJa ?? "", AudioUrl = null }
-            };
+            dbContext.PoiLocalizations.AddRange(
+                new PoiLocalization { PoiId = poi.Id, LanguageCode = "vi", Name = request.NameVi ?? "", Description = request.DescVi ?? "" },
+                new PoiLocalization { PoiId = poi.Id, LanguageCode = "en", Name = request.NameEn ?? "", Description = request.DescEn ?? "" },
+                new PoiLocalization { PoiId = poi.Id, LanguageCode = "ja", Name = request.NameJa ?? "", Description = request.DescJa ?? "" }
+            );
 
-            dbContext.PoiLocalizations.AddRange(localizations);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             return Ok(new { success = true, message = "Thêm POI thành công!", poiId = poi.Id });
@@ -405,14 +438,62 @@ public class AdminController(
             {
                 LanguageCode = languageCode,
                 Name = name ?? string.Empty,
-                Description = description ?? string.Empty,
-                AudioUrl = null
+                Description = description ?? string.Empty
             });
             return;
         }
 
         existing.Name = name ?? string.Empty;
         existing.Description = description ?? string.Empty;
+    }
+
+    /// <summary>
+    /// POST /api/admin/pois/{poiId}/reset-qr
+    /// Hủy mã QR cũ và sinh ra một mã QR mới cho dự án.
+    /// </summary>
+    [HttpPost("pois/{poiId:int}/reset-qr")]
+    public async Task<IActionResult> ResetQrToken(int poiId, CancellationToken cancellationToken)
+    {
+        var poi = await dbContext.Pois.FirstOrDefaultAsync(p => p.Id == poiId, cancellationToken);
+        if (poi is null) return NotFound("POI không tồn tại.");
+        
+        string token;
+        do
+        {
+            token = $"poi-{Guid.NewGuid():N}"[..20].ToLowerInvariant();
+        }
+        while (await dbContext.Pois.AnyAsync(p => p.QrToken == token, cancellationToken));
+        
+        poi.QrToken = token;
+        poi.UpdatedAt = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        
+        return Ok(new { success = true, newQrToken = token, newQrLink = BuildQrLink(token) });
+    }
+
+    /// <summary>
+    /// DELETE /api/admin/pois/{poiId}
+    /// Xóa hoàn toàn một POI và các dữ liệu liên quan (Localizations, Ratings).
+    /// </summary>
+    [HttpDelete("pois/{poiId:int}")]
+    public async Task<IActionResult> DeletePoi(int poiId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var poi = await dbContext.Pois.FirstOrDefaultAsync(p => p.Id == poiId, cancellationToken);
+            if (poi is null) return NotFound("POI không tồn tại.");
+
+            // Do DB đã cấu hình DeleteBehavior.Cascade cho Localizations và Ratings trong AppDbContext,
+            // nên ta chỉ cần xóa thực thể Poi chính.
+            dbContext.Pois.Remove(poi);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            return Ok(new { success = true, message = "Đã xóa POI thành công." });
+        }
+        catch (Exception ex)
+        {
+            return Problem($"Lỗi khi xóa POI: {ex.Message}");
+        }
     }
 }
 

@@ -88,7 +88,7 @@ app.MapGet("/", () => Results.Ok(new { status = "ok", message = "VinhKhanh.Admin
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 app.MapControllers();
 
-// SEED DATA: Identity Roles & Default Admin
+// KHỞI TẠO DỮ LIỆU: Phân quyền Identity & Tài khoản Admin mặc định
 using (var scope = app.Services.CreateScope())
 {
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
@@ -128,7 +128,7 @@ using (var scope = app.Services.CreateScope())
 
         dbContext.Database.Migrate(); // Tự động áp dụng Migration
 
-        // Tu dong va schema cu: bo sung cot ImageUrl neu DB cu chua co.
+        // Tự động vá schema cũ: Bổ sung cột ImageUrl nếu CSDL cũ chưa có.
         await dbContext.Database.ExecuteSqlRawAsync(@"
 IF COL_LENGTH('Pois', 'ImageUrl') IS NULL
 BEGIN

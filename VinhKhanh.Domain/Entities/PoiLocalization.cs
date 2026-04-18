@@ -7,7 +7,6 @@ public class PoiLocalization
     public string LanguageCode { get; set; } = "vi"; // vi, ja
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
-    public string? AudioUrl { get; set; }
 
     public Poi Poi { get; set; } = null!;
 }

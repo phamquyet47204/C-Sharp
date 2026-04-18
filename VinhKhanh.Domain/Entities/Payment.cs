@@ -4,7 +4,8 @@ namespace VinhKhanh.Domain.Entities;
 
 public enum PaymentType
 {
-    AccessPass = 0
+    AccessPass = 0,
+    PremiumUpgrade = 1
 }
 
 public enum PaymentStatus
@@ -19,23 +20,25 @@ public class Payment
 {
     public int Id { get; set; }
 
-    // Unique transaction identifier from payment gateway
+    // Mã giao dịch duy nhất từ cổng thanh toán
     public string TransactionId { get; set; } = string.Empty;
 
-    // FK → ApplicationUser.Id
+    // Khóa ngoại → ApplicationUser.Id
     public string UserId { get; set; } = string.Empty;
 
     public decimal Amount { get; set; }
 
     public PaymentType Type { get; set; }
 
+    public int? PoiId { get; set; }
+
     public PaymentStatus Status { get; set; }
 
-    // Null until payment is completed and access is granted
+    // Bằng null cho đến khi thanh toán hoàn tất và được cấp quyền truy cập
     public DateTime? ExpiryDate { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    // Navigation property
+    // Thuộc tính điều hướng liên kết bảng User
     public ApplicationUser User { get; set; } = null!;
 }

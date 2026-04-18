@@ -28,8 +28,9 @@ public class PaymentController(AppDbContext dbContext) : ControllerBase
         {
             TransactionId = request.TransactionId,
             UserId = CurrentUserId!,
-            Amount = 1.00m,
-            Type = PaymentType.AccessPass,
+            Amount = request.Type == PaymentType.PremiumUpgrade ? 10.00m : 1.00m,
+            Type = request.Type,
+            PoiId = request.PoiId,
             Status = PaymentStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
@@ -50,7 +51,18 @@ public class PaymentController(AppDbContext dbContext) : ControllerBase
         if (payment is null) return NotFound("Không tìm thấy giao dịch.");
 
         payment.Status = PaymentStatus.Completed;
-        payment.ExpiryDate = payment.CreatedAt.AddDays(7);
+        if (payment.Type == PaymentType.AccessPass)
+        {
+            payment.ExpiryDate = payment.CreatedAt.AddDays(7);
+        }
+        else if (payment.Type == PaymentType.PremiumUpgrade && payment.PoiId.HasValue)
+        {
+            var poi = await dbContext.Pois.FirstOrDefaultAsync(p => p.Id == payment.PoiId.Value, ct);
+            if (poi != null)
+            {
+                poi.IsPremium = true;
+            }
+        }
         await dbContext.SaveChangesAsync(ct);
 
         return Ok(new { success = true, expiryDate = payment.ExpiryDate });
@@ -79,6 +91,8 @@ public class PaymentController(AppDbContext dbContext) : ControllerBase
 public class InitiatePaymentRequest
 {
     public string TransactionId { get; set; } = string.Empty;
+    public PaymentType Type { get; set; } = PaymentType.AccessPass;
+    public int? PoiId { get; set; }
 }
 
 public class PaymentCallbackRequest

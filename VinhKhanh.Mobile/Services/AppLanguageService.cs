@@ -5,15 +5,36 @@ using Microsoft.Maui.Storage;
 
 namespace VinhKhanhFoodStreet.Services;
 
+/// <summary>
+/// AppLanguageService: Dịch vụ quản lý đa ngôn ngữ và từ điển nội bộ của ứng dụng.
+/// 
+/// Chức năng chính:
+/// - Quản lý ngôn ngữ ưu tiên của người dùng (Preferred Language).
+/// - Xây dựng chuỗi Fallback ngôn ngữ (Fallback Chain) để đảm bảo luôn có nội dung hiển thị.
+/// - Lưu trữ từ điển tĩnh cho các chuỗi văn bản UI (Title, Tabs, Categories, v.v.).
+/// - Chuẩn hóa mã ngôn ngữ (Normalize Language Code) tương thích với tiêu chuẩn ISO.
+/// </summary>
 public class AppLanguageService : IAppLanguageService
 {
     private const string PreferredLanguageKey = "app_preferred_language";
 
+    /// <summary>
+    /// Lấy ngôn ngữ người dùng đã chọn thủ công trong phần cài đặt.
+    /// Trả về chuỗi rỗng nếu chưa bao giờ chọn.
+    /// </summary>
     public string GetPreferredLanguageOrEmpty()
     {
         return Preferences.Default.Get(PreferredLanguageKey, string.Empty);
     }
 
+    /// <summary>
+    /// Quyết định ngôn ngữ hiệu dụng (Effective Language) để thực hiện thuyết minh hoặc hiển thị UI.
+    /// Thứ tự ưu tiên:
+    /// 1. Ngôn ngữ đã chọn trong Cài đặt app.
+    /// 2. Ngôn ngữ yêu cầu cụ thể từ tham số truyền vào.
+    /// 3. Ngôn ngữ của Hệ điều hành (UI Culture).
+    /// 4. Mặc định là Tiếng Việt (vi).
+    /// </summary>
     public string GetEffectiveLanguage(string? requestedLanguageCode = null)
     {
         var preferred = NormalizeLanguageCode(GetPreferredLanguageOrEmpty());
@@ -31,16 +52,23 @@ public class AppLanguageService : IAppLanguageService
         return NormalizeLanguageCode(CultureInfo.CurrentUICulture.Name) ?? "vi";
     }
 
+    /// <summary>
+    /// Xây dựng danh sách ưu tiên tìm kiếm nội bộ (Fallback Chain).
+    /// Ví dụ: Nếu xem tiếng Nhật (ja), chuỗi sẽ là [ja, en, vi]. 
+    /// Nếu một POI không có bản dịch tiếng Nhật, hệ thống sẽ tự tìm bản dịch tiếng Anh, sau đó là tiếng Việt.
+    /// </summary>
     public IReadOnlyList<string> GetLanguageFallbackChain(string? requestedLanguageCode = null)
     {
         var primary = GetEffectiveLanguage(requestedLanguageCode);
         var chain = new List<string> { primary };
 
+        // Tiếng Anh luôn là lựa chọn thứ 2 nếu không phải tiếng chính
         if (!chain.Contains("en", StringComparer.OrdinalIgnoreCase))
         {
             chain.Add("en");
         }
 
+        // Tiếng Việt là lựa chọn cuối cùng (Base language)
         if (!chain.Contains("vi", StringComparer.OrdinalIgnoreCase))
         {
             chain.Add("vi");
@@ -49,17 +77,24 @@ public class AppLanguageService : IAppLanguageService
         return chain;
     }
 
+    /// <summary>
+    /// Lưu lựa chọn ngôn ngữ của người dùng vào bộ nhớ bền vững.
+    /// </summary>
     public void SetPreferredLanguage(string languageCode)
     {
         var normalized = NormalizeLanguageCode(languageCode) ?? "vi";
         Preferences.Default.Set(PreferredLanguageKey, normalized);
     }
 
+    /// <summary>
+    /// Hàm dịch thuật (Translation function) thủ công.
+    /// Truy xuất chuỗi ký tự dựa trên Mã định danh (Key) và Ngôn ngữ (Lang).
+    /// </summary>
     public string T(string key, string lang)
     {
         return (lang, key) switch
         {
-            // App Core
+            // --- Core App UI ---
             ("en", "AppTitle") => "Vinh Khanh Food Street",
             ("ja", "AppTitle") => "ビンカイン フードストリート",
             (_, "AppTitle") => "Vĩnh Khánh Food Street",
@@ -72,7 +107,7 @@ public class AppLanguageService : IAppLanguageService
             ("ja", "ListTab") => "一覧",
             (_, "ListTab") => "Danh sách",
 
-            // Categories
+            // --- Danh mục Quán ---
             ("en", "CategoryAll") => "All",
             ("ja", "CategoryAll") => "すべて",
             (_, "CategoryAll") => "Tất cả",
@@ -101,7 +136,7 @@ public class AppLanguageService : IAppLanguageService
             ("ja", "CategoryUtility") => "ユーティリティ",
             (_, "CategoryUtility") => "Tiện ích",
 
-            // Search
+            // --- Tìm kiếm ---
             ("en", "Search") => "Find",
             ("ja", "Search") => "検索",
             (_, "Search") => "Tìm",
@@ -110,7 +145,7 @@ public class AppLanguageService : IAppLanguageService
             ("ja", "SearchPlaceholder") => "店名を検索...",
             (_, "SearchPlaceholder") => "Tìm quán trên bản đồ...",
 
-            // Settings Page
+            // --- Trang Cài đặt & Bản quyền ---
             ("en", "SettingsTitle") => "Settings",
             ("ja", "SettingsTitle") => "設定",
             (_, "SettingsTitle") => "Cài đặt",
@@ -159,7 +194,7 @@ public class AppLanguageService : IAppLanguageService
             ("ja", "RenewPassButton") => "7日間延長 ($1)",
             (_, "RenewPassButton") => "Gia hạn thêm 7 ngày ($1)",
 
-            // Common
+            // --- Nút bấm và phản hồi chung ---
             ("en", "Ok") => "OK",
             ("ja", "Ok") => "OK",
             (_, "Ok") => "OK",
@@ -184,7 +219,7 @@ public class AppLanguageService : IAppLanguageService
             ("ja", "BuySuccess") => "ありがとうございます！Access Passが有効になりました。",
             (_, "BuySuccess") => "Cảm ơn bạn! Gói Access Pass của bạn đã được kích hoạt.",
 
-            // GPS & Maps
+            // --- GPS & Trạng thái ---
             ("en", "GpsTracking") => "Tracking location...",
             ("ja", "GpsTracking") => "位置追跡中...",
             (_, "GpsTracking") => "Đang theo dõi vị trí...",
@@ -205,6 +240,10 @@ public class AppLanguageService : IAppLanguageService
         };
     }
 
+    /// <summary>
+    /// Chuẩn hóa mã ngôn ngữ để sử dụng nội bộ.
+    /// Xử lý các trường hợp đặc biệt như jp (alias của ja) hoặc định dạng vi_VN.
+    /// </summary>
     private static string? NormalizeLanguageCode(string? languageCode)
     {
         if (string.IsNullOrWhiteSpace(languageCode))
@@ -220,7 +259,7 @@ public class AppLanguageService : IAppLanguageService
             "vi" => "vi",
             "en" => "en",
             "ja" => "ja",
-            "jp" => "ja",
+            "jp" => "ja", // Đồng nhất jp thành ja (tiêu chuẩn ISO)
             _ => "vi"
         };
     }

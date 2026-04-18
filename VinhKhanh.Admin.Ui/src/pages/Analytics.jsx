@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Tooltip as MapTooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, Headphones, Users, Trophy } from 'lucide-react';
+import { MapPin, Headphones, Users, Trophy, Activity } from 'lucide-react';
 import api from '../services/api';
 
 // Vinh Khanh center coordinates
@@ -21,6 +21,12 @@ const Analytics = () => {
   const [heatmapLoading, setHeatmapLoading] = useState(false);
   const [heatmapError, setHeatmapError] = useState('');
 
+  const [onlineCount, setOnlineCount] = useState(0);
+  const [realtimeLoading, setRealtimeLoading] = useState(false);
+  const [realtimeError, setRealtimeError] = useState('');
+  const [selectedDay, setSelectedDay] = useState(defaultTo);
+  const [isRealtimeMode, setIsRealtimeMode] = useState(true);
+
   const [perfItems, setPerfItems] = useState([]);
   const [perfTotal, setPerfTotal] = useState(0);
   const [perfLoading, setPerfLoading] = useState(false);
@@ -30,8 +36,19 @@ const Analytics = () => {
     try {
       setHeatmapLoading(true);
       setHeatmapError('');
-      const res = await api.get('/analytics/heatmap', {
-        params: { from: `${from}T00:00:00Z`, to: `${to}T23:59:59Z` },
+
+      if (isRealtimeMode) {
+        setRealtimeLoading(true);
+        setRealtimeError('');
+        const res = await api.get('/analytics/realtime-overview');
+        setHeatmapPoints(res.data?.points ?? []);
+        setHeatmapTotal(res.data?.total ?? 0);
+        setOnlineCount(res.data?.onlineCount ?? 0);
+        return;
+      }
+
+      const res = await api.get('/analytics/heatmap/daily', {
+        params: { date: selectedDay },
       });
       setHeatmapPoints(res.data?.points ?? []);
       setHeatmapTotal(res.data?.total ?? 0);
@@ -40,11 +57,13 @@ const Analytics = () => {
         typeof err?.response?.data === 'string'
           ? err.response.data
           : err?.response?.data?.error || err?.message;
+      if (isRealtimeMode) setRealtimeError(msg || 'Không tải được realtime overview.');
       setHeatmapError(msg || 'Không tải được dữ liệu heatmap.');
     } finally {
       setHeatmapLoading(false);
+      setRealtimeLoading(false);
     }
-  }, [from, to]);
+  }, [from, to, isRealtimeMode, selectedDay]);
 
   const fetchContentPerf = useCallback(async () => {
     try {
@@ -70,6 +89,14 @@ const Analytics = () => {
     fetchHeatmap();
     fetchContentPerf();
   }, [fetchHeatmap, fetchContentPerf]);
+
+  useEffect(() => {
+    if (!isRealtimeMode) return undefined;
+    const timer = setInterval(() => {
+      fetchHeatmap();
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [isRealtimeMode, fetchHeatmap]);
 
   const handleApply = () => {
     fetchHeatmap();
@@ -103,36 +130,85 @@ const Analytics = () => {
         </p>
       </header>
 
-      {/* Date Range Picker */}
-      <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Từ ngày</label>
-            <input
-              type="date"
-              value={from}
-              max={to}
-              onChange={(e) => setFrom(e.target.value)}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
-            />
+      {/* Monitoring Controls */}
+      <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-bold text-gray-800">Monitoring realtime</h3>
+            <p className="text-xs text-gray-500">Hiển thị người dùng online và heatmap cập nhật mỗi 10 giây.</p>
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Đến ngày</label>
-            <input
-              type="date"
-              value={to}
-              min={from}
-              onChange={(e) => setTo(e.target.value)}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
-            />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsRealtimeMode(true)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold ${isRealtimeMode ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+            >
+              Realtime
+            </button>
+            <button
+              onClick={() => setIsRealtimeMode(false)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold ${!isRealtimeMode ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+            >
+              Lịch sử theo ngày
+            </button>
           </div>
-          <button
-            onClick={handleApply}
-            className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
-          >
-            Áp dụng
-          </button>
         </div>
+
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-emerald-700">
+            <Activity size={18} />
+            <span className="text-sm font-semibold">Người dùng online (5 phút gần nhất)</span>
+          </div>
+          <div className="text-2xl font-black text-emerald-700">{onlineCount.toLocaleString('vi-VN')}</div>
+        </div>
+
+        {!isRealtimeMode ? (
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500">Ngày</label>
+              <input
+                type="date"
+                value={selectedDay}
+                max={defaultTo}
+                onChange={(e) => setSelectedDay(e.target.value)}
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500">Từ ngày (content)</label>
+              <input
+                type="date"
+                value={from}
+                max={to}
+                onChange={(e) => setFrom(e.target.value)}
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500">Đến ngày (content)</label>
+              <input
+                type="date"
+                value={to}
+                min={from}
+                onChange={(e) => setTo(e.target.value)}
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
+            </div>
+            <button
+              onClick={handleApply}
+              className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+            >
+              Áp dụng
+            </button>
+          </div>
+        ) : (
+          <div className="text-xs text-gray-500">Realtime đang bật, dữ liệu tự động làm mới.</div>
+        )}
+
+        {realtimeError && (
+          <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {realtimeError}
+          </div>
+        )}
       </div>
 
       {/* Heatmap Section */}
@@ -155,7 +231,7 @@ const Analytics = () => {
           </div>
         )}
 
-        {heatmapLoading ? (
+        {heatmapLoading || realtimeLoading ? (
           <div className="flex h-80 items-center justify-center rounded-2xl bg-gray-50 text-sm text-gray-400">
             Đang tải heatmap...
           </div>
