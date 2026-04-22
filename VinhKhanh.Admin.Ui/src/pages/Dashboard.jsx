@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { MapPin, Users, Headphones, TrendingUp } from 'lucide-react';
+import { MapPin, Users, Headphones, TrendingUp, Store, Clock } from 'lucide-react';
 import api from '../services/api';
 
 const Dashboard = () => {
-  const [stats, setStats] = useState({ pois: 0, visits: 0, audioPlays: 0, visitsToday: 0 });
+  const [stats, setStats] = useState({ 
+    pois: 0, 
+    visits: 0, 
+    audioPlays: 0, 
+    visitsToday: 0,
+    totalShops: 0,
+    pendingOwners: 0
+  });
   const [activityData, setActivityData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -23,6 +30,8 @@ const Dashboard = () => {
           visits: data.visitCount ?? 0,
           audioPlays: data.narrationCount ?? 0,
           visitsToday: data.visitsToday ?? 0,
+          totalShops: data.totalShopsCount ?? 0,
+          pendingOwners: data.pendingOwnersCount ?? 0,
         });
 
         setActivityData(
@@ -50,7 +59,7 @@ const Dashboard = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold text-gray-900">Tổng quan</h2>
-        <p className="text-gray-500 mt-1">Hiệu suất và tương tác của du khách hôm nay.</p>
+        <p className="text-gray-500 mt-1">Hiệu suất và tương tác của hệ thống.</p>
       </div>
 
       {errorMsg && (
@@ -60,27 +69,41 @@ const Dashboard = () => {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard 
           icon={<MapPin />} 
           title="Tổng số POI" 
           value={stats.pois} 
-          trend="Dữ liệu trực tiếp từ database" 
+          trend="Số lượng địa điểm" 
           color="bg-blue-50 text-blue-600" 
         />
         <StatCard 
+          icon={<Store />} 
+          title="Tổng số Shop" 
+          value={stats.totalShops} 
+          trend="Đối tác đăng ký" 
+          color="bg-purple-50 text-purple-600" 
+        />
+        <StatCard 
           icon={<Users />} 
-          title="Lượt khách ghé thăm" 
+          title="Lượt truy cập" 
           value={stats.visits} 
           trend={`Hôm nay: ${stats.visitsToday}`} 
           color="bg-coral-50 text-coral-600" 
         />
         <StatCard 
           icon={<Headphones />} 
-          title="Lượt nghe thuyết minh" 
+          title="Lượt nghe" 
           value={stats.audioPlays} 
-          trend="Tổng lượt nghe TTS toàn hệ thống" 
+          trend="Phát thuyết minh" 
           color="bg-emerald-50 text-emerald-600" 
+        />
+        <StatCard 
+          icon={<Clock />} 
+          title="Chờ duyệt" 
+          value={stats.pendingOwners} 
+          trend="Shop cần duyệt" 
+          color="bg-amber-50 text-amber-600" 
         />
       </div>
 

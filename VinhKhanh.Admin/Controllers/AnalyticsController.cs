@@ -21,13 +21,14 @@ public class AnalyticsController(
 
     private sealed class HeatmapEvent
     {
+        public string? DeviceId { get; init; }
         public double Latitude { get; init; }
         public double Longitude { get; init; }
         public DateTime Timestamp { get; init; }
     }
 
     private const int HeatmapMaxPoints = 500;
-    private static readonly TimeSpan OnlineThreshold = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan OnlineThreshold = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan RealtimeWindow = TimeSpan.FromMinutes(10);
 
     [HttpGet("online-count")]
@@ -94,8 +95,11 @@ public class AnalyticsController(
         if (fromDate.HasValue) query = query.Where(e => e.Timestamp >= fromDate.Value);
         if (toDate.HasValue) query = query.Where(e => e.Timestamp <= toDate.Value);
 
+        // Lọc bỏ dữ liệu từ các POI đã bị xoá
+        query = query.Where(e => e.PoiId == null || dbContext.Pois.Any(p => p.Id == e.PoiId));
+
         var events = await query
-            .Select(e => new HeatmapEvent { Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
+            .Select(e => new HeatmapEvent { DeviceId = e.DeviceId, Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
             .ToListAsync(cancellationToken);
 
         var points = BuildHeatmapPoints(events, DateTime.UtcNow, useRecencyWeight: false);
@@ -116,7 +120,8 @@ public class AnalyticsController(
 
         var events = await dbContext.AnalyticsEvents
             .Where(e => e.Timestamp >= from && e.Timestamp <= to)
-            .Select(e => new HeatmapEvent { Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
+            .Where(e => e.PoiId == null || dbContext.Pois.Any(p => p.Id == e.PoiId)) // Filter deleted
+            .Select(e => new HeatmapEvent { DeviceId = e.DeviceId, Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
             .ToListAsync(cancellationToken);
 
         var points = BuildHeatmapPoints(events, DateTime.UtcNow, useRecencyWeight: false);
@@ -140,7 +145,8 @@ public class AnalyticsController(
 
         var events = await dbContext.AnalyticsEvents
             .Where(e => e.Timestamp >= fromDate && e.Timestamp <= toDate)
-            .Select(e => new HeatmapEvent { Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
+            .Where(e => e.PoiId == null || dbContext.Pois.Any(p => p.Id == e.PoiId)) // Filter deleted
+            .Select(e => new HeatmapEvent { DeviceId = e.DeviceId, Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
             .ToListAsync(cancellationToken);
 
         var grouped = events
@@ -174,6 +180,9 @@ public class AnalyticsController(
             var eventsQuery = dbContext.AnalyticsEvents.Where(e => e.PoiId.HasValue);
             if (fromDate.HasValue) eventsQuery = eventsQuery.Where(e => e.Timestamp >= fromDate.Value);
             if (toDate.HasValue) eventsQuery = eventsQuery.Where(e => e.Timestamp <= toDate.Value);
+
+            // Chỉ lấy dữ liệu của các POI hiện còn tồn tại
+            eventsQuery = eventsQuery.Where(e => dbContext.Pois.Any(p => p.Id == e.PoiId));
 
             var grouped = await eventsQuery
                 .GroupBy(e => e.PoiId!.Value)
@@ -218,11 +227,20 @@ public class AnalyticsController(
     private async Task<int> GetOnlineUserCountInternal(CancellationToken cancellationToken)
     {
         var threshold = DateTime.UtcNow.Subtract(OnlineThreshold);
-        return await dbContext.AnalyticsEvents
+        
+        // Lấy tất cả sự kiện trong khoảng thời gian threshold
+        var recentEvents = await dbContext.AnalyticsEvents
             .Where(e => e.Timestamp >= threshold)
-            .Select(e => e.DeviceId)
-            .Distinct()
-            .CountAsync(cancellationToken);
+            .OrderByDescending(e => e.Timestamp)
+            .ThenByDescending(e => e.Id) // Id lớn hơn/mới hơn sẽ thắng nếu trùng giây
+            .Select(e => new { e.DeviceId, e.EventType, e.Timestamp })
+            .ToListAsync(cancellationToken);
+
+        // Gom nhóm theo thiết bị, lấy sự kiện mới nhất (dựa trên sắp xếp ở trên), và đếm những thiết bị đang online
+        return recentEvents
+            .GroupBy(e => e.DeviceId)
+            .Select(g => g.First()) // Đã OrderByDescending ở trên nên First() là cái mới nhất
+            .Count(e => e.EventType != "app_offline");
     }
 
     private async Task<object> BuildRealtimePayloadAsync(CancellationToken cancellationToken)
@@ -231,7 +249,8 @@ public class AnalyticsController(
         var from = now.Subtract(RealtimeWindow);
         var events = await dbContext.AnalyticsEvents
             .Where(e => e.Timestamp >= from)
-            .Select(e => new HeatmapEvent { Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
+            .Where(e => e.PoiId == null || dbContext.Pois.Any(p => p.Id == e.PoiId)) // Filter deleted
+            .Select(e => new HeatmapEvent { DeviceId = e.DeviceId, Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
             .ToListAsync(cancellationToken);
 
         var points = BuildHeatmapPoints(events, now, useRecencyWeight: true);
@@ -290,11 +309,21 @@ public class AnalyticsController(
         DateTime now,
         bool useRecencyWeight)
     {
+        // 4 decimal places of lat/lng is roughly 11m x 11m = 121 m2.
+        // We will calculate density as People / 100m2.
+        const double areaPerCell = 121.0; 
+
         return events
             .Where(e => Math.Abs(e.Latitude) > 0.000001 && Math.Abs(e.Longitude) > 0.000001)
             .GroupBy(e => (lat: Math.Round(e.Latitude, 4), lng: Math.Round(e.Longitude, 4)))
             .Select(g =>
             {
+                // For density, we want to know how many PEOPLE (unique devices) are in this cell.
+                // If it's historical data (long time window), we could average or sum.
+                // For realtime/daily, unique DeviceId count is a better representation of "density".
+                var uniqueDevices = g.Select(e => e.DeviceId).Distinct().Count();
+
+                // Intensity can still use recency weight for visual "fade" of older points in realtime mode.
                 var intensity = g.Sum(e =>
                 {
                     if (!useRecencyWeight) return 1.0;
@@ -302,14 +331,20 @@ public class AnalyticsController(
                     return Math.Max(0.15, 1.0 - (ageMinutes / RealtimeWindow.TotalMinutes));
                 });
 
+                // Correcting intensity to reflect unique people normalized by area
+                // Density = UniqueDevices / area (per 100m2)
+                var density = (uniqueDevices * 100.0) / areaPerCell;
+
                 return new
                 {
                     lat = g.Key.lat,
                     lng = g.Key.lng,
-                    intensity = Math.Round(intensity, 2)
+                    intensity = Math.Round(intensity, 2),
+                    density = Math.Round(density, 2),
+                    peopleCount = uniqueDevices
                 };
             })
-            .OrderByDescending(p => p.intensity)
+            .OrderByDescending(p => p.density)
             .Take(HeatmapMaxPoints)
             .Cast<object>()
             .ToList();

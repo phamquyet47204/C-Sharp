@@ -20,6 +20,7 @@ public class Poi
 
     public PoiStatus Status { get; set; } = PoiStatus.Draft;
     public bool IsPremium { get; set; } = false;
+    public DateTime? PremiumExpiryDate { get; set; }
     public string? OwnerId { get; set; }
     public string? RejectionReason { get; set; }
 

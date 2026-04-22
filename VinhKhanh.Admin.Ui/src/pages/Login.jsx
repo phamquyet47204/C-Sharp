@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   ArrowRight,
   Eye,
@@ -105,9 +105,6 @@ const Login = () => {
                   Đăng nhập để tiếp tục vào khu vực quản trị.
                 </p>
               </div>
-              <div className="hidden rounded-2xl bg-coral-50 px-3 py-2 text-sm font-semibold text-coral-700 sm:block">
-                Admin only
-              </div>
             </div>
 
             {errorMsg && (
@@ -195,6 +192,19 @@ const Login = () => {
                 {isLoading ? 'Đang xác thực...' : 'Truy cập hệ thống'}
                 {!isLoading && <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />}
               </button>
+
+              <div className="mt-8 text-center border-t border-gray-100 pt-6">
+                <p className="text-sm text-gray-500">
+                  Bạn là chủ quán muốn tham gia hệ thống?
+                </p>
+                <Link
+                  to="/register"
+                  className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-coral-500 hover:text-coral-600 transition"
+                >
+                  Đăng ký làm đối tác ngay
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
             </form>
           </div>
         </section>

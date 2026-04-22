@@ -6,6 +6,7 @@ using Android.Content;
 using Android.OS;
 using AndroidX.Core.App;
 using Microsoft.Maui.ApplicationModel;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace VinhKhanhFoodStreet.Services;
 
@@ -107,9 +108,47 @@ public class LocationForegroundService : Service
     {
         base.OnTaskRemoved(rootIntent);
         
-        Debug.WriteLine("[AndroidForegroundService] OnTaskRemoved: App bi quet bo, dang dung service...");
+        Debug.WriteLine("[AndroidForegroundService] OnTaskRemoved: App bi quet bo. Dang gui tin hieu offline va kill process...");
         
-        // Dung foreground service va xoa thong bao khi app bi dong han
+        // Luu lai service de dung trong background thread vi context co the bi huy
+        var services = IPlatformApplication.Current?.Services;
+        
+        // Chay mot Task ngam de gui tin hieu offline sau do tu sat (Kill process)
+        Task.Run(async () => 
+        {
+            try 
+            {
+                var locationService = services?.GetService<ILocationService>();
+                var analyticsService = services?.GetService<AnalyticsService>();
+
+                // 1. Dung loop de dam bao khong con location_update
+                if (locationService != null)
+                {
+                    _ = locationService.StopListeningAsync();
+                }
+
+                // 2. Gui tin hieu offline
+                if (analyticsService != null)
+                {
+                    await analyticsService.TrackAppLifecycleAsync("offline");
+                }
+                
+                // 3. Cho mot chut de dam bao package mang duoc gui di
+                await Task.Delay(500);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[LocationForegroundService] Loi trong luc thoat app: {ex.Message}");
+            }
+            finally
+            {
+                // 4. TU SAT: Giet chet hoan toan tien trinh de dung moi thread ngam (GPS, TTS, v.v.)
+                Debug.WriteLine("[AndroidForegroundService] TU SAT: Dong hoan toan tien trinh ung dung.");
+                Android.OS.Process.KillProcess(Android.OS.Process.MyPid());
+            }
+        });
+
+        // Dung foreground service va xoa thong bao ngay lap tuc cho UI muot
         StopForeground(StopForegroundFlags.Remove);
         StopSelf();
     }

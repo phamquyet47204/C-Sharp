@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { MapPin, Headphones, Users, Trophy, Activity, Play, Pause } from 'lucide-react';
 import api from '../services/api';
 import { startRealtimeAnalytics, stopRealtimeAnalytics } from '../services/realtimeAnalytics';
+import HeatmapLayer from '../components/HeatmapLayer';
 
 const VINH_KHANH_CENTER = [10.7580, 106.7020];
 const toDateInput = (date) => date.toISOString().slice(0, 10);
@@ -198,8 +199,8 @@ const Analytics = () => {
   return (
     <section className="space-y-6">
       <header>
-        <h2 className="text-3xl font-bold text-gray-900">Phân tích</h2>
-        <p className="text-sm text-gray-500 mt-2">Heatmap lượt ghé thăm và hiệu suất nội dung theo thời gian.</p>
+        <h2 className="text-3xl font-bold text-gray-900">Heatmap tổng quan</h2>
+        <p className="text-sm text-gray-500 mt-2">Phân tích mật độ người dùng và hiệu suất nội dung theo thời gian thực.</p>
       </header>
 
       <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm space-y-6">
@@ -235,7 +236,7 @@ const Analytics = () => {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           <div className="lg:col-span-1 rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white px-5 py-4 flex flex-col justify-center">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Online (5p)</span>
+              <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Số người online</span>
               <Activity size={14} className="text-emerald-500" />
             </div>
             <div className="mt-1 flex items-baseline gap-1">
@@ -371,7 +372,7 @@ const Analytics = () => {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <MapPin size={20} className="text-blue-600" />
-            <h3 className="text-lg font-bold text-gray-800">Heatmap lượt ghé thăm</h3>
+            <h3 className="text-lg font-bold text-gray-800">Heatmap</h3>
           </div>
           {!heatmapLoading && !heatmapError && <span className="text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full">{heatmapTotal} điểm dữ liệu</span>}
         </div>
@@ -385,15 +386,30 @@ const Analytics = () => {
             <div className="h-80 w-full rounded-2xl overflow-hidden border border-gray-100">
               <MapContainer center={VINH_KHANH_CENTER} zoom={16} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
                 <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                
+                <HeatmapLayer 
+                  points={heatmapPoints} 
+                  maxDensity={5} 
+                  radius={50} 
+                  blur={25} 
+                />
+
                 {heatmapPoints.map((point, idx) => (
                   <CircleMarker
                     key={idx}
                     center={[point.lat, point.lng]}
-                    radius={getRadius(point.intensity)}
-                    pathOptions={{ color: getColor(point.intensity), fillColor: getColor(point.intensity), fillOpacity: 0.5, weight: 1 }}
+                    radius={3} // Constant small dots for reference
+                    pathOptions={{ 
+                      color: 'transparent', // Borderless
+                      fillColor: 'white', 
+                      fillOpacity: 0.3,
+                      weight: 0 
+                    }}
                   >
                     <MapTooltip>
-                      <span className="text-xs">{point.lat.toFixed(5)}, {point.lng.toFixed(5)}<br />Cường độ: {point.intensity}</span>
+                      <span className="text-xs font-bold">Mật độ: {point.density} người/100m²</span>
+                      <br />
+                      <span className="text-[10px] text-gray-400">Ước tính: {point.peopleCount} người tại đây</span>
                     </MapTooltip>
                   </CircleMarker>
                 ))}
@@ -401,15 +417,15 @@ const Analytics = () => {
             </div>
 
             <div className="mt-3 flex items-center gap-4 text-xs text-gray-500">
-              <span className="font-medium">Cường độ:</span>
+              <span className="font-bold text-gray-700 uppercase tracking-wider">Mật độ nhiệt:</span>
               {[
-                { color: '#22c55e', label: 'Thấp' },
-                { color: '#eab308', label: 'Trung bình' },
-                { color: '#f97316', label: 'Cao' },
-                { color: '#ef4444', label: 'Rất cao' },
+                { color: '#22c55e', label: 'Thấp (< 1)' },
+                { color: '#eab308', label: 'Vừa (1 - 4)' },
+                { color: '#f97316', label: 'Cao (4 - 8)' },
+                { color: '#ef4444', label: 'Rất cao (> 8)' },
               ].map(({ color, label }) => (
-                <span key={label} className="flex items-center gap-1">
-                  <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
+                <span key={label} className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
                   {label}
                 </span>
               ))}

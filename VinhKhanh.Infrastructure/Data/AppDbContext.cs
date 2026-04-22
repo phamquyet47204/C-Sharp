@@ -43,6 +43,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .HasForeignKey(p => p.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<Payment>()
+            .Property(p => p.Amount)
+            .HasPrecision(18, 2);
+
         modelBuilder.Entity<FreeTrialRecord>()
             .HasIndex(f => new { f.UserId, f.PoiId })
             .IsUnique()

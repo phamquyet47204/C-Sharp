@@ -46,6 +46,144 @@ public class AdminController(
     }
 
     /// <summary>
+    /// GET /api/admin/users/owners
+    /// Lấy danh sách toàn bộ Chủ quán.
+    /// </summary>
+    [HttpGet("users/owners")]
+    public async Task<IActionResult> GetOwners()
+    {
+        var users = await userManager.GetUsersInRoleAsync("ShopOwner");
+        var userIds = users.Select(u => u.Id).ToList();
+        
+        var pois = await dbContext.Pois
+            .Where(p => userIds.Contains(p.OwnerId))
+            .ToListAsync();
+
+        var result = users.Select(u => {
+            var poi = pois.FirstOrDefault(p => p.OwnerId == u.Id);
+            return new
+            {
+                id = u.Id,
+                fullName = u.FullName,
+                email = u.Email,
+                phoneNumber = u.PhoneNumber,
+                isApproved = u.IsApproved,
+                activationDate = u.ActivationDate,
+                isPremium = poi?.IsPremium ?? false,
+                premiumExpiryDate = poi?.PremiumExpiryDate
+            };
+        });
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// GET /api/admin/users/pending-owners
+    /// Lấy danh sách Chủ quán đang chờ duyệt.
+    /// </summary>
+    [HttpGet("users/pending-owners")]
+    public async Task<IActionResult> GetPendingOwners()
+    {
+        var users = await userManager.GetUsersInRoleAsync("ShopOwner");
+        var result = users.Where(u => !u.IsApproved).Select(u => new
+        {
+            id = u.Id,
+            fullName = u.FullName,
+            email = u.Email,
+            phoneNumber = u.PhoneNumber,
+            activationDate = u.ActivationDate
+        });
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// PUT /api/admin/users/{userId}
+    /// Cập nhật thông tin Chủ quán.
+    /// </summary>
+    [HttpPut("users/{userId}")]
+    public async Task<IActionResult> UpdateOwner(string userId, [FromBody] UpdateOwnerRequest request)
+    {
+        var user = await userManager.FindByIdAsync(userId);
+        if (user == null) return NotFound("Không tìm thấy người dùng.");
+        
+        user.FullName = request.FullName ?? user.FullName;
+        user.PhoneNumber = request.PhoneNumber ?? user.PhoneNumber;
+        
+        var userResult = await userManager.UpdateAsync(user);
+        if (!userResult.Succeeded) return Problem("Lỗi khi cập nhật thông tin.");
+
+        // Xử lý Premium nếu có tùy chọn
+        if (request.PremiumOption != null)
+        {
+            var poi = await dbContext.Pois.FirstOrDefaultAsync(p => p.OwnerId == userId);
+            if (poi != null)
+            {
+                if (request.PremiumOption == "None")
+                {
+                    poi.IsPremium = false;
+                    poi.Priority = 0;
+                    poi.PremiumExpiryDate = null;
+                }
+                else
+                {
+                    poi.IsPremium = true;
+                    poi.Priority = 100;
+                    var months = request.PremiumOption switch
+                    {
+                        "1Month" => 1,
+                        "6Months" => 6,
+                        "1Year" => 12,
+                        _ => 0
+                    };
+                    
+                    if (months > 0)
+                    {
+                        // Luôn gia hạn từ thời điểm hiện tại
+                        poi.PremiumExpiryDate = DateTime.UtcNow.AddMonths(months);
+                    }
+                }
+                poi.UpdatedAt = DateTime.UtcNow;
+                await dbContext.SaveChangesAsync();
+            }
+        }
+        
+        return Ok(new { success = true });
+    }
+
+    /// <summary>
+    /// POST /api/admin/users/{userId}/reject-owner
+    /// Từ chối và xóa tài khoản chủ quán đang chờ duyệt.
+    /// </summary>
+    [HttpPost("users/{userId}/reject-owner")]
+    public async Task<IActionResult> RejectOwner(string userId)
+    {
+        var user = await userManager.FindByIdAsync(userId);
+        if (user == null) return NotFound("Không tìm thấy người dùng.");
+        
+        var result = await userManager.DeleteAsync(user);
+        if (!result.Succeeded) return Problem("Lỗi khi xóa tài khoản.");
+        
+        return Ok(new { success = true });
+    }
+
+    /// <summary>
+    /// POST /api/admin/users/{userId}/toggle-premium
+    /// Bật/Tắt trạng thái Premium cho quán của Owner này.
+    /// </summary>
+    [HttpPost("users/{userId}/toggle-premium")]
+    public async Task<IActionResult> TogglePremium(string userId)
+    {
+        var poi = await dbContext.Pois.FirstOrDefaultAsync(p => p.OwnerId == userId);
+        if (poi == null) return NotFound("Chủ quán chưa có POI nào để nâng cấp Premium.");
+        
+        poi.IsPremium = !poi.IsPremium;
+        poi.Priority = poi.IsPremium ? 100 : 0; // Tăng ưu tiên lên 100 nếu là Premium
+        poi.UpdatedAt = DateTime.UtcNow;
+        
+        await dbContext.SaveChangesAsync();
+        return Ok(new { success = true, isPremium = poi.IsPremium, priority = poi.Priority });
+    }
+
+    /// <summary>
     /// GET /api/admin/pois
     /// Lấy danh sách toàn bộ các địa điểm (POI) bao gồm thông tin chi tiết và ngôn ngữ.
     /// </summary>
@@ -156,6 +294,10 @@ public class AdminController(
             .ToList();
 
         var visitsToday = await dbContext.AnalyticsEvents.CountAsync(e => e.Timestamp >= todayUtc, cancellationToken);
+        
+        // Thống kê chủ quán
+        var totalShops = await userManager.GetUsersInRoleAsync("ShopOwner");
+        var pendingOwnersCount = totalShops.Count(u => !u.IsApproved);
 
         return Ok(new
         {
@@ -164,6 +306,8 @@ public class AdminController(
             narrationCount,
             visitsToday,
             onlineCount,
+            totalShopsCount = totalShops.Count,
+            pendingOwnersCount,
             activitySeries
         });
     }
@@ -544,4 +688,11 @@ public class CreatePoiRequest
     public string? DescJa { get; set; }
 
     public IFormFile? Image { get; set; }
+}
+
+public class UpdateOwnerRequest
+{
+    public string? FullName { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? PremiumOption { get; set; } // None, 1Month, 6Months, 1Year
 }

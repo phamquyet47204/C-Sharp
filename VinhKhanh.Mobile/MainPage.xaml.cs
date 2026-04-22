@@ -74,6 +74,13 @@ public partial class MainPage : ContentPage
 		return _appLanguageService.T(key, _currentLanguage);
 	}
 
+	public MainPage(
+		IGeofenceEngine geofenceEngine,
+		ILocationService locationService,
+		INarrationService narrationService,
+		IDatabaseService databaseService,
+		IAppLanguageService appLanguageService,
+		IServiceProvider serviceProvider,
 		AccessService accessService,
 		AnalyticsService analyticsService)
 	{
@@ -413,6 +420,8 @@ public partial class MainPage : ContentPage
 
 	private void HandlePoiEntered(POI poi)
 	{
+		_ = MainThread.InvokeOnMainThreadAsync(async () =>
+		{
 			try
 			{
 				_geofenceEngine.MarkPoiAsPlayed(poi.Id);
@@ -819,7 +828,7 @@ public partial class MainPage : ContentPage
 	{
 		if (_selectedPinPoi is null) return;
 		var poi = _selectedPinPoi;
-		await LogPoiEventAsync(poi, "narration");
+		await _analyticsService.TrackActivityAsync(poi.Latitude, poi.Longitude, "narration", poi.Id);
 
 		SetNarratingPoi(poi);
 

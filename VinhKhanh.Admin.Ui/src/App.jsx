@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import Approvals from './pages/Approvals';
+import OwnerManager from './pages/OwnerManager';
 import ShopLayout from './pages/shop/ShopLayout';
 import ShopDashboard from './pages/shop/ShopDashboard';
 import ShopPoiList from './pages/shop/ShopPoiList';
@@ -31,6 +32,7 @@ function App() {
             <Route path="pois/new" element={<PoiForm />} />
             <Route path="pois/:id" element={<PoiForm />} />
             <Route path="approvals" element={<Approvals />} />
+            <Route path="owners" element={<OwnerManager />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

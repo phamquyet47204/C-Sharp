@@ -79,6 +79,7 @@ public class AuthController(
             SecurityStamp = Guid.NewGuid().ToString(),
             UserName = request.Email,
             FullName = request.FullName,
+            PhoneNumber = request.PhoneNumber,
             IsApproved = false // Chủ quán cần Admin duyệt
         };
 
@@ -139,6 +140,7 @@ public class RegisterShopRequest
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
+    public string PhoneNumber { get; set; } = string.Empty;
 }
 
 public class RegisterVisitorRequest

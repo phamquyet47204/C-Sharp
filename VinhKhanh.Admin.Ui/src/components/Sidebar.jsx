@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, MapPin, BarChart3, Settings, LogOut, ClipboardCheck } from 'lucide-react';
+import { LayoutDashboard, MapPin, BarChart3, Settings, LogOut, ClipboardCheck, UserCheck } from 'lucide-react';
 import api from '../services/api';
 
 const Sidebar = () => {
@@ -10,8 +10,13 @@ const Sidebar = () => {
   useEffect(() => {
     const fetchPendingCount = async () => {
       try {
-        const res = await api.get('/admin/pois/pending');
-        setPendingCount(res.data.length);
+        const [poiRes, ownerRes] = await Promise.all([
+          api.get('/admin/pois/pending'),
+          api.get('/admin/dashboard-summary')
+        ]);
+        // I'll take pending owners from dashboard summary or a direct count.
+        // Dashboard summary has pendingOwnersCount.
+        setPendingCount(poiRes.data.length + (ownerRes.data.pendingOwnersCount || 0));
       } catch { /* ignore */ }
     };
     fetchPendingCount();
@@ -29,6 +34,7 @@ const Sidebar = () => {
       badge: pendingCount > 0 ? pendingCount : null
     },
     { icon: <BarChart3 size={20} />, label: 'Phân tích', path: '/analytics' },
+    { icon: <UserCheck size={20} />, label: 'Quản lý Shop', path: '/owners', badge: pendingCount > 0 ? pendingCount : null },
     { icon: <Settings size={20} />, label: 'Cài đặt', path: '/settings' },
   ];
 

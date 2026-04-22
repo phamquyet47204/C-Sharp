@@ -7,12 +7,14 @@ import {
   Mail,
   Store,
   CheckCircle2,
+  Phone,
 } from 'lucide-react';
 import api from '../services/api';
 
 const Register = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -23,7 +25,7 @@ const Register = () => {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!fullName || !email || !password) {
+    if (!fullName || !email || !phoneNumber || !password) {
       setErrorMsg("Vui lòng nhập đầy đủ thông tin!");
       return;
     }
@@ -39,6 +41,7 @@ const Register = () => {
       await api.post('/auth/register-shop', {
         fullName: fullName.trim(),
         email: email.trim(),
+        phoneNumber: phoneNumber.trim(),
         password,
       });
 
@@ -141,6 +144,24 @@ const Register = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     className="block w-full rounded-2xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-4 text-sm font-medium text-gray-900 outline-none transition focus:border-coral-400 focus:bg-white focus:ring-4 focus:ring-coral-500/10"
                     placeholder="email@example.com"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-gray-700">
+                  Số điện thoại
+                </label>
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-coral-500">
+                    <Phone className="h-4 w-4" />
+                  </div>
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    className="block w-full rounded-2xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-4 text-sm font-medium text-gray-900 outline-none transition focus:border-coral-400 focus:bg-white focus:ring-4 focus:ring-coral-500/10"
+                    placeholder="0912 345 678"
                   />
                 </div>
               </div>

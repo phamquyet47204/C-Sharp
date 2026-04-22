@@ -33,11 +33,22 @@ public class AnalyticsService
     /// <summary>
     /// Gửi tọa độ và trạng thái hoạt động hiện tại lên Server.
     /// </summary>
-    /// <param name="lat">Vĩ độ</param>
-    /// <param name="lng">Kinh độ</param>
-    /// <param name="eventType">Loại sự kiện: "heartbeat", "visit", "narration"</param>
-    /// <param name="poiId">Mã POI (nếu có)</param>
-    public async Task TrackActivityAsync(double lat, double lng, string eventType = "heartbeat", int? poiId = null)
+    public async Task TrackActivityAsync(double lat, double lng, string eventType = "location_update", int? poiId = null)
+    {
+        await SendAnalyticsEventAsync(lat, lng, eventType, poiId);
+    }
+
+    /// <summary>
+    /// Gửi trạng thái vòng đời ứng dụng (online/offline).
+    /// </summary>
+    public async Task TrackAppLifecycleAsync(string status)
+    {
+        // Khi báo online/offline, nếu không lấy được GPS ngay lập tức thì gửi tọa độ 0,0 
+        // để Backend biết là sự kiện điểm danh.
+        await SendAnalyticsEventAsync(0, 0, $"app_{status}");
+    }
+
+    private async Task SendAnalyticsEventAsync(double lat, double lng, string eventType, int? poiId = null)
     {
         try
         {

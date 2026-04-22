@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using VinhKhanhFoodStreet.Services;
 
 namespace VinhKhanhFoodStreet;
 
@@ -83,4 +84,36 @@ public partial class App : Application
 		};
 	}
 #endif
+
+	protected override async void OnStart()
+	{
+		base.OnStart();
+		await TrackStatusAsync("online");
+	}
+
+	protected override async void OnResume()
+	{
+		base.OnResume();
+		await TrackStatusAsync("online");
+	}
+
+	protected override async void OnSleep()
+	{
+		base.OnSleep();
+		// Thử gửi offline nhanh chóng trước khi app bị suspend
+		await TrackStatusAsync("offline");
+	}
+
+	private async Task TrackStatusAsync(string status)
+	{
+		try
+		{
+			var analyticsService = _serviceProvider.GetRequiredService<AnalyticsService>();
+			await analyticsService.TrackAppLifecycleAsync(status);
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"[AppLifecycle] Khong the gui heartbeat {status}: {ex.Message}");
+		}
+	}
 }
