@@ -287,6 +287,7 @@ public class AdminController(
             var poi = new Poi
             {
                 BasePoiId = Guid.NewGuid().ToString("N").Substring(0, 10).ToLower(),
+                QrToken = $"poi-{Guid.NewGuid():N}"[..20].ToLowerInvariant(),
                 CategoryCode = NormalizeCategoryCode(request.CategoryCode, request.NameVi, request.DescVi),
                 Latitude = request.Lat,
                 Longitude = request.Lng,
@@ -329,7 +330,14 @@ public class AdminController(
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            return Ok(new { success = true, message = "Thêm POI thành công!", poiId = poi.Id });
+            return Ok(new
+            {
+                success = true,
+                message = "Thêm POI thành công!",
+                poiId = poi.Id,
+                qrToken = poi.QrToken,
+                qrLink = BuildQrLink(poi.QrToken)
+            });
         }
         catch (Exception ex)
         {
@@ -363,6 +371,8 @@ public class AdminController(
             lng = poi.Longitude,
             radius = poi.Radius,
             imageUrl = poi.ImageUrl,
+            qrToken = poi.QrToken,
+            qrLink = BuildQrLink(poi.QrToken),
             vi = new { name = GetName("vi"), description = GetDescription("vi") },
             en = new { name = GetName("en"), description = GetDescription("en") },
             ja = new { name = GetName("ja"), description = GetDescription("ja") }
@@ -445,6 +455,16 @@ public class AdminController(
 
         existing.Name = name ?? string.Empty;
         existing.Description = description ?? string.Empty;
+    }
+
+    private string? BuildQrLink(string? qrToken)
+    {
+        if (string.IsNullOrWhiteSpace(qrToken))
+        {
+            return null;
+        }
+
+        return $"{Request.Scheme}://{Request.Host}/qr/{Uri.EscapeDataString(qrToken)}";
     }
 
     /// <summary>

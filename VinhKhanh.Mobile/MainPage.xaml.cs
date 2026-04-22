@@ -37,15 +37,16 @@ public partial class MainPage : ContentPage
 	private readonly IAppLanguageService _appLanguageService;
 	private readonly IServiceProvider _serviceProvider;
 	private readonly AccessService _accessService;
+	private readonly AnalyticsService _analyticsService;
 	private readonly MainPageViewModel _viewModel;
 	private readonly HttpClient _apiHttpClient;
 	
 	private ObservableCollection<POI> _displayItems = new();
 	private ObservableCollection<POIGroup> _groupedDisplayItems = new();
 	private ObservableCollection<POI> _mapSearchResults = new();
-	private Dictionary<int, Pin> _poiPins = new();
+	private Dictionary<string, Pin> _poiPins = new();
 	private List<POI> _allPois = new();
-	private Dictionary<int, List<POI>> _poiVariantsByGroup = new();
+	private Dictionary<string, List<POI>> _poiVariantsByGroup = new();
 	private static readonly (string Code, string TextKey)[] CategoryOptions =
 	[
 		("ALL", "CategoryAll"),
@@ -66,20 +67,15 @@ public partial class MainPage : ContentPage
 	private bool _isSearchExpanded;
 	private bool _isListTabActive;
 	private bool _isSystemLanguageInitialized;
+	private bool _isAppVisible;
 
 	private string T(string key)
 	{
 		return _appLanguageService.T(key, _currentLanguage);
 	}
 
-	public MainPage(
-		IGeofenceEngine geofenceEngine,
-		ILocationService locationService,
-		INarrationService narrationService,
-		IDatabaseService databaseService,
-		IAppLanguageService appLanguageService,
-		IServiceProvider serviceProvider,
-		AccessService accessService)
+		AccessService accessService,
+		AnalyticsService analyticsService)
 	{
 		InitializeComponent();
 		_geofenceEngine = geofenceEngine;
@@ -89,11 +85,9 @@ public partial class MainPage : ContentPage
 		_appLanguageService = appLanguageService;
 		_serviceProvider = serviceProvider;
 		_accessService = accessService;
-		_apiHttpClient = new HttpClient
-		{
-			BaseAddress = new Uri(AppConfig.BaseApiUrl),
-			Timeout = TimeSpan.FromSeconds(10)
-		};
+		_analyticsService = analyticsService;
+		_apiHttpClient = new HttpClient(); // No longer needs BaseAddress here for logs
+
 		
 		NavigationPage.SetHasNavigationBar(this, false);
 		_viewModel = new MainPageViewModel();
@@ -128,6 +122,7 @@ public partial class MainPage : ContentPage
 
 	protected override async void OnAppearing()
 	{
+		_isAppVisible = true;
 		base.OnAppearing();
 		AttachEventsIfNeeded();
 		MoveCameraToVinhKhanh();
@@ -191,6 +186,9 @@ public partial class MainPage : ContentPage
 
 	private async Task LoadMapPinsAndListAsync(bool reloadFromDatabase = false)
 	{
+		// Đảm bảo DB đã khởi tạo xong trước khi nạp dữ liệu (Tránh lỗi 'database is locked' trên Emulator)
+		await _databaseService.InitializeAsync();
+
 		if (reloadFromDatabase || _poiVariantsByGroup.Count == 0)
 		{
 			await EnsurePoiCacheLoadedAsync();
@@ -291,7 +289,7 @@ public partial class MainPage : ContentPage
 		catch (Exception ex)
 		{
 			Debug.WriteLine($"[MainPage] Loi load toan bo POI: {ex.Message}");
-			_poiVariantsByGroup = new Dictionary<int, List<POI>>();
+			_poiVariantsByGroup = new Dictionary<string, List<POI>>();
 		}
 	}
 
@@ -326,14 +324,14 @@ public partial class MainPage : ContentPage
 			.FirstOrDefault();
 	}
 
-	private static int GetAggregateId(POI poi)
+	private static string GetAggregateId(POI poi)
 	{
-		if (poi.BasePoiId > 0)
+		if (!string.IsNullOrEmpty(poi.BasePoiId))
 		{
 			return poi.BasePoiId;
 		}
 
-		return poi.Id;
+		return poi.Id.ToString();
 	}
 
 	private static string NormalizeLanguage(string? languageCode)
@@ -415,18 +413,16 @@ public partial class MainPage : ContentPage
 
 	private void HandlePoiEntered(POI poi)
 	{
-		_ = Task.Run(async () =>
-		{
 			try
 			{
 				_geofenceEngine.MarkPoiAsPlayed(poi.Id);
-				await LogPoiEventAsync(poi, "visit");
+				_ = _analyticsService.TrackActivityAsync(poi.Latitude, poi.Longitude, "visit", poi.Id);
 				
 				if (!string.IsNullOrWhiteSpace(poi.AudioPath))
 				{
 					try
 					{
-						await LogPoiEventAsync(poi, "narration");
+						_ = _analyticsService.TrackActivityAsync(poi.Latitude, poi.Longitude, "narration", poi.Id);
 						await _narrationService.PlayAudioAsync(poi.AudioPath);
 						return;
 					}
@@ -437,7 +433,7 @@ public partial class MainPage : ContentPage
 				}
 
 				var text = poi.Description ?? $"{T("NarrationFallback")} {poi.Name}";
-				await LogPoiEventAsync(poi, "narration");
+				_ = _analyticsService.TrackActivityAsync(poi.Latitude, poi.Longitude, "narration", poi.Id);
 				await _narrationService.SpeakAsync(text, _currentLanguage);
 			}
 			catch (Exception ex)
@@ -999,26 +995,7 @@ public partial class MainPage : ContentPage
 			: Color.FromArgb("#FFF8F4");
 	}
 
-	private async Task LogPoiEventAsync(POI poi, string eventType)
-	{
-		try
-		{
-			var payload = new AnalyticsEventRequest
-			{
-				Latitude = _currentLocation?.Latitude ?? poi.Latitude,
-				Longitude = _currentLocation?.Longitude ?? poi.Longitude,
-				DeviceId = _accessService.DeviceId,
-				PoiId = GetAggregateId(poi),
-				EventType = eventType
-			};
 
-			await _apiHttpClient.PostAsJsonAsync("api/analytics/visit", payload);
-		}
-		catch (Exception ex)
-		{
-			Debug.WriteLine($"[MainPage] Loi log analytics {eventType}: {ex.Message}");
-		}
-	}
 
 	private async void OnPlayPoi(object? sender, EventArgs e)
 	{
@@ -1035,7 +1012,7 @@ public partial class MainPage : ContentPage
 					return;
 				}
 
-				await LogPoiEventAsync(poi, "narration");
+				_ = _analyticsService.TrackActivityAsync(poi.Latitude, poi.Longitude, "narration", poi.Id);
 					SetNarratingPoi(poi);
 
 					if (!string.IsNullOrWhiteSpace(poi.AudioPath))
@@ -1338,14 +1315,7 @@ public partial class MainPage : ContentPage
 		public int? UserStars { get; set; }
 	}
 
-	private sealed class AnalyticsEventRequest
-	{
-		public double Latitude { get; set; }
-		public double Longitude { get; set; }
-		public string DeviceId { get; set; } = string.Empty;
-		public int PoiId { get; set; }
-		public string EventType { get; set; } = "visit";
-	}
+
 
 	private void OnMapHandlerChanged(object? sender, EventArgs e)
 	{
@@ -1369,6 +1339,9 @@ public partial class MainPage : ContentPage
 
 		public void OnMapReady(Android.Gms.Maps.GoogleMap googleMap)
 		{
+			// Disable default My Location button as we have our own custom FAB in the bottom right
+			googleMap.UiSettings.MyLocationButtonEnabled = false;
+
 			// Wire up direct marker click to avoid double-tap requirement
 			googleMap.MarkerClick += (s, e) =>
 			{

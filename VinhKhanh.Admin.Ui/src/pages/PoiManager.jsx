@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Search, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Eye, ExternalLink, QrCode, X, Globe, MapPin } from 'lucide-react';
 import Swal from 'sweetalert2';
 import api from '../services/api';
 
@@ -9,6 +9,9 @@ const PoiManager = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('ALL');
+  const [selectedPoi, setSelectedPoi] = useState(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [activeLangTab, setActiveLangTab] = useState('vi');
   const navigate = useNavigate();
 
   const categoryOptions = [
@@ -168,6 +171,25 @@ const PoiManager = () => {
     }
   };
 
+  const handleView = async (poiId) => {
+    setIsDetailLoading(true);
+    try {
+      const res = await api.get(`/admin/pois/${poiId}`);
+      setSelectedPoi(res.data);
+      setActiveLangTab('vi');
+    } catch (err) {
+      console.error('Lỗi khi tải chi tiết POI:', err);
+      Swal.fire({
+        title: 'Lỗi',
+        text: 'Không thể tải thông tin chi tiết.',
+        icon: 'error',
+        confirmButtonColor: '#ff5a5f'
+      });
+    } finally {
+      setIsDetailLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchPois();
   }, []);
@@ -277,6 +299,13 @@ const PoiManager = () => {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => handleView(poi.id)}
+                          className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
+                          title="Xem chi tiết"
+                        >
+                          <Eye size={18} />
+                        </button>
                         <Link to={`/pois/${poi.id}`} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors">
                           <Edit2 size={18} />
                         </Link>
@@ -296,6 +325,170 @@ const PoiManager = () => {
           )}
         </div>
       </div>
+      {/* Detail View Modal */}
+      {selectedPoi && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
+            onClick={() => setSelectedPoi(null)}
+          ></div>
+          
+          {/* Modal Container */}
+          <div className="relative bg-white w-full max-w-4xl max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-coral-50 flex items-center justify-center text-coral-500">
+                  <Eye size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Chi tiết địa điểm</h3>
+                  <p className="text-sm text-gray-500">ID: #{selectedPoi.id}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedPoi(null)}
+                className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Content Scroll Area */}
+            <div className="overflow-y-auto p-6 md:p-8 flex-1">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Left Column: Visuals */}
+                <div className="lg:col-span-5 space-y-6">
+                  {/* POI Main Image */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] uppercase font-bold tracking-widest text-gray-400">Ảnh đại diện</label>
+                    <div className="aspect-video w-full rounded-3xl overflow-hidden border border-gray-200 shadow-sm relative">
+                      {selectedPoi.imageUrl ? (
+                        <img 
+                          src={resolveImageUrl(selectedPoi.imageUrl)} 
+                          className="w-full h-full object-cover" 
+                          alt="POI Main" 
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gray-50 flex items-center justify-center text-gray-300">Không có ảnh</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* QR Core Info */}
+                  <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
+                    <div className="flex items-center gap-2 mb-4">
+                      <QrCode className="text-slate-700" size={20} />
+                      <h4 className="font-bold text-slate-800">Mã QR chính thức</h4>
+                    </div>
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col items-center gap-4 shadow-sm">
+                      <img 
+                        src={`${getBackendOrigin()}/api/qr/${selectedPoi.qrToken}/png`} 
+                        className="w-40 h-40 object-contain" 
+                        alt="QR Code" 
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                      <div className="text-center">
+                        <p className="text-[10px] text-gray-400 font-mono mb-1 uppercase tracking-tighter">{selectedPoi.qrToken}</p>
+                        <a 
+                          href={selectedPoi.qrLink} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="text-xs text-blue-600 hover:underline flex items-center justify-center gap-1 font-semibold"
+                        >
+                          Mở trang Landing <ExternalLink size={12} />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Localized Data */}
+                <div className="lg:col-span-7 space-y-6">
+                  {/* Tabs */}
+                  <div className="flex gap-2 p-1 bg-gray-100 rounded-2xl w-fit">
+                    {['vi', 'en', 'ja'].map(lang => (
+                      <button
+                        key={lang}
+                        onClick={() => setActiveLangTab(lang)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                          activeLangTab === lang 
+                            ? 'bg-white text-coral-600 shadow-sm' 
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        {lang === 'vi' ? '🇻🇳 TV' : lang === 'en' ? '🇬🇧 EN' : '🇯🇵 JA'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold tracking-widest text-gray-400">Tên địa điểm</label>
+                      <h4 className="text-2xl font-black text-gray-900 leading-tight">
+                        {selectedPoi[activeLangTab]?.name || <span className="text-gray-300 italic font-normal">Chưa cập nhật tên</span>}
+                      </h4>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold tracking-widest text-gray-400">Mô tả giới thiệu</label>
+                      <div className="text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-2xl border border-gray-100 italic min-h-[100px]">
+                        {selectedPoi[activeLangTab]?.description || 'Không có mô tả cho ngôn ngữ này.'}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold tracking-widest text-gray-400 flex items-center gap-1">
+                          <MapPin size={10} /> Tọa độ
+                        </label>
+                        <p className="text-sm font-mono text-gray-500">{selectedPoi.lat?.toFixed(6)}, {selectedPoi.lng?.toFixed(6)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold tracking-widest text-gray-400 flex items-center gap-1">
+                          <Globe size={10} /> Danh mục
+                        </label>
+                        <p className="text-sm font-semibold text-gray-700">{toCategoryLabel(selectedPoi.categoryCode)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+              <button 
+                onClick={() => setSelectedPoi(null)}
+                className="px-6 py-3 text-gray-600 font-bold hover:bg-gray-200 rounded-2xl transition-all"
+              >
+                Đóng
+              </button>
+              <button 
+                onClick={() => {
+                  setSelectedPoi(null);
+                  navigate(`/pois/${selectedPoi.id}`);
+                }}
+                className="bg-coral-500 hover:bg-coral-600 text-white px-8 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-coral-500/20"
+              >
+                <Edit2 size={18} />
+                Chỉnh sửa thông tin
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Detail Loading Overlay */}
+      {isDetailLoading && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/20 backdrop-blur-[2px]">
+          <div className="bg-white px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 font-semibold text-gray-600">
+            <div className="w-5 h-5 border-2 border-coral-500 border-t-transparent rounded-full animate-spin"></div>
+            Đang tải dữ liệu...
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -9,6 +9,7 @@ public class SyncResponse
 {
     public List<Poi> UpdatedPois { get; set; } = new();
     public List<int> DeletedIds { get; set; } = new();
+    public List<string> ActiveBasePoiIds { get; set; } = new(); // For pruning stale local data
     public DateTime ServerTime { get; set; } = DateTime.UtcNow;
 }
 

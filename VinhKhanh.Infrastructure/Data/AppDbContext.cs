@@ -13,12 +13,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<AnalyticsEvent> AnalyticsEvents { get; set; }
     public DbSet<Payment> Payments { get; set; }
     public DbSet<FreeTrialRecord> FreeTrialRecords { get; set; }
-<<<<<<< Updated upstream
-=======
     public DbSet<DeviceTrial> DeviceTrials { get; set; }
     public DbSet<PoiRating> PoiRatings { get; set; }
     public DbSet<SystemSetting> SystemSettings { get; set; }
->>>>>>> Stashed changes
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -29,8 +26,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .WithOne(l => l.Poi)
             .HasForeignKey(l => l.PoiId)
             .OnDelete(DeleteBehavior.Cascade);
-
-        // Poi.OwnerId → ApplicationUser (không sử dụng cascade, cho phép null)
         modelBuilder.Entity<Poi>()
             .HasOne(p => p.Owner)
             .WithMany()
@@ -38,19 +33,16 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .OnDelete(DeleteBehavior.NoAction)
             .IsRequired(false);
 
-        // Cấu hình Unique Index cho Payment.TransactionId
         modelBuilder.Entity<Payment>()
             .HasIndex(p => p.TransactionId)
             .IsUnique();
 
-        // Khóa ngoại Payment.UserId → ApplicationUser
         modelBuilder.Entity<Payment>()
             .HasOne(p => p.User)
             .WithMany()
             .HasForeignKey(p => p.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Cấu hình Unique Index cho FreeTrialRecord (lọc để xử lý các giá trị null)
         modelBuilder.Entity<FreeTrialRecord>()
             .HasIndex(f => new { f.UserId, f.PoiId })
             .IsUnique()
@@ -60,8 +52,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .HasIndex(f => new { f.DeviceId, f.PoiId })
             .IsUnique()
             .HasFilter("[DeviceId] IS NOT NULL");
-<<<<<<< Updated upstream
-=======
 
         modelBuilder.Entity<PoiRating>()
             .HasOne(r => r.Poi)
@@ -78,6 +68,5 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 
         modelBuilder.Entity<SystemSetting>()
             .HasKey(s => s.Key);
->>>>>>> Stashed changes
     }
 }

@@ -30,6 +30,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddLocationServices(this IServiceCollection services)
     {
         services.AddSingleton<IGeolocation>(_ => Geolocation.Default);
+        services.AddSingleton<AnalyticsService>();
         services.AddSingleton<ILocationService, LocationService>();
         return services;
     }

@@ -3,12 +3,15 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.HttpOverrides;
 using VinhKhanh.Application.UseCases;
 using VinhKhanh.Domain.Entities;
 using VinhKhanh.Domain.Interfaces;
 using VinhKhanh.Infrastructure.Data;
 using VinhKhanh.Infrastructure.Repositories;
 using VinhKhanh.Infrastructure.Security;
+using VinhKhanh.Admin.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -37,8 +40,19 @@ builder.Services.AddScoped<AdminApproveUseCase>();
 
 // 5. API CONFIGURATION & CORS
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Support for Reverse Proxies (ngrok, IIS, etc.) để nhận diện đúng X-Forwarded-Proto và Host
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+    // Xóa các giới hạn IP để hỗ trợ ngrok tunner linh hoạt
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy => {
@@ -68,11 +82,27 @@ builder.Services.AddAuthentication(options => {
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
         ClockSkew = TimeSpan.Zero
     };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrWhiteSpace(accessToken) && path.StartsWithSegments("/hubs/analytics"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
 {
@@ -86,6 +116,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapGet("/", () => Results.Ok(new { status = "ok", message = "VinhKhanh.Admin backend is running" }));
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+
+app.MapHub<AnalyticsHub>("/hubs/analytics");
 app.MapControllers();
 
 // KHỞI TẠO DỮ LIỆU: Phân quyền Identity & Tài khoản Admin mặc định

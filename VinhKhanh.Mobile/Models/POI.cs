@@ -23,7 +23,7 @@ public class POI : INotifyPropertyChanged
     /// Id goc de gom cac ban dich cua cung mot quan (vi/en/ja) vao 1 doi tuong logic.
     /// </summary>
     [Indexed]
-    public int BasePoiId { get; set; }
+    public string BasePoiId { get; set; } = string.Empty;
 
     /// <summary>
     /// Tên điểm POI hiển thị cho người dùng.
@@ -145,7 +145,7 @@ public class POI : INotifyPropertyChanged
     public bool IsDownloaded { get; set; }
 
     [Ignore]
-    public int AggregateId => BasePoiId > 0 ? BasePoiId : Id;
+    public string AggregateId => !string.IsNullOrEmpty(BasePoiId) ? BasePoiId : Id.ToString();
 
     private int _distance;
 

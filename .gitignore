@@ -58,3 +58,5 @@ deploy/
 # NuGet Temp
 .nuget-temp*/
 .nuget/
+
+.kiro/

@@ -35,6 +35,9 @@
                           Grid.Row="0"
                           IsShowingUser="True"
                           IsTrafficEnabled="False"
+                          MapType="Street"
+                          IsZoomEnabled="True"
+                          IsScrollEnabled="True"
                           HandlerChanged="OnMapHandlerChanged" />
                 <Grid Grid.Row="0" Margin="16" RowDefinitions="Auto, Auto, *">
                     <!-- Compact Search Bar with Hamburger -->
@@ -125,6 +128,31 @@
                         </VerticalStackLayout>
                     </Border>
                 </Grid>
+
+                <!-- Custom Floating 'My Location' Button -->
+                <Border Grid.Row="0"
+                        IsVisible="True"
+                        VerticalOptions="End"
+                        HorizontalOptions="End"
+                        Margin="0,0,16,24"
+                        Padding="0"
+                        WidthRequest="48"
+                        HeightRequest="48"
+                        BackgroundColor="White"
+                        StrokeThickness="0"
+                        StrokeShape="RoundRectangle 24">
+                    <Border.Shadow>
+                        <Shadow Brush="Black" Offset="0,4" Radius="10" Opacity="0.2"/>
+                    </Border.Shadow>
+                    <Button Text="📍"
+                            FontSize="22"
+                            BackgroundColor="Transparent"
+                            TextColor="#FF7F50"
+                            Padding="0"
+                            WidthRequest="48"
+                            HeightRequest="48"
+                            Clicked="OnCenterToUserLocation"/>
+                </Border>
 
                 <!-- POI Quick Card — hiện khi bấm pin — TO HƠN -->
                 <Border x:Name="PinQuickCard"

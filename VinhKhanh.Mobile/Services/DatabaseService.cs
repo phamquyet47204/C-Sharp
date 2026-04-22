@@ -79,6 +79,20 @@ public class DatabaseService : IDatabaseService
             
             // Tạo bảng POI dựa trên Model định nghĩa (Class-to-Table Mapping)
             await _database.CreateTableAsync<POI>();
+
+            // One-time Reset: Xóa dữ liệu cũ nếu BasePoiId vẫn đang chứa dữ liệu dạng số sai lệch
+            // (Chỉ áp dụng trong giai đoạn Migration này)
+            var count = await _database.Table<POI>().CountAsync();
+            if (count > 0)
+            {
+                var sample = await _database.Table<POI>().FirstOrDefaultAsync();
+                if (sample != null && int.TryParse(sample.BasePoiId, out _))
+                {
+                    Debug.WriteLine("[DatabaseService] Detect legacy int BasePoiIds. Wiping for integrity.");
+                    await _database.DeleteAllAsync<POI>();
+                    Preferences.Remove(LastSyncPreferenceKey);
+                }
+            }
             
             // Migration: Đảm bảo Schema đủ các cột cần thiết cho các bản cập nhật mới
             await EnsureSchemaCompatibilityAsync();
@@ -270,7 +284,7 @@ public class DatabaseService : IDatabaseService
 
             // Nhóm các bản dịch dựa trên BasePoiId (Trường do Server định nghĩa)
             var grouped = allPois
-                .GroupBy(p => p.BasePoiId > 0 ? p.BasePoiId : p.Id)
+                .GroupBy(p => !string.IsNullOrEmpty(p.BasePoiId) ? p.BasePoiId : p.Id.ToString())
                 .ToList();
 
             var localized = new List<POI>();
@@ -383,29 +397,45 @@ public class DatabaseService : IDatabaseService
             }
         }
 
-        // Thực hiện xóa các POI mà Server báo đã bị gỡ
+        // Thực hiện xóa các POI mà Server báo đã bị gỡ (Legacy DeletedIds support)
         foreach (var deletedId in payload.DeletedIds)
         {
-            // Xóa tất cả các bản dịch liên quan đến BasePoiId này
-            await _database.ExecuteAsync("DELETE FROM POI WHERE BasePoiId = ?", deletedId);
-            
-            // Xóa theo ID nếu nó là ID trực tiếp (hỗ trợ dữ liệu cũ)
-            await _database.ExecuteAsync("DELETE FROM POI WHERE Id = ?", deletedId);
+            await _database.ExecuteAsync("DELETE FROM POI WHERE BasePoiId = ? OR Id = ?", deletedId, deletedId);
+        }
+
+        // PRUNING: Xóa các POI cục bộ không còn nằm trong danh sách Active của Server
+        try
+        {
+            if (payload.ActiveBasePoiIds != null && payload.ActiveBasePoiIds.Count > 0)
+            {
+                var localPois = await _database.Table<POI>().ToListAsync();
+                var toDelete = localPois.Where(lp => !payload.ActiveBasePoiIds.Contains(lp.BasePoiId)).ToList();
+
+                foreach (var poi in toDelete)
+                {
+                    Debug.WriteLine($"[DatabaseService] Pruning stale POI: BasePoiId={poi.BasePoiId}");
+                    await _database.DeleteAsync(poi);
+                }
+            }
+        }
+        catch (Exception pruneEx)
+        {
+            Debug.WriteLine($"[DatabaseService] Critical error during pruning: {pruneEx.Message}");
         }
     }
 
     /// <summary>
     /// Trình phân tích BasePoiId: Đảm bảo lấy ID gốc của quán để gom nhóm.
+    /// Tra về chuỗi (Hex hoăc ID) để đồng nhất với Server.
     /// </summary>
-    private static int ParseBasePoiId(RemotePoi remotePoi)
+    private static string ParseBasePoiId(RemotePoi remotePoi)
     {
-        if (int.TryParse(remotePoi.BasePoiId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedBasePoiId) &&
-            parsedBasePoiId > 0)
+        if (!string.IsNullOrEmpty(remotePoi.BasePoiId))
         {
-            return parsedBasePoiId;
+            return remotePoi.BasePoiId;
         }
 
-        return remotePoi.Id > 0 ? remotePoi.Id : 0;
+        return remotePoi.Id.ToString();
     }
 
     /// <summary>
@@ -581,9 +611,9 @@ public class DatabaseService : IDatabaseService
         foreach (var group in grouped)
         {
             var groupList = group.ToList();
-            var existingBase = groupList.Select(p => p.BasePoiId).FirstOrDefault(x => x > 0);
+            var existingBase = groupList.Select(p => p.BasePoiId).FirstOrDefault(x => !string.IsNullOrEmpty(x));
 
-            var effectiveBaseId = existingBase > 0 ? existingBase : groupList.Min(p => p.Id);
+            var effectiveBaseId = !string.IsNullOrEmpty(existingBase) ? existingBase : groupList.Min(p => p.Id).ToString();
 
             foreach (var poi in groupList)
             {
@@ -597,7 +627,7 @@ public class DatabaseService : IDatabaseService
 
     private static string BuildLegacyGroupKey(POI poi)
     {
-        if (poi.BasePoiId > 0) return $"base:{poi.BasePoiId}";
+        if (!string.IsNullOrEmpty(poi.BasePoiId)) return $"base:{poi.BasePoiId}";
 
         var category = poi.Category?.Trim().ToLowerInvariant() ?? "all";
         // Làm tròn 4 chữ số thập phân (độ chính xác ~10m) để gom nhóm các quán cùng vị trí
@@ -672,6 +702,7 @@ public class DatabaseService : IDatabaseService
     {
         public List<RemotePoi> UpdatedPois { get; set; } = new();
         public List<int> DeletedIds { get; set; } = new();
+        public List<string> ActiveBasePoiIds { get; set; } = new();
         public DateTime ServerTime { get; set; } = DateTime.UtcNow;
     }
 

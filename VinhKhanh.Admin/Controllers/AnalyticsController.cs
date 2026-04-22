@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using VinhKhanh.Admin.Hubs;
 using VinhKhanh.Application.UseCases;
 using VinhKhanh.Domain.Entities;
 using VinhKhanh.Infrastructure.Data;
@@ -9,31 +11,39 @@ namespace VinhKhanh.Admin.Controllers;
 
 [ApiController]
 [Route("api/analytics")]
-public class AnalyticsController(AnalyticsVisitUseCase visitUseCase, AppDbContext dbContext) : ControllerBase
+public class AnalyticsController(
+    AnalyticsVisitUseCase visitUseCase,
+    AppDbContext dbContext,
+    IHubContext<AnalyticsHub> analyticsHub) : ControllerBase
 {
-    private const int HeatmapMaxPoints = 500;
-    private const double HeatmapClusterRadiusMeters = 10.0;
-    private static readonly TimeSpan OnlineThreshold = TimeSpan.FromMinutes(5);
+    private static DateTime _lastRealtimePush = DateTime.MinValue;
+    private static readonly object _pushLock = new();
 
-    /// <summary>
-    /// Đếm số DeviceId duy nhất đã gửi sự kiện trong vòng 5 phút qua.
-    /// </summary>
-    private async Task<int> GetOnlineUserCountInternal(CancellationToken cancellationToken)
+    private sealed class HeatmapEvent
     {
-        var threshold = DateTime.UtcNow.Subtract(OnlineThreshold);
-        return await dbContext.AnalyticsEvents
-            .Where(e => e.Timestamp >= threshold)
-            .Select(e => e.DeviceId)
-            .Distinct()
-            .CountAsync(cancellationToken);
+        public double Latitude { get; init; }
+        public double Longitude { get; init; }
+        public DateTime Timestamp { get; init; }
     }
+
+    private const int HeatmapMaxPoints = 500;
+    private static readonly TimeSpan OnlineThreshold = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan RealtimeWindow = TimeSpan.FromMinutes(10);
 
     [HttpGet("online-count")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetOnlineCount(CancellationToken cancellationToken)
     {
         var count = await GetOnlineUserCountInternal(cancellationToken);
-        return Ok(new { onlineCount = count });
+        return Ok(new { onlineCount = count, measuredAt = DateTime.UtcNow });
+    }
+
+    [HttpGet("realtime-overview")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetRealtimeOverview(CancellationToken cancellationToken)
+    {
+        var payload = await BuildRealtimePayloadAsync(cancellationToken);
+        return Ok(payload);
     }
 
     [HttpPost("visit")]
@@ -43,12 +53,11 @@ public class AnalyticsController(AnalyticsVisitUseCase visitUseCase, AppDbContex
         {
             await visitUseCase.ExecuteAsync(command, cancellationToken);
 
-            // Upsert FreeTrialRecord nếu là lần đầu nghe POI này
             if (command.PoiId.HasValue && command.EventType == "narration")
             {
                 var deviceId = string.IsNullOrWhiteSpace(command.DeviceId) ? null : command.DeviceId;
                 var alreadyExists = await dbContext.FreeTrialRecords
-                    .AnyAsync(f => (deviceId != null && f.DeviceId == deviceId && f.PoiId == command.PoiId.Value), cancellationToken);
+                    .AnyAsync(f => deviceId != null && f.DeviceId == deviceId && f.PoiId == command.PoiId.Value, cancellationToken);
 
                 if (!alreadyExists && deviceId != null)
                 {
@@ -62,6 +71,7 @@ public class AnalyticsController(AnalyticsVisitUseCase visitUseCase, AppDbContex
                 }
             }
 
+            await PublishRealtimeUpdateAsync(cancellationToken);
             return Ok(new { success = true });
         }
         catch (Exception ex)
@@ -77,39 +87,74 @@ public class AnalyticsController(AnalyticsVisitUseCase visitUseCase, AppDbContex
         [FromQuery] string? to,
         CancellationToken cancellationToken)
     {
-        DateTime? fromDate = null, toDate = null;
-
-        if (!string.IsNullOrWhiteSpace(from))
-        {
-            if (!DateTime.TryParse(from, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsedFrom))
-                return BadRequest(new { error = "Định dạng ngày không hợp lệ. Sử dụng ISO 8601 (VD: 2026-01-01T00:00:00Z)" });
-            fromDate = parsedFrom.ToUniversalTime();
-        }
-
-        if (!string.IsNullOrWhiteSpace(to))
-        {
-            if (!DateTime.TryParse(to, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsedTo))
-                return BadRequest(new { error = "Định dạng ngày không hợp lệ. Sử dụng ISO 8601 (VD: 2026-01-01T00:00:00Z)" });
-            toDate = parsedTo.ToUniversalTime();
-        }
+        var (fromDate, toDate, error) = ParseRange(from, to);
+        if (error is not null) return BadRequest(new { error });
 
         var query = dbContext.AnalyticsEvents.AsQueryable();
         if (fromDate.HasValue) query = query.Where(e => e.Timestamp >= fromDate.Value);
         if (toDate.HasValue) query = query.Where(e => e.Timestamp <= toDate.Value);
 
-        var events = await query.Select(e => new { e.Latitude, e.Longitude }).ToListAsync(cancellationToken);
+        var events = await query
+            .Select(e => new HeatmapEvent { Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
+            .ToListAsync(cancellationToken);
 
-        // Gom nhóm các sự kiện trong bán kính HeatmapClusterRadiusMeters
-        var points = events
-            .GroupBy(e => (
-                lat: Math.Round(e.Latitude, 4),
-                lng: Math.Round(e.Longitude, 4)))
-            .Select(g => new { lat = g.Key.lat, lng = g.Key.lng, intensity = g.Count() })
-            .OrderByDescending(p => p.intensity)
-            .Take(HeatmapMaxPoints)
+        var points = BuildHeatmapPoints(events, DateTime.UtcNow, useRecencyWeight: false);
+        return Ok(new { points, total = points.Count });
+    }
+
+    [HttpGet("heatmap/daily")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetHeatmapByDay([FromQuery] string date, CancellationToken cancellationToken)
+    {
+        if (!DateOnly.TryParse(date, out var day))
+        {
+            return BadRequest(new { error = "Ngày không hợp lệ. Dùng định dạng yyyy-MM-dd." });
+        }
+
+        var from = day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var to = day.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+
+        var events = await dbContext.AnalyticsEvents
+            .Where(e => e.Timestamp >= from && e.Timestamp <= to)
+            .Select(e => new HeatmapEvent { Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
+            .ToListAsync(cancellationToken);
+
+        var points = BuildHeatmapPoints(events, DateTime.UtcNow, useRecencyWeight: false);
+        return Ok(new { day = day.ToString("yyyy-MM-dd"), points, total = points.Count });
+    }
+
+    [HttpGet("heatmap/history")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetHeatmapHistory(
+        [FromQuery] string from,
+        [FromQuery] string to,
+        CancellationToken cancellationToken)
+    {
+        if (!DateOnly.TryParse(from, out var fromDay) || !DateOnly.TryParse(to, out var toDay) || fromDay > toDay)
+        {
+            return BadRequest(new { error = "Khoảng ngày không hợp lệ. Dùng yyyy-MM-dd và from <= to." });
+        }
+
+        var fromDate = fromDay.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var toDate = toDay.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+
+        var events = await dbContext.AnalyticsEvents
+            .Where(e => e.Timestamp >= fromDate && e.Timestamp <= toDate)
+            .Select(e => new HeatmapEvent { Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
+            .ToListAsync(cancellationToken);
+
+        var grouped = events
+            .GroupBy(e => DateOnly.FromDateTime(e.Timestamp))
+            .OrderBy(g => g.Key)
+            .Select(g => new
+            {
+                day = g.Key.ToString("yyyy-MM-dd"),
+                totalEvents = g.Count(),
+                points = BuildHeatmapPoints(g.ToList(), DateTime.UtcNow, useRecencyWeight: false)
+            })
             .ToList();
 
-        return Ok(new { points, total = points.Count });
+        return Ok(new { from = fromDay.ToString("yyyy-MM-dd"), to = toDay.ToString("yyyy-MM-dd"), days = grouped });
     }
 
     [HttpGet("content-performance")]
@@ -122,65 +167,151 @@ public class AnalyticsController(AnalyticsVisitUseCase visitUseCase, AppDbContex
     {
         try
         {
-        limit = Math.Clamp(limit, 1, 50);
+            limit = Math.Clamp(limit, 1, 50);
+            var (fromDate, toDate, error) = ParseRange(from, to);
+            if (error is not null) return BadRequest(new { error });
 
-        DateTime? fromDate = null, toDate = null;
+            var eventsQuery = dbContext.AnalyticsEvents.Where(e => e.PoiId.HasValue);
+            if (fromDate.HasValue) eventsQuery = eventsQuery.Where(e => e.Timestamp >= fromDate.Value);
+            if (toDate.HasValue) eventsQuery = eventsQuery.Where(e => e.Timestamp <= toDate.Value);
+
+            var grouped = await eventsQuery
+                .GroupBy(e => e.PoiId!.Value)
+                .Select(g => new
+                {
+                    poiId = g.Key,
+                    totalVisits = g.Count(e => e.EventType == "visit"),
+                    totalNarrations = g.Count(e => e.EventType == "narration")
+                })
+                .OrderByDescending(g => g.totalNarrations)
+                .Take(limit)
+                .ToListAsync(cancellationToken);
+
+            var poiIds = grouped.Select(g => g.poiId).ToList();
+            var pois = await dbContext.Pois
+                .Include(p => p.Localizations)
+                .Where(p => poiIds.Contains(p.Id))
+                .ToListAsync(cancellationToken);
+
+            var items = grouped.Select((g, idx) =>
+            {
+                var poi = pois.FirstOrDefault(p => p.Id == g.poiId);
+                var viName = poi?.Localizations.FirstOrDefault(l => l.LanguageCode == "vi")?.Name ?? string.Empty;
+                return new
+                {
+                    g.poiId,
+                    poiName = viName,
+                    g.totalVisits,
+                    g.totalNarrations,
+                    rank = idx + 1
+                };
+            });
+
+            return Ok(new { items, total = grouped.Count });
+        }
+        catch (Exception ex)
+        {
+            return Problem($"content-performance error: {ex.Message} | {ex.InnerException?.Message}");
+        }
+    }
+
+    private async Task<int> GetOnlineUserCountInternal(CancellationToken cancellationToken)
+    {
+        var threshold = DateTime.UtcNow.Subtract(OnlineThreshold);
+        return await dbContext.AnalyticsEvents
+            .Where(e => e.Timestamp >= threshold)
+            .Select(e => e.DeviceId)
+            .Distinct()
+            .CountAsync(cancellationToken);
+    }
+
+    private async Task<object> BuildRealtimePayloadAsync(CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        var from = now.Subtract(RealtimeWindow);
+        var events = await dbContext.AnalyticsEvents
+            .Where(e => e.Timestamp >= from)
+            .Select(e => new HeatmapEvent { Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
+            .ToListAsync(cancellationToken);
+
+        var points = BuildHeatmapPoints(events, now, useRecencyWeight: true);
+        var onlineCount = await GetOnlineUserCountInternal(cancellationToken);
+
+        return new
+        {
+            windowMinutes = (int)RealtimeWindow.TotalMinutes,
+            onlineCount,
+            points,
+            total = points.Count,
+            measuredAt = now
+        };
+    }
+
+    private async Task PublishRealtimeUpdateAsync(CancellationToken cancellationToken)
+    {
+        lock (_pushLock)
+        {
+            var now = DateTime.UtcNow;
+            if (now - _lastRealtimePush < TimeSpan.FromSeconds(1))
+            {
+                return; // Throttled: Giảm tải cho server và dashboard
+            }
+            _lastRealtimePush = now;
+        }
+
+        var payload = await BuildRealtimePayloadAsync(cancellationToken);
+        await analyticsHub.Clients.Group(AnalyticsHub.AdminGroup).SendAsync("analytics:realtime", payload, cancellationToken);
+    }
+
+    private static (DateTime? from, DateTime? to, string? error) ParseRange(string? from, string? to)
+    {
+        DateTime? fromDate = null;
+        DateTime? toDate = null;
 
         if (!string.IsNullOrWhiteSpace(from))
         {
             if (!DateTime.TryParse(from, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsedFrom))
-                return BadRequest(new { error = "Định dạng ngày không hợp lệ. Sử dụng ISO 8601 (VD: 2026-01-01T00:00:00Z)" });
+                return (null, null, "Định dạng ngày không hợp lệ. Sử dụng ISO 8601 (VD: 2026-01-01T00:00:00Z)");
             fromDate = parsedFrom.ToUniversalTime();
         }
 
         if (!string.IsNullOrWhiteSpace(to))
         {
             if (!DateTime.TryParse(to, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsedTo))
-                return BadRequest(new { error = "Định dạng ngày không hợp lệ. Sử dụng ISO 8601 (VD: 2026-01-01T00:00:00Z)" });
+                return (null, null, "Định dạng ngày không hợp lệ. Sử dụng ISO 8601 (VD: 2026-01-01T00:00:00Z)");
             toDate = parsedTo.ToUniversalTime();
         }
 
-        var eventsQuery = dbContext.AnalyticsEvents.Where(e => e.PoiId.HasValue);
-        if (fromDate.HasValue) eventsQuery = eventsQuery.Where(e => e.Timestamp >= fromDate.Value);
-        if (toDate.HasValue) eventsQuery = eventsQuery.Where(e => e.Timestamp <= toDate.Value);
+        return (fromDate, toDate, null);
+    }
 
-        var grouped = await eventsQuery
-            .GroupBy(e => e.PoiId!.Value)
-            .Select(g => new
+    private static List<object> BuildHeatmapPoints(
+        List<HeatmapEvent> events,
+        DateTime now,
+        bool useRecencyWeight)
+    {
+        return events
+            .Where(e => Math.Abs(e.Latitude) > 0.000001 && Math.Abs(e.Longitude) > 0.000001)
+            .GroupBy(e => (lat: Math.Round(e.Latitude, 4), lng: Math.Round(e.Longitude, 4)))
+            .Select(g =>
             {
-                poiId = g.Key,
-                totalVisits = g.Count(e => e.EventType == "visit"),
-                totalNarrations = g.Count(e => e.EventType == "narration")
+                var intensity = g.Sum(e =>
+                {
+                    if (!useRecencyWeight) return 1.0;
+                    var ageMinutes = Math.Max(0, (now - e.Timestamp).TotalMinutes);
+                    return Math.Max(0.15, 1.0 - (ageMinutes / RealtimeWindow.TotalMinutes));
+                });
+
+                return new
+                {
+                    lat = g.Key.lat,
+                    lng = g.Key.lng,
+                    intensity = Math.Round(intensity, 2)
+                };
             })
-            .OrderByDescending(g => g.totalNarrations)
-            .Take(limit)
-            .ToListAsync(cancellationToken);
-
-        var poiIds = grouped.Select(g => g.poiId).ToList();
-        var pois = await dbContext.Pois
-            .Include(p => p.Localizations)
-            .Where(p => poiIds.Contains(p.Id))
-            .ToListAsync(cancellationToken);
-
-        var items = grouped.Select((g, idx) =>
-        {
-            var poi = pois.FirstOrDefault(p => p.Id == g.poiId);
-            var viName = poi?.Localizations.FirstOrDefault(l => l.LanguageCode == "vi")?.Name ?? string.Empty;
-            return new
-            {
-                g.poiId,
-                poiName = viName,
-                g.totalVisits,
-                g.totalNarrations,
-                rank = idx + 1
-            };
-        });
-
-        return Ok(new { items, total = grouped.Count });
-        }
-        catch (Exception ex)
-        {
-            return Problem($"content-performance error: {ex.Message} | {ex.InnerException?.Message}");
-        }
+            .OrderByDescending(p => p.intensity)
+            .Take(HeatmapMaxPoints)
+            .Cast<object>()
+            .ToList();
     }
 }

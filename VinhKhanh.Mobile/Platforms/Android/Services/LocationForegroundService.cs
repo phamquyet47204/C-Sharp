@@ -102,6 +102,17 @@ public class LocationForegroundService : Service
             .SetPriority((int)NotificationPriority.Low)
             .Build();
     }
+
+    public override void OnTaskRemoved(Intent? rootIntent)
+    {
+        base.OnTaskRemoved(rootIntent);
+        
+        Debug.WriteLine("[AndroidForegroundService] OnTaskRemoved: App bi quet bo, dang dung service...");
+        
+        // Dung foreground service va xoa thong bao khi app bi dong han
+        StopForeground(StopForegroundFlags.Remove);
+        StopSelf();
+    }
 }
 
 /// <summary>

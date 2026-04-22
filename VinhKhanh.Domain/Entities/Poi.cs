@@ -9,6 +9,7 @@ public class Poi
     public double Longitude { get; set; }
     public double Radius { get; set; } = 50;
     public string? ImageUrl { get; set; }
+    public string? QrToken { get; set; }
     public int Priority { get; set; }
     public bool IsApproved { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

@@ -26,9 +26,9 @@ public class GeminiAiService
             throw new InvalidOperationException("Chưa cấu hình Gemini:ApiKey trong appsettings hoặc biến môi trường.");
         }
 
-        // Chuyển sang gemini-2.5-flash vì Google đã nâng cấp model
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
-
+        // Danh sach model thu tu de fallback neu gap loi 503 (Ban) hoac 429 (Het han muc)
+        var modelNames = new[] { "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite" };
+        
         var prompt = $@"
 Bạn là một trợ lý ảo chuyên dịch thuật dữ liệu du lịch về Phố Ẩm Thực Vĩnh Khánh.
 Dựa vào tên và mô tả được cung cấp bằng tiếng Việt, hãy dịch chúng sang tiếng Anh (EN) và tiếng Nhật (JA) với văn phong hấp dẫn, tự nhiên, và chuyên nghiệp.
@@ -69,50 +69,70 @@ Vui lòng TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON MÀ KHÔNG CÓ BẤT KỲ VĂN B
             }
         };
 
-        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-
-        try
+        foreach (var modelName in modelNames)
         {
-            var response = await _httpClient.PostAsync(url, content, cancellationToken);
-            var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:generateContent?key={_apiKey}";
+            var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
-            if (!response.IsSuccessStatusCode)
+            int maxRetries = 2;
+            int delayMs = 2000;
+
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                _logger.LogError("Gemini API Error: {statusCode} - {error}", response.StatusCode, responseString);
-                throw new InvalidOperationException($"Gemini API lỗi {(int)response.StatusCode}: {responseString}");
+                try
+                {
+                    var response = await _httpClient.PostAsync(url, content, cancellationToken);
+                    var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var jsonDocument = JsonDocument.Parse(responseString);
+                        var textResult = jsonDocument.RootElement
+                            .GetProperty("candidates")[0]
+                            .GetProperty("content")
+                            .GetProperty("parts")[0]
+                            .GetProperty("text")
+                            .GetString();
+
+                        if (string.IsNullOrWhiteSpace(textResult))
+                            throw new InvalidOperationException("Gemini không trả về nội dung.");
+
+                        var jsonPayload = ExtractJsonPayload(textResult);
+                        var parsed = JsonSerializer.Deserialize<GeminiTranslationResult>(jsonPayload, new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        });
+                        return parsed ?? throw new InvalidOperationException("Lỗi parse JSON.");
+                    }
+
+                    // Neu loi 503 (Ban) hoac 429 (Quota), ta co the thu lai hoac doi model
+                    if (((int)response.StatusCode == 503 || (int)response.StatusCode == 429) && attempt < maxRetries)
+                    {
+                        _logger.LogWarning("Model {model} dang ban (503) hoac het quota (429), thu lai lan {attempt}...", modelName, attempt);
+                        await Task.Delay(delayMs, cancellationToken);
+                        delayMs *= 2;
+                        continue;
+                    }
+                    
+                    // Neu van loi sau khi thu lai, ta break de chuyen model tiep theo
+                    if ((int)response.StatusCode == 503 || (int)response.StatusCode == 429)
+                    {
+                        _logger.LogWarning("Model {model} khong kha dung, dang thu chuyen sang model tiep theo...", modelName);
+                        break; 
+                    }
+
+                    _logger.LogError("Gemini API Error ({model}): {statusCode} - {error}", modelName, response.StatusCode, responseString);
+                    throw new InvalidOperationException($"Gemini API lỗi {(int)response.StatusCode} trên model {modelName}");
+                }
+                catch (Exception ex) when (attempt < maxRetries && ex is not InvalidOperationException)
+                {
+                    _logger.LogWarning(ex, "Loi ket noi Gemini model {model}, attempt {attempt}", modelName, attempt);
+                    await Task.Delay(delayMs, cancellationToken);
+                }
             }
-
-            var jsonDocument = JsonDocument.Parse(responseString);
-            var textResult = jsonDocument.RootElement
-                .GetProperty("candidates")[0]
-                .GetProperty("content")
-                .GetProperty("parts")[0]
-                .GetProperty("text")
-                .GetString();
-
-            if (string.IsNullOrWhiteSpace(textResult))
-            {
-                throw new InvalidOperationException("Gemini không trả về nội dung dịch.");
-            }
-
-            var jsonPayload = ExtractJsonPayload(textResult);
-            var parsed = JsonSerializer.Deserialize<GeminiTranslationResult>(jsonPayload, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
-
-            if (parsed == null)
-            {
-                throw new InvalidOperationException("Không parse được JSON dịch thuật từ Gemini.");
-            }
-
-            return parsed;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception calling Gemini API");
-            throw;
-        }
+
+        throw new InvalidOperationException("Tất cả các model Gemini bận. Vui lòng thử lại sau.");
     }
 
     private static string ExtractJsonPayload(string rawText)

@@ -20,7 +20,7 @@ namespace VinhKhanhFoodStreet.Services;
 public class LocationService : ILocationService
 {
     // Khoảng cách tối thiểu giữa 2 lần cập nhật (mét). Nếu di chuyển ít hơn 5m thì sẽ không phát sự kiện thay đổi.
-    private const double DistanceFilterMeters = 5d;
+    private const double DistanceFilterMeters = 2d;
     
     // Ngưỡng tốc độ để coi là đứng yên (1 km/h). Tốc độ dưới mức này sẽ được tính vào thời gian dừng.
     private const double StationarySpeedThresholdKmh = 1d;
@@ -30,7 +30,7 @@ public class LocationService : ILocationService
     private static readonly TimeSpan MaxSilentEmitInterval = TimeSpan.FromSeconds(10);
     
     // Chu kỳ lấy mẫu khi đang di chuyển (2 giây/lần). Đảm bảo độ nhạy cao khi đang đi bộ.
-    private static readonly TimeSpan ActiveInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan ActiveInterval = TimeSpan.FromSeconds(1);
     
     // Chu kỳ lấy mẫu khi đứng yên (10 giây/lần). Giúp giảm tải CPU và tiết kiệm Pin đáng kể.
     private static readonly TimeSpan IdleInterval = TimeSpan.FromSeconds(10);
@@ -39,6 +39,7 @@ public class LocationService : ILocationService
     private static readonly TimeSpan StationaryDurationThreshold = TimeSpan.FromMinutes(1);
 
     private readonly IGeolocation _geolocation;
+    private readonly AnalyticsService _analyticsService;
     
     // Khóa trạng thái để đảm bảo Start/Stop diễn ra an toàn, không bị tranh chấp luồng.
     private readonly SemaphoreSlim _stateLock = new(1, 1);
@@ -63,9 +64,10 @@ public class LocationService : ILocationService
 
     public event Action<Location>? LocationChanged;
 
-    public LocationService(IGeolocation geolocation)
+    public LocationService(IGeolocation geolocation, AnalyticsService analyticsService)
     {
         _geolocation = geolocation;
+        _analyticsService = analyticsService;
     }
 
     /// <summary>
@@ -191,7 +193,12 @@ public class LocationService : ILocationService
                     {
                         _lastEmittedLocation = location;
                         _lastEmittedAtUtc = DateTimeOffset.UtcNow;
+                        
+                        // Thông báo cho các thành phần nội bộ (Geofence, UI)
                         LocationChanged?.Invoke(location);
+                        
+                        // Đồng bộ trạng thái Online và vị trí về Backend cho Admin theo dõi
+                        _ = _analyticsService.TrackActivityAsync(location.Latitude, location.Longitude, "location_update");
                     }
                 }
                 else

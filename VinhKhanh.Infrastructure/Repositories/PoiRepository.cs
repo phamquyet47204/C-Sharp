@@ -29,4 +29,13 @@ public class PoiRepository(AppDbContext context) : IPoiRepository
         poi.UpdatedAt = DateTime.UtcNow;
         return await context.SaveChangesAsync(cancellationToken) > 0;
     }
+    
+    public async Task<List<string>> GetAllActiveBaseIdsAsync(CancellationToken cancellationToken = default)
+    {
+        return await context.Pois
+            .Where(p => p.Status == PoiStatus.Approved)
+            .Select(p => p.BasePoiId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
 }

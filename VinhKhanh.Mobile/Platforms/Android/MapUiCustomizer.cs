@@ -34,54 +34,15 @@ public static class MapUiCustomizer
         {
             try
             {
-                // Bat zoom controls de nguoi dung co cum zoom in/out ro rang.
-                googleMap.UiSettings.ZoomControlsEnabled = true;
-                googleMap.UiSettings.MyLocationButtonEnabled = true;
-
-                MoveMyLocationButtonNearZoom(mapView);
+                // TAT nut zoom UI de giao dien Map phang va sach se nhat, van co the dung 2 ngon tay de zoom.
+                googleMap.UiSettings.ZoomControlsEnabled = false;
+                
+                // TAT chuc nang hien nut My Location cua Google (chung ta da co nut Custom tuyet dep roi)
+                googleMap.UiSettings.MyLocationButtonEnabled = false;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[MapUiCustomizer] OnMapReady failed: {ex}");
-            }
-        }
-
-        private static void MoveMyLocationButtonNearZoom(MapView mapView)
-        {
-            try
-            {
-                // Cac view id noi bo cua Google Map UI (on dinh tren Android):
-                // "1" la container map controls, "2" la nut My Location.
-                var locationButton = mapView.FindViewById(int.Parse("2"));
-                var locationButtonParent = locationButton?.Parent as global::Android.Views.View;
-
-                if (locationButton == null || locationButtonParent == null)
-                {
-                    return;
-                }
-
-                if (locationButton.LayoutParameters is not RelativeLayout.LayoutParams layoutParams)
-                {
-                    return;
-                }
-
-                // Bo canh tren, canh phai; day xuong duoi de nam gan cum zoom in/out.
-                layoutParams.RemoveRule(LayoutRules.AlignParentTop);
-                layoutParams.RemoveRule(LayoutRules.AlignParentLeft);
-
-                layoutParams.AddRule(LayoutRules.AlignParentBottom, (int)LayoutRules.True);
-                layoutParams.AddRule(LayoutRules.AlignParentEnd, (int)LayoutRules.True);
-
-                var rightMargin = DpToPx(mapView, 16);
-                var bottomMargin = DpToPx(mapView, 120);
-
-                layoutParams.SetMargins(rightMargin, 0, rightMargin, bottomMargin);
-                locationButton.LayoutParameters = layoutParams;
-                locationButtonParent.RequestLayout();
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[MapUiCustomizer] Move button failed: {ex}");
             }
         }
 

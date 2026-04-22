@@ -54,7 +54,7 @@ public static class MauiProgram
 #endif
 
 #if ANDROID
-		MapHandler.Mapper.AppendToMapping("MoveMyLocationButton", (handler, _) =>
+		Microsoft.Maui.Maps.Handlers.MapHandler.Mapper.AppendToMapping("MoveMyLocationButton", (handler, _) =>
 		{
 			Platforms.Android.MapUiCustomizer.Configure(handler);
 		});

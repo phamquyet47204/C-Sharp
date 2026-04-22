@@ -19,7 +19,7 @@ function App() {
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/qr/:token" element={<QrPoiPublic />} />
+        <Route path="/poi/qr/:token" element={<QrPoiPublic />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
 
         {/* Admin routes */}

@@ -39,6 +39,8 @@ const PoiForm = () => {
   const [existingImageUrl, setExistingImageUrl] = useState('');
   const [selectedImagePreviewUrl, setSelectedImagePreviewUrl] = useState('');
   const [errorMsg, setErrorMsg] = useState(null);
+  const [qrToken, setQrToken] = useState('');
+  const [qrLink, setQrLink] = useState('');
 
   const getBackendOrigin = () => {
     const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
@@ -105,6 +107,8 @@ const PoiForm = () => {
         });
 
         setExistingImageUrl(resolveImageUrl(detail?.imageUrl));
+        setQrToken(detail?.qrToken || '');
+        setQrLink(detail?.qrLink || '');
       } catch (error) {
         showError('Không tải được dữ liệu POI để chỉnh sửa.');
       } finally {
@@ -190,6 +194,33 @@ const PoiForm = () => {
     }
   };
 
+  const handleDownloadQr = () => {
+    if (!qrToken) {
+      showError('POI chưa có QR token. Hãy lưu POI trước.');
+      return;
+    }
+    const backendOrigin = getBackendOrigin();
+    window.open(`${backendOrigin}/api/qr/${encodeURIComponent(qrToken)}/png`, '_blank');
+  };
+
+  const handlePrintQr = () => {
+    if (!qrToken) {
+      showError('POI chưa có QR token. Hãy lưu POI trước.');
+      return;
+    }
+    const backendOrigin = getBackendOrigin();
+    const qrUrl = `${backendOrigin}/api/qr/${encodeURIComponent(qrToken)}/png`;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html><head><title>Print QR</title></head>
+      <body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+        <img src="${qrUrl}" style="max-width:80vw;max-height:80vh;" onload="window.print();" />
+      </body></html>
+    `);
+    printWindow.document.close();
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -219,6 +250,10 @@ const PoiForm = () => {
       });
 
       if (res.data.success) {
+        if (!isEditMode && res.data.poiId) {
+          navigate(`/pois/${res.data.poiId}`);
+          return;
+        }
         navigate('/pois');
       }
     } catch (error) {
@@ -252,19 +287,45 @@ const PoiForm = () => {
             <p className="text-gray-500 mt-1">Sử dụng AI để dịch thuật & tự động hóa nội dung đa ngôn ngữ.</p>
           </div>
         </div>
-        <button 
-          onClick={handleSave}
-          disabled={isSaving}
-          className={`${isSaving ? 'bg-gray-400' : 'bg-coral-500 hover:bg-coral-600 shadow-coral-500/30'} text-white px-8 py-3 rounded-2xl font-semibold flex items-center justify-center gap-2 transition-all shadow-sm w-full md:w-auto`}
-        >
-          <Save size={20} />
-          <span>{isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          {isEditMode && (
+            <>
+              <button
+                type="button"
+                onClick={handleDownloadQr}
+                className="bg-slate-700 hover:bg-slate-800 text-white px-4 py-3 rounded-2xl font-semibold"
+              >
+                Tải QR PNG
+              </button>
+              <button
+                type="button"
+                onClick={handlePrintQr}
+                className="bg-white border border-gray-200 hover:border-slate-400 text-slate-700 px-4 py-3 rounded-2xl font-semibold"
+              >
+                In QR
+              </button>
+            </>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className={`${isSaving ? 'bg-gray-400' : 'bg-coral-500 hover:bg-coral-600 shadow-coral-500/30'} text-white px-8 py-3 rounded-2xl font-semibold flex items-center justify-center gap-2 transition-all shadow-sm w-full md:w-auto`}
+          >
+            <Save size={20} />
+            <span>{isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}</span>
+          </button>
+        </div>
       </div>
 
       {isLoadingDetail && (
         <div className="rounded-2xl border border-coral-100 bg-coral-50 px-4 py-3 text-sm font-medium text-coral-700">
           Đang tải dữ liệu POI...
+        </div>
+      )}
+
+      {isEditMode && qrLink && (
+        <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+          QR public link: <a className="underline" href={qrLink} target="_blank" rel="noreferrer">{qrLink}</a>
         </div>
       )}
 

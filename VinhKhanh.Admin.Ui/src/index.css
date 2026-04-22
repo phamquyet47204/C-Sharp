@@ -3,8 +3,10 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+  html, body {
+    @apply bg-slate-950 text-slate-100 antialiased overflow-x-hidden w-full;
+    min-height: -webkit-fill-available;
+    scroll-behavior: smooth;
   }
 }
 
