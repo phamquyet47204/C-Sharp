@@ -25,14 +25,14 @@ public class LocationService : ILocationService
     // Ngưỡng tốc độ để coi là đứng yên (1 km/h). Tốc độ dưới mức này sẽ được tính vào thời gian dừng.
     private const double StationarySpeedThresholdKmh = 1d;
     
-    // Thời gian tối đa giữ im lặng (15 giây).
-    private static readonly TimeSpan MaxSilentEmitInterval = TimeSpan.FromSeconds(15);
+    // Thời gian tối đa giữ im lặng (10 giây).
+    private static readonly TimeSpan MaxSilentEmitInterval = TimeSpan.FromSeconds(10);
     
-    // Chu kỳ lấy mẫu khi đang di chuyển (15 giây/lần). 
-    private static readonly TimeSpan ActiveInterval = TimeSpan.FromSeconds(15);
+    // Chu kỳ lấy mẫu khi đang di chuyển (10 giây/lần). 
+    private static readonly TimeSpan ActiveInterval = TimeSpan.FromSeconds(10);
     
-    // Chu kỳ lấy mẫu khi đứng yên (15 giây/lần). 
-    private static readonly TimeSpan IdleInterval = TimeSpan.FromSeconds(15);
+    // Chu kỳ lấy mẫu khi đứng yên (10 giây/lần). 
+    private static readonly TimeSpan IdleInterval = TimeSpan.FromSeconds(10);
     
     // Ngưỡng thời gian để xác nhận trạng thái đứng yên (1 phút).
     private static readonly TimeSpan StationaryDurationThreshold = TimeSpan.FromMinutes(1);

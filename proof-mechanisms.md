@@ -221,13 +221,13 @@ _poiMap.Clear();
 foreach (var poi in _cachedPois)
     _poiMap[poi.Id] = poi;               // O(1) lookup theo Id
 ```
-GPS update mỗi 15s → chỉ tính Haversine trên RAM, không I/O.
+GPS update mỗi 10s → chỉ tính Haversine trên RAM, không I/O.
 
 ### 4b. Adaptive GPS interval — tiết kiệm pin
 **`LocationService.cs` — `UpdateAdaptiveInterval`**
 ```csharp
-private static readonly TimeSpan ActiveInterval = TimeSpan.FromSeconds(15);
-private static readonly TimeSpan IdleInterval   = TimeSpan.FromSeconds(15);
+private static readonly TimeSpan ActiveInterval = TimeSpan.FromSeconds(10);
+private static readonly TimeSpan IdleInterval   = TimeSpan.FromSeconds(10);
 private static readonly TimeSpan StationaryDurationThreshold = TimeSpan.FromMinutes(1);
 
 // Nếu đứng yên > 1 phút → giãn interval (tiết kiệm pin)
@@ -244,7 +244,7 @@ private const double DistanceFilterMeters = 1d;
 var distanceMeters = Location.CalculateDistance(_lastEmittedLocation, location, ...) * 1000;
 if (distanceMeters >= DistanceFilterMeters) return true;   // di chuyển đủ → emit
 
-// Heartbeat 15s khi đứng yên — cần cho Debounce counter của GeofenceEngine
+// Heartbeat 10s khi đứng yên — cần cho Debounce counter của GeofenceEngine
 if (DateTimeOffset.UtcNow - _lastEmittedAtUtc >= MaxSilentEmitInterval) return true;
 
 return false;   // bỏ qua nếu không đủ điều kiện
