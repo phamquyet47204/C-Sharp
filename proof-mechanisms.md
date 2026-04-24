@@ -22,6 +22,22 @@ _insideStableCounters[poi.Id] = _insideStableCounters.GetValueOrDefault(poi.Id) 
 var readyToEnter = insideCandidates.Where(p => _insideStableCounters[p.Id] >= EnterDebounceThreshold);
 ```
 
+### 1c. Chống "Spam" cho cùng một quán (Thời gian đóng băng)
+*   **Vấn đề thực tế**: Bạn vừa nghe xong bài giới thiệu của quán A, nhưng vì đứng lại chụp ảnh nên GPS nhảy ra nhảy vào. Bạn không muốn cứ mỗi 1 phút app lại chào mừng bạn vào quán A một lần nữa.
+*   **Giải pháp "Đóng băng 10 phút"**: Sau khi một quán đã phát xong âm thanh, quán đó sẽ bị đưa vào danh sách "Chờ" (Cooldown) trong 10 phút. Trong suốt 10 phút này, dù bạn có ra vào quán đó bao nhiêu lần, hệ thống cũng sẽ không phát lại âm thanh để đảm bảo sự tinh tế.
+*   **Bằng chứng kỹ thuật (`GeofenceEngine.cs`):**
+```csharp
+// Mặc định mỗi quán phát xong sẽ nghỉ 10 phút mới được phát lại
+private static readonly TimeSpan DefaultCooldown = TimeSpan.FromMinutes(10);
+
+// Khi phát xong, ghi nhận thời điểm "Đóng băng"
+_cooldownUntilUtc[poiId] = DateTimeOffset.UtcNow.Add(DefaultCooldown);
+
+// Khi kiểm tra để phát tiếng, phải đảm bảo đã hết thời gian đóng băng
+var readyToEnter = insideCandidates
+    .Where(p => !_cooldownUntilUtc.TryGetValue(p.Id, out var untill) || untill <= now);
+```
+
 ### 1b. Xử lý vùng chồng lấn (Nhiều quán sát nhau)
 *   **Vấn đề thực tế**: Ở phố ẩm thực, các quán nằm sát vách nhau. Khi bạn đứng một chỗ, có thể bạn đang nằm trong bán kính của 3 quán cùng lúc.
 *   **Giải pháp "Duyệt toàn bộ"**: Hệ thống không bao giờ lấy quán đầu tiên nó thấy. Nó sẽ quét toàn bộ danh sách, gom tất cả các quán bạn đang đứng trúng vào một "rổ" chung, sau đó mới dùng quy tắc Ưu tiên để chọn quán đúng nhất.
@@ -127,7 +143,8 @@ var url = $"api/pois/updates?lastSync={thời_điểm_trước_đó}";
 
 | Tính năng | Lợi ích cho người dùng | Tại sao nó đặc biệt? |
 | :--- | :--- | :--- |
-| **Chống Spam** | Không bị "tra tấn" bởi âm thanh khi GPS nhảy. | Thông minh hơn các app bản đồ thông thường. |
+| **Chống Spam GPS** | Không bị "tra tấn" bởi âm thanh khi GPS nhảy. | Thông minh hơn các app bản đồ thông thường. |
+| **Chống Spam 1 Quán** | Không nghe đi nghe lại 1 nội dung trong thời gian ngắn. | Cơ chế đóng băng (Cooldown) 10 phút tinh tế. |
 | **Ưu tiên VIP** | Quán Premium luôn được giới thiệu trước. | Đảm bảo quyền lợi cho chủ quán trả phí. |
 | **Độc quyền âm thanh**| Nghe rõ ràng, không bị chồng chéo tiếng. | Xử lý mượt mà giữa giọng đọc AI và nhạc MP3. |
 | **Siêu mượt** | Bản đồ Admin không bị giật lag khi đông người. | Nén dữ liệu thông minh ngay tại Server. |
