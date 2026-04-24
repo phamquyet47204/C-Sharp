@@ -7,6 +7,18 @@
 
 ## 1. Cơ chế Chống Nhiễu & Trùng lặp (Duplicate Prevention)
 
+```mermaid
+graph TD
+    A[Nhận tọa độ GPS mới] --> B{Trong bán kính quán?}
+    B -- Không --> C[Reset bộ đếm về 0]
+    B -- Có --> D[Tăng bộ đếm +1]
+    D --> E{Bộ đếm >= 2?}
+    E -- Chưa đủ --> F[Chờ lần cập nhật sau]
+    E -- Đã đủ --> G{Đang đóng băng - Cooldown?}
+    G -- Có --> H[Im lặng - Chống spam]
+    G -- Không --> I[Chuyển sang xét Ưu tiên]
+```
+
 ### 1a. Chống "Spam" thông báo do nhiễu GPS
 *   **Vấn đề thực tế**: Sóng GPS trên điện thoại luôn bị sai số (nhảy lung tung). Nếu bạn đứng ở cửa quán, GPS có thể nhảy vào trong rồi lại nhảy ra ngoài liên tục. Nếu không xử lý, điện thoại sẽ phát tiếng "Chào mừng" rồi lại "Tạm biệt" hàng chục lần, gây khó chịu cực độ.
 *   **Giải pháp "Xác nhận 2 lần"**: App sẽ không phát tiếng ngay khi thấy bạn vào quán. Nó bắt buộc bạn phải ở trong vùng đó **ít nhất 2 lần cập nhật liên tiếp** (khoảng 20 giây). Nếu bạn chỉ lướt ngang qua hoặc GPS nhảy nhầm, hệ thống sẽ bỏ qua.
@@ -54,6 +66,15 @@ foreach (var poi in _cachedPois) // Duyệt TOÀN BỘ danh sách, không dừng
 
 ## 2. Cơ chế Độ ưu tiên & Quyền ưu tiên (Priority & Preemption)
 
+```mermaid
+graph LR
+    A[Danh sách quán đang đứng trúng] --> B(Sắp xếp theo Điểm ưu tiên)
+    B --> C{Quán đứng đầu có điểm cao hơn?}
+    C -- Đúng --> D[Ngắt quán cũ - Preempt]
+    D --> E[Phát quán mới cao điểm hơn]
+    C -- Sai --> F[Tiếp tục phát quán hiện tại]
+```
+
 ### 2a. Quy tắc VIP (Premium luôn thắng)
 *   **Vấn đề thực tế**: Bạn đang đứng ở vùng giao thoa giữa một quán thường và một quán Premium (trả phí). Bạn nên nghe giới thiệu của quán nào?
 *   **Giải pháp**: Hệ thống luôn ưu tiên quán có điểm `Priority` cao nhất. Quán Premium được Admin gán 100 điểm, quán thường 0 điểm.
@@ -82,6 +103,21 @@ foreach (var lowerPoi in lowerPriorityActives)
 ---
 
 ## 3. Cơ chế Hàng đợi âm thanh Độc quyền (Exclusive Audio)
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant Queue as Quản lý hàng đợi
+    participant Speaker as Loa điện thoại
+
+    App->>Queue: Yêu cầu phát Quán A
+    Queue->>Speaker: Đang phát Quán A...
+    Note over App,Speaker: 5 giây sau...
+    App->>Queue: Yêu cầu phát Quán B (Ưu tiên hơn)
+    Queue->>Queue: Gửi lệnh HỦY Quán A
+    Queue->>Speaker: Ngừng Quán A
+    Queue->>Speaker: Bắt đầu phát Quán B
+```
 
 ### 3a. Nguyên tắc "Chỉ một tiếng nói"
 *   **Vấn đề thực tế**: Nếu 2 quán cùng phát giới thiệu một lúc, điện thoại sẽ thành một mớ hỗn độn. Hoặc nếu bạn đang nghe AI đọc mà có file âm thanh MP3 kích hoạt, chúng sẽ đè lên nhau.
