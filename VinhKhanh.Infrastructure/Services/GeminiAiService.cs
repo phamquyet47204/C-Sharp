@@ -27,7 +27,8 @@ public class GeminiAiService
         }
 
         // Danh sach model thu tu de fallback neu gap loi 503 (Ban) hoac 429 (Het han muc)
-        var modelNames = new[] { "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite" };
+        // Danh sach model thu tu de fallback
+        var modelNames = new[] { "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.0-pro" };
         
         var prompt = $@"
 Bạn là một trợ lý ảo chuyên dịch thuật dữ liệu du lịch về Phố Ẩm Thực Vĩnh Khánh.
@@ -64,8 +65,7 @@ Vui lòng TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON MÀ KHÔNG CÓ BẤT KỲ VĂN B
             },
             generationConfig = new
             {
-                temperature = 0.4,
-                responseMimeType = "application/json"
+                temperature = 0.4
             }
         };
 
@@ -114,10 +114,10 @@ Vui lòng TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON MÀ KHÔNG CÓ BẤT KỲ VĂN B
                         continue;
                     }
                     
-                    // Neu van loi sau khi thu lai, ta break de chuyen model tiep theo
-                    if ((int)response.StatusCode == 503 || (int)response.StatusCode == 429)
+                    // Neu van loi sau khi thu lai, hoac la loi 404 (khong tim thay model) / 400 (model khong ho tro config), ta break de chuyen model tiep theo
+                    if ((int)response.StatusCode == 503 || (int)response.StatusCode == 429 || (int)response.StatusCode == 404 || (int)response.StatusCode == 400)
                     {
-                        _logger.LogWarning("Model {model} khong kha dung, dang thu chuyen sang model tiep theo...", modelName);
+                        _logger.LogWarning("Model {model} khong kha dung ({status}), dang thu chuyen sang model tiep theo...", modelName, response.StatusCode);
                         break; 
                     }
 

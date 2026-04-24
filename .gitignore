@@ -22,7 +22,9 @@ Thumbs.db
 # Environment & Secrets
 .env
 .env.*
+appsettings.json
 appsettings.Development.json
+appsettings.Production.json
 secrets.json
 
 # Node

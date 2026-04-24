@@ -102,7 +102,8 @@ public class AnalyticsController(
             .Select(e => new HeatmapEvent { DeviceId = e.DeviceId, Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
             .ToListAsync(cancellationToken);
 
-        var points = BuildHeatmapPoints(events, DateTime.UtcNow, useRecencyWeight: false);
+        var poiRefs = await GetPoiReferencesAsync(cancellationToken);
+        var points = BuildHeatmapPoints(events, DateTime.UtcNow, useRecencyWeight: false, poiRefs);
         return Ok(new { points, total = points.Count });
     }
 
@@ -124,7 +125,8 @@ public class AnalyticsController(
             .Select(e => new HeatmapEvent { DeviceId = e.DeviceId, Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
             .ToListAsync(cancellationToken);
 
-        var points = BuildHeatmapPoints(events, DateTime.UtcNow, useRecencyWeight: false);
+        var poiRefs = await GetPoiReferencesAsync(cancellationToken);
+        var points = BuildHeatmapPoints(events, DateTime.UtcNow, useRecencyWeight: false, poiRefs);
         return Ok(new { day = day.ToString("yyyy-MM-dd"), points, total = points.Count });
     }
 
@@ -149,18 +151,27 @@ public class AnalyticsController(
             .Select(e => new HeatmapEvent { DeviceId = e.DeviceId, Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
             .ToListAsync(cancellationToken);
 
-        var grouped = events
-            .GroupBy(e => DateOnly.FromDateTime(e.Timestamp))
-            .OrderBy(g => g.Key)
-            .Select(g => new
-            {
-                day = g.Key.ToString("yyyy-MM-dd"),
-                totalEvents = g.Count(),
-                points = BuildHeatmapPoints(g.ToList(), DateTime.UtcNow, useRecencyWeight: false)
-            })
-            .ToList();
+        var poiRefs = await GetPoiReferencesAsync(cancellationToken);
 
-        return Ok(new { from = fromDay.ToString("yyyy-MM-dd"), to = toDay.ToString("yyyy-MM-dd"), days = grouped });
+        // Gom nhóm sự kiện theo ngày
+        var groupedByDay = events
+            .GroupBy(e => DateOnly.FromDateTime(e.Timestamp))
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        // Tạo danh sách liên tục các ngày từ fromDay đến toDay
+        var allDays = new List<object>();
+        for (var current = fromDay; current <= toDay; current = current.AddDays(1))
+        {
+            var dayEvents = groupedByDay.TryGetValue(current, out var evts) ? evts : new List<HeatmapEvent>();
+            allDays.Add(new
+            {
+                day = current.ToString("yyyy-MM-dd"),
+                totalEvents = dayEvents.Count,
+                points = BuildHeatmapPoints(dayEvents, DateTime.UtcNow, useRecencyWeight: false, poiRefs)
+            });
+        }
+
+        return Ok(new { from = fromDay.ToString("yyyy-MM-dd"), to = toDay.ToString("yyyy-MM-dd"), days = allDays });
     }
 
     [HttpGet("content-performance")]
@@ -269,7 +280,8 @@ public class AnalyticsController(
             .Select(e => new HeatmapEvent { DeviceId = e.DeviceId, Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
             .ToList();
 
-        var points = BuildHeatmapPoints(events, now, useRecencyWeight: true);
+        var poiRefs = await GetPoiReferencesAsync(cancellationToken);
+        var points = BuildHeatmapPoints(events, now, useRecencyWeight: true, poiRefs);
         var onlineCount = await GetOnlineUserCountInternal(cancellationToken);
 
         return new
@@ -320,16 +332,30 @@ public class AnalyticsController(
         return (fromDate, toDate, null);
     }
 
+    private async Task<List<(double Lat, double Lng, string Name, double Radius)>> GetPoiReferencesAsync(CancellationToken ct)
+    {
+        var pois = await dbContext.Pois
+            .Include(p => p.Localizations)
+            .Select(p => new
+            {
+                p.Latitude,
+                p.Longitude,
+                Radius = p.Radius > 0 ? p.Radius : 50.0,
+                Name = p.Localizations.Where(l => l.LanguageCode == "vi").Select(l => l.Name).FirstOrDefault()
+            })
+            .ToListAsync(ct);
+
+        return pois.Select(p => (p.Latitude, p.Longitude, p.Name ?? "Khu vực lân cận", p.Radius)).ToList();
+    }
+
     private static List<object> BuildHeatmapPoints(
         List<HeatmapEvent> events,
         DateTime now,
-        bool useRecencyWeight)
+        bool useRecencyWeight,
+        List<(double Lat, double Lng, string Name, double Radius)>? poiRefs = null)
     {
-        // 4 decimal places of lat/lng is roughly 11m x 11m = 121 m2.
-        // We will calculate density as People / 100m2.
         const double areaPerCell = 121.0; 
 
-        // Bước 1: Gom nhóm theo DeviceId để mỗi người chỉ là 1 điểm duy nhất (tránh chồng lấn do nhảy GPS)
         var userPositions = events
             .Where(e => Math.Abs(e.Latitude) > 0.000001 && Math.Abs(e.Longitude) > 0.000001)
             .GroupBy(e => e.DeviceId)
@@ -342,33 +368,62 @@ public class AnalyticsController(
             })
             .ToList();
 
-        // Bước 2: Chia lưới và tính mật độ dựa trên danh sách người dùng đã được làm sạch
-        return userPositions
-            .GroupBy(u => (lat: Math.Round(u.Lat, 4), lng: Math.Round(u.Lng, 4)))
+        // Bước 1: Xác định mỗi User thuộc POI nào (nếu nằm trong bán kính)
+        var userPoiAssignments = userPositions.Select(u =>
+        {
+            var nearestPoi = poiRefs?
+                .Select(p => new { p.Lat, p.Lng, p.Name, p.Radius, Dist = CalculateDistance(p.Lat, p.Lng, u.Lat, u.Lng) })
+                .Where(p => p.Dist <= (p.Radius / 1000.0)) // Trong bán kính (mét -> km)
+                .OrderBy(p => p.Dist)
+                .FirstOrDefault();
+
+            return new { u.Lat, u.Lng, u.EventCount, Poi = nearestPoi };
+        }).ToList();
+
+        // Bước 2: Gom nhóm. Những người thuộc POI sẽ bị "hút" về tâm POI.
+        // Những người không thuộc POI sẽ gom theo lưới 44m như cũ.
+        var finalPoints = userPoiAssignments
+            .GroupBy(x => x.Poi != null 
+                ? $"poi:{x.Poi.Name}" 
+                : $"grid:{Math.Round(x.Lat * 2500.0) / 2500.0}:{Math.Round(x.Lng * 2500.0) / 2500.0}")
             .Select(g =>
             {
-                // Áp dụng công thức: Density = Tổng (Trọng số của từng User)
-                var userWeights = g.Sum(u => Math.Min(1.1, 1.0 + (u.EventCount - 1) * 0.05));
+                var first = g.First();
+                var lat = first.Poi?.Lat ?? Math.Round(first.Lat * 2500.0) / 2500.0;
+                var lng = first.Poi?.Lng ?? Math.Round(first.Lng * 2500.0) / 2500.0;
+                var poiName = first.Poi?.Name;
 
-                // Intensity dùng cho visual: lấy số bản ghi thô để đảm bảo độ rực rỡ
-                var intensity = userWeights; 
-
-                // Density = Tổng trọng số / diện tích (quy đổi về 100m2)
+                var userWeights = g.Sum(x => Math.Min(1.1, 1.0 + (x.EventCount - 1) * 0.05));
+                var intensity = userWeights;
                 var density = (userWeights * 100.0) / areaPerCell;
 
                 return new
                 {
-                    lat = g.Key.lat,
-                    lng = g.Key.lng,
+                    lat,
+                    lng,
                     intensity = Math.Round(intensity, 2),
                     density = Math.Round(density, 2),
                     peopleCount = g.Count(),
-                    weightedPeople = Math.Round(userWeights, 1)
+                    weightedPeople = Math.Round(userWeights, 1),
+                    poiName
                 };
             })
-            .OrderByDescending(p => p.density)
+            .OrderByDescending(p => p.peopleCount)
             .Take(HeatmapMaxPoints)
             .Cast<object>()
             .ToList();
+
+        return finalPoints;
+    }
+
+    private static double CalculateDistance(double lat1, double lng1, double lat2, double lng2)
+    {
+        var dLat = (lat2 - lat1) * Math.PI / 180.0;
+        var dLng = (lng2 - lng1) * Math.PI / 180.0;
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(lat1 * Math.PI / 180.0) * Math.Cos(lat2 * Math.PI / 180.0) *
+                Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return 6371 * c; // Km
     }
 }

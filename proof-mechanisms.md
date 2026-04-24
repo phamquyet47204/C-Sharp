@@ -139,6 +139,65 @@ Dòng 370: var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.From
 
 > **Kết quả**: Dù gọi `SpeakAsync` hay `PlayAudioAsync`, cả hai đều phải qua `RunExclusiveNarrationAsync` → `AudioQueueManager.RunExclusiveAsync`. Yêu cầu mới sẽ **hủy ngay** (`_currentCts?.Cancel()` dòng 15) yêu cầu cũ và **chờ slot** (`SemaphoreSlim(1,1)` dòng 20) trước khi phát — đảm bảo tại mọi thời điểm chỉ có 1 giọng đọc vang lên.
 
+## 4. Tối ưu Hiệu suất (Performance Optimization)
+
+### 4a. Gom nhóm Heatmap (Snap-to-POI Clustering)
+
+**Vấn đề**: Hàng nghìn tọa độ GPS gửi về liên tục làm quá tải trình duyệt và gây "nhiễu" bản đồ.
+**Giải pháp**: Kéo (snap) các vị trí nằm trong bán kính quán về làm một điểm duy nhất tại tâm quán.
+
+**File**: `VinhKhanh.Admin/Controllers/AnalyticsController.cs`
+
+```csharp
+// Bước 1: Gắn user vào POI gần nhất
+Dòng 372: var userPoiAssignments = userPositions.Select(u => {
+Dòng 374:     var nearestPoi = poiRefs?
+Dòng 376:         .Where(p => p.Dist <= (p.Radius / 1000.0)) // Trong bán kính
+Dòng 377:         .OrderBy(p => p.Dist).FirstOrDefault();
+Dòng 380:     return new { u.Lat, u.Lng, u.EventCount, Poi = nearestPoi };
+Dòng 381: }).ToList();
+
+// Bước 2: Gom nhóm theo POI hoặc Lưới (Grid) nếu đứng ngoài đường
+Dòng 385: var finalPoints = userPoiAssignments
+Dòng 386:     .GroupBy(x => x.Poi != null 
+Dòng 387:         ? $"poi:{x.Poi.Name}" 
+Dòng 388:         : $"grid:{Math.Round(x.Lat * 2500.0)/2500.0}:{Math.Round(x.Lng * 2500.0)/2500.0}")
+```
+
+> **Kết quả**: Backend tự tính toán nén dữ liệu, giúp trình duyệt (Leaflet) render bản đồ Heatmap ở tốc độ 60FPS dù có lượng người rất lớn.
+
+### 4b. Chặn dội bom WebSockets (Throttling)
+
+**File**: `VinhKhanh.Admin/Controllers/AnalyticsController.cs`
+
+```csharp
+Dòng 301: var now = DateTime.UtcNow;
+Dòng 302: if (now - _lastRealtimePush < TimeSpan.FromSeconds(1))
+Dòng 303: {
+Dòng 304:     return; // Throttled: Giảm tải cho server và dashboard
+Dòng 305: }
+Dòng 306: _lastRealtimePush = now;
+Dòng 310: await analyticsHub.Clients.Group("AdminGroup").SendAsync("analytics:realtime", payload);
+```
+
+> **Kết quả**: Khi có 500 người đi bộ gửi API sự kiện đồng thời, server chỉ nhả dữ liệu về giao diện Web Dashboard đúng **1 giây/lần**. Chống quá tải CPU trên trình duyệt.
+
+### 4c. Đồng bộ Offline thông minh (Delta Sync & Pruning)
+
+**File**: `VinhKhanh.Mobile/Services/DatabaseService.cs`
+
+```csharp
+// Lấy thời điểm đồng bộ lần cuối
+Dòng 130: var lastSync = Preferences.Get("root_last_sync_utc", string.Empty);
+Dòng 135: var url = $"/api/pois/updates?lastSync={lastSyncIso}";
+
+// Xóa rác rưởi bị xóa trên server (Pruning)
+Dòng 189: var deleteQuery = $"DELETE FROM Pois WHERE BasePoiId NOT IN ({placeholders})";
+Dòng 190: await _db.ExecuteAsync(deleteQuery, basePoiIds.ToArray());
+```
+
+> **Kết quả**: Điện thoại chỉ tải về **dữ liệu mới thay đổi** thay vì hàng MB toàn bộ database. Trải nghiệm mở App tức thời, không tốn dung lượng mạng 4G.
+
 ---
 
 ## Tóm tắt ánh xạ Code → Cơ chế
@@ -156,3 +215,6 @@ Dòng 370: var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.From
 | **Cổng độc quyền MP3** | `NarrationService.cs` | 101, 108 | `PlayAudioAsync` → `RunExclusiveNarrationAsync` |
 | **Audio Ducking** | `NarrationService.cs` | 175, 178, 185 | `BeginAudioDuckingAsync`, `Task.Delay(120)`, `EndAudioDucking` |
 | **Timeout MP3** | `NarrationService.cs` | 370 | `Task.WhenAny(..., Task.Delay(12s))` |
+| **Heatmap Clustering** | `AnalyticsController.cs` | 372, 386 | `Where(Dist <= Radius)`, `GroupBy(poiName)` |
+| **Throttling SignalR** | `AnalyticsController.cs` | 302 | `if (now - _last < 1s) return;` |
+| **Delta Sync & Pruning**| `DatabaseService.cs` | 135, 189 | `?lastSync=`, `DELETE WHERE NOT IN` |

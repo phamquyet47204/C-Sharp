@@ -3,7 +3,7 @@ import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
 
-const HeatmapLayer = ({ points, maxDensity = 2.2 }) => {
+const HeatmapLayer = ({ points, maxDensity = 2.2, radius = 25, blur = 15 }) => {
   const map = useMap();
 
   useEffect(() => {
@@ -13,47 +13,41 @@ const HeatmapLayer = ({ points, maxDensity = 2.2 }) => {
     const expandedPoints = [];
     
     points.forEach(p => {
-      const density = p.density;
+      const density = p.density || 1;
       
       // Luôn có điểm gốc
       expandedPoints.push([p.lat, p.lng, density]);
 
-      // Nếu mật độ cao, thêm các điểm vệ tinh siêu gần để làm "nở" bán kính vùng nhiệt
-      if (density > 1.5) {
-        const offset = 0.00008; // Khoảng cách cực nhỏ (~8-10m)
-        expandedPoints.push([p.lat + offset, p.lng, density * 0.6]);
-        expandedPoints.push([p.lat - offset, p.lng, density * 0.6]);
-        expandedPoints.push([p.lat, p.lng + offset, density * 0.6]);
-        expandedPoints.push([p.lat, p.lng - offset, density * 0.6]);
-      }
-
-      if (density > 3.0) {
-        const offset2 = 0.00015; // Lớp thứ 2 cho vùng cực đông
-        expandedPoints.push([p.lat + offset2, p.lng + offset2, density * 0.4]);
-        expandedPoints.push([p.lat - offset2, p.lng - offset2, density * 0.4]);
-        expandedPoints.push([p.lat + offset2, p.lng - offset2, density * 0.4]);
-        expandedPoints.push([p.lat - offset2, p.lng + offset2, density * 0.4]);
+      // Chỉ nở vùng nhiệt khi thực sự đông (>= 3 người)
+      // Giúp tránh việc 1 người trông quá "nóng"
+      if (density >= 3.0) {
+        const offset = 0.0001; // ~11m
+        expandedPoints.push([p.lat + offset, p.lng, density * 0.5]);
+        expandedPoints.push([p.lat - offset, p.lng, density * 0.5]);
+        expandedPoints.push([p.lat, p.lng + offset, density * 0.5]);
+        expandedPoints.push([p.lat, p.lng - offset, density * 0.5]);
       }
     });
 
     const heatLayer = L.heatLayer(expandedPoints, {
-      radius: 24, // Cố định 10px trên màn hình bất kể zoom
-      blur: 8,
+      radius, 
+      blur,
       max: maxDensity,
-      minOpacity: 0.5,
+      minOpacity: 0.3,
       gradient: {
         0.1: 'blue',
-        0.25: 'lime',
-        0.4: 'yellow',
-        0.6: 'orange',
-        0.80: 'red'
+        0.2: 'cyan',
+        0.3: 'lime',
+        0.5: 'yellow',
+        0.7: 'orange',
+        1.0: 'red'
       }
     }).addTo(map);
 
     return () => {
       map.removeLayer(heatLayer);
     };
-  }, [map, points, maxDensity]);
+  }, [map, points, maxDensity, radius, blur]);
 
   return null;
 };

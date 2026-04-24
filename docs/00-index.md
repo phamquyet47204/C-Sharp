@@ -8,16 +8,16 @@ Tài liệu được tách thành các file riêng theo nhóm chức năng để
 
 ## Danh sách tài liệu
 
-| File | Nội dung |
-|---|---|
-| [01-auth.md](./01-auth.md) | Xác thực & Phân quyền — Login, RegisterShop, RegisterVisitor |
-| [02-admin-poi.md](./02-admin-poi.md) | Quản lý POI (Admin) — CRUD, Approve, Reject, Hide, QR |
-| [03-shop-owner.md](./03-shop-owner.md) | Cổng chủ quán (ShopOwner) — Draft, Submit, AI dịch thuật |
-| [04-mobile-sync.md](./04-mobile-sync.md) | Đồng bộ Mobile — Delta Sync, SQLite, Language Fallback |
-| [05-geofence-narration.md](./05-geofence-narration.md) | Geofence & Thuyết minh — GPS, Debounce, Cooldown, MP3/TTS |
-| [06-access-payment.md](./06-access-payment.md) | Kiểm soát truy cập & Thanh toán — Trial, FreeTrial, AccessPass |
-| [07-analytics.md](./07-analytics.md) | Analytics & Realtime — Heatmap, Content Performance, SignalR |
-| [08-ratings-qr-settings.md](./08-ratings-qr-settings.md) | Đánh giá POI, QR Code, Cài đặt hệ thống |
+| File                                                     | Nội dung                                                       |
+| -------------------------------------------------------- | -------------------------------------------------------------- |
+| [01-auth.md](./01-auth.md)                               | Xác thực & Phân quyền — Login, RegisterShop, RegisterVisitor   |
+| [02-admin-poi.md](./02-admin-poi.md)                     | Quản lý POI (Admin) — CRUD, Approve, Reject, Hide, QR          |
+| [03-shop-owner.md](./03-shop-owner.md)                   | Cổng chủ quán (ShopOwner) — Draft, Submit, AI dịch thuật       |
+| [04-mobile-sync.md](./04-mobile-sync.md)                 | Đồng bộ Mobile — Delta Sync, SQLite, Language Fallback         |
+| [05-geofence-narration.md](./05-geofence-narration.md)   | Geofence & Thuyết minh — GPS, Debounce, Cooldown, MP3/TTS      |
+| [06-access-payment.md](./06-access-payment.md)           | Kiểm soát truy cập & Thanh toán — Trial, FreeTrial, AccessPass |
+| [07-analytics.md](./07-analytics.md)                     | Analytics & Realtime — Heatmap, Content Performance, SignalR   |
+| [08-ratings-qr-settings.md](./08-ratings-qr-settings.md) | Đánh giá POI, QR Code, Cài đặt hệ thống                        |
 
 ---
 

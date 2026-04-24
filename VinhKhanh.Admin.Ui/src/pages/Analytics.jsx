@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Tooltip as MapTooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, Headphones, Users, Trophy, Activity, Play, Pause } from 'lucide-react';
+import { MapPin, Headphones, Users, Trophy, Activity, Play, Pause, BarChart2 as ChartIcon } from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartsTooltip, ResponsiveContainer, Cell
+} from 'recharts';
 import api from '../services/api';
 import { startRealtimeAnalytics, stopRealtimeAnalytics } from '../services/realtimeAnalytics';
 import HeatmapLayer from '../components/HeatmapLayer';
@@ -179,22 +183,54 @@ const Analytics = () => {
   const maxIntensity = heatmapPoints.length ? Math.max(...heatmapPoints.map((p) => p.intensity)) : 1;
 
   const getRadius = (intensity) => {
-    const normalized = intensity / maxIntensity;
-    return 6 + normalized * 24;
+    return Math.min(30, 6 + (intensity || 0) * 1.5);
   };
 
   const getColor = (intensity) => {
-    const normalized = intensity / maxIntensity;
-    if (normalized > 0.75) return '#ef4444';
-    if (normalized > 0.5) return '#f97316';
-    if (normalized > 0.25) return '#eab308';
-    return '#22c55e';
+    const val = intensity || 0;
+    if (val >= 11) return '#ef4444'; // Rất đông: >= 11 người
+    if (val >= 6) return '#f97316'; // Đông: 6 - 10 người
+    if (val >= 3) return '#eab308'; // Vừa: 3 - 5 người
+    return '#22c55e';               // Bình thường: 1 - 2 người
+  };
+
+  const getStatusText = (count) => {
+    if (count >= 11) return 'Rất đông';
+    if (count >= 6) return 'Đông đúc';
+    if (count >= 3) return 'Vừa phải';
+    return 'Thưa thớt';
   };
 
   const timelinePercent = useMemo(() => {
     if (!historyDays.length) return 0;
     return Math.round((timelineIndex / Math.max(1, historyDays.length - 1)) * 100);
   }, [timelineIndex, historyDays]);
+
+  const totalPeople = useMemo(() => {
+    return heatmapPoints.reduce((acc, p) => acc + (p.peopleCount || 0), 0);
+  }, [heatmapPoints]);
+
+  const hotspots = useMemo(() => {
+    const groups = {};
+    heatmapPoints.forEach(p => {
+      const key = p.poiName || `Khu vực [${p.lat.toFixed(3)}, ${p.lng.toFixed(3)}]`;
+      if (!groups[key]) {
+        groups[key] = {
+          name: key,
+          value: 0,
+          density: 0,
+          lat: p.lat,
+          lng: p.lng
+        };
+      }
+      groups[key].value += (p.peopleCount || 0);
+      groups[key].density = Math.max(groups[key].density, p.density || 0);
+    });
+
+    return Object.values(groups)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+  }, [heatmapPoints]);
 
   return (
     <section className="space-y-6">
@@ -214,17 +250,17 @@ const Analytics = () => {
               <p className="text-xs text-gray-500">Phân tích mật độ người dùng và hiệu suất nội dung.</p>
             </div>
           </div>
-          
+
           <div className="flex bg-gray-100 p-1.5 rounded-2xl">
-            <button 
-              onClick={() => setIsRealtimeMode(true)} 
+            <button
+              onClick={() => setIsRealtimeMode(true)}
               className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold transition-all ${isRealtimeMode ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <div className={`h-2 w-2 rounded-full ${isRealtimeMode ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
               Realtime
             </button>
-            <button 
-              onClick={() => setIsRealtimeMode(false)} 
+            <button
+              onClick={() => setIsRealtimeMode(false)}
               className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold transition-all ${!isRealtimeMode ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <MapPin size={16} />
@@ -236,11 +272,15 @@ const Analytics = () => {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           <div className="lg:col-span-1 rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white px-5 py-4 flex flex-col justify-center">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Số người online</span>
+              <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                {isRealtimeMode ? 'Số người online' : 'Tổng lượng khách'}
+              </span>
               <Activity size={14} className="text-emerald-500" />
             </div>
             <div className="mt-1 flex items-baseline gap-1">
-              <span className="text-3xl font-black text-emerald-700">{onlineCount.toLocaleString('vi-VN')}</span>
+              <span className="text-3xl font-black text-emerald-700">
+                {(isRealtimeMode ? onlineCount : totalPeople).toLocaleString('vi-VN')}
+              </span>
               <span className="text-xs text-emerald-600/70">người</span>
             </div>
           </div>
@@ -251,33 +291,33 @@ const Analytics = () => {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold text-gray-400 uppercase ml-1">Khoảng ngày</label>
                   <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-gray-200 shadow-sm">
-                    <input 
-                      type="date" 
-                      value={from} 
-                      max={to} 
-                      onChange={(e) => setFrom(e.target.value)} 
-                      className="bg-transparent border-none focus:ring-0 text-sm py-1.5 px-2 text-gray-700 font-medium" 
+                    <input
+                      type="date"
+                      value={from}
+                      max={to}
+                      onChange={(e) => setFrom(e.target.value)}
+                      className="bg-transparent border-none focus:ring-0 text-sm py-1.5 px-2 text-gray-700 font-medium"
                     />
                     <div className="h-4 w-px bg-gray-200" />
-                    <input 
-                      type="date" 
-                      value={to} 
-                      min={from} 
+                    <input
+                      type="date"
+                      value={to}
+                      min={from}
                       max={defaultTo}
-                      onChange={(e) => setTo(e.target.value)} 
-                      className="bg-transparent border-none focus:ring-0 text-sm py-1.5 px-2 text-gray-700 font-medium" 
+                      onChange={(e) => setTo(e.target.value)}
+                      className="bg-transparent border-none focus:ring-0 text-sm py-1.5 px-2 text-gray-700 font-medium"
                     />
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold text-gray-400 uppercase ml-1">Xem ngày cụ thể</label>
-                  <input 
-                    type="date" 
-                    value={selectedDay} 
-                    max={defaultTo} 
-                    onChange={(e) => setSelectedDay(e.target.value)} 
-                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 font-medium shadow-sm focus:border-blue-300 focus:ring-4 focus:ring-blue-100 transition-all outline-none" 
+                  <input
+                    type="date"
+                    value={selectedDay}
+                    max={defaultTo}
+                    onChange={(e) => setSelectedDay(e.target.value)}
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 font-medium shadow-sm focus:border-blue-300 focus:ring-4 focus:ring-blue-100 transition-all outline-none"
                   />
                 </div>
 
@@ -287,7 +327,7 @@ const Analytics = () => {
                     { label: '7 ngày', days: 7 },
                     { label: '30 ngày', days: 30 }
                   ].map(p => (
-                    <button 
+                    <button
                       key={p.label}
                       onClick={() => {
                         const newTo = defaultTo;
@@ -312,8 +352,8 @@ const Analytics = () => {
               </div>
             )}
 
-            <button 
-              onClick={handleApply} 
+            <button
+              onClick={handleApply}
               className="ml-auto flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-blue-700 hover:shadow-lg active:scale-95 transition-all"
             >
               <Users size={16} />
@@ -339,7 +379,7 @@ const Analytics = () => {
                 disabled={historyDays.length === 0}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm ${isTimelinePlaying ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
               >
-                {isTimelinePlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />} 
+                {isTimelinePlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
                 {isTimelinePlaying ? 'Tạm dừng' : 'Phát lại'}
               </button>
             </div>
@@ -359,8 +399,8 @@ const Analytics = () => {
             <div className="flex items-center justify-between text-[11px] font-bold text-blue-800 px-1">
               <span className="bg-white px-2 py-1 rounded-lg border border-blue-100 shadow-sm">{historyDays[0]?.day || '—'}</span>
               <div className="flex flex-col items-center">
-                 <span className="text-blue-900">{timelineDay?.day || '—'}</span>
-                 <span className="text-[9px] text-blue-400 font-black uppercase">{timelinePercent}% COMPLETED</span>
+                <span className="text-blue-900">{timelineDay?.day || '—'}</span>
+                <span className="text-[9px] text-blue-400 font-black uppercase">{timelinePercent}% COMPLETED</span>
               </div>
               <span className="bg-white px-2 py-1 rounded-lg border border-blue-100 shadow-sm">{historyDays[historyDays.length - 1]?.day || '—'}</span>
             </div>
@@ -379,59 +419,144 @@ const Analytics = () => {
 
         {heatmapError && <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{heatmapError}</div>}
 
-        {heatmapLoading ? (
-          <div className="flex h-80 items-center justify-center rounded-2xl bg-gray-50 text-sm text-gray-400">Đang tải heatmap...</div>
-        ) : (
-          <>
-            <div className="h-80 w-full rounded-2xl overflow-hidden border border-gray-100">
-              <MapContainer center={VINH_KHANH_CENTER} zoom={16} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
-                <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                
-                <HeatmapLayer 
-                  points={heatmapPoints} 
-                  maxDensity={3.0} 
-                  radius={25} 
-                  blur={15} 
+        <div className="relative h-80 w-full rounded-2xl overflow-hidden border border-gray-100 bg-gray-50">
+          <MapContainer center={VINH_KHANH_CENTER} zoom={16} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
+            <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+            <HeatmapLayer
+              points={heatmapPoints}
+              maxDensity={10.0}
+              radius={25}
+              blur={15}
+            />
+
+            {heatmapPoints.map((point, idx) => (
+              <CircleMarker
+                key={idx}
+                center={[point.lat, point.lng]}
+                radius={4}
+                pathOptions={{
+                  color: 'white',
+                  fillColor: getColor(point.intensity),
+                  fillOpacity: 0.6,
+                  weight: 1
+                }}
+              >
+                <MapTooltip permanent={false} direction="top" offset={[0, -5]}>
+                  <div className="p-1 min-w-[120px]">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs font-bold text-gray-600">Thực tế:</span>
+                      <span className="text-sm font-black text-blue-600">{point.peopleCount} người</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] text-gray-400">Trạng thái:</span>
+                      <span className="text-[10px] font-bold" style={{ color: getColor(point.peopleCount) }}>
+                        {getStatusText(point.peopleCount)}
+                      </span>
+                    </div>
+                  </div>
+                </MapTooltip>
+              </CircleMarker>
+            ))}
+          </MapContainer>
+
+          {/* Loading Overlay */}
+          {heatmapLoading && (
+            <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/40 backdrop-blur-[1px]">
+              <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-lg border border-blue-100">
+                <Activity size={16} className="text-blue-600 animate-pulse" />
+                <span className="text-xs font-bold text-blue-900">Đang cập nhật...</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center gap-4 text-xs text-gray-500">
+          <span className="font-bold text-gray-700 uppercase tracking-wider">Mật độ người (Ước tính):</span>
+          {[
+            { color: '#22c55e', label: '1 - 2 người' },
+            { color: '#eab308', label: '3 - 5 người' },
+            { color: '#f97316', label: '6 - 10 người' },
+            { color: '#ef4444', label: '≥ 11 người' },
+          ].map(({ color, label }) => (
+            <span key={label} className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
+              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+              {label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Hotspots Analysis Section */ }
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
+                <ChartIcon size={20} />
+              </div>
+              <h3 className="text-lg font-bold text-gray-800">Top khu vực đông đúc</h3>
+            </div>
+            {!heatmapLoading && hotspots.length > 0 && (
+              <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 uppercase">Dựa trên {heatmapTotal} điểm</span>
+            )}
+          </div>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={hotspots} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
+                <RechartsTooltip 
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                  itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
                 />
+                <Bar dataKey="value" radius={[8, 8, 0, 0]} barSize={42} name="Số người">
+                  {hotspots.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={['#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe', '#e0e7ff'][index % 5]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
 
-                {heatmapPoints.map((point, idx) => (
-                  <CircleMarker
-                    key={idx}
-                    center={[point.lat, point.lng]}
-                    radius={3} // Constant small dots for reference
-                    pathOptions={{ 
-                      color: 'transparent', // Borderless
-                      fillColor: 'white', 
-                      fillOpacity: 0.3,
-                      weight: 0 
-                    }}
-                  >
-                    <MapTooltip>
-                      <span className="text-xs font-bold">Mật độ: {point.density} người/100m²</span>
-                      <br />
-                      <span className="text-[10px] text-gray-500">Thực tế: {point.peopleCount} người | Quy đổi: {point.weightedPeople}</span>
-                    </MapTooltip>
-                  </CircleMarker>
-                ))}
-              </MapContainer>
+        <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600">
+                <MapPin size={20} />
+              </div>
+              <h3 className="text-lg font-bold text-gray-800">Chi tiết điểm nóng</h3>
             </div>
-
-            <div className="mt-3 flex items-center gap-4 text-xs text-gray-500">
-              <span className="font-bold text-gray-700 uppercase tracking-wider">Mật độ nhiệt:</span>
-              {[
-                { color: '#22c55e', label: 'Thấp (< 1)' },
-                { color: '#eab308', label: 'Vừa (1 - 4)' },
-                { color: '#f97316', label: 'Cao (4 - 8)' },
-                { color: '#ef4444', label: 'Rất cao (> 8)' },
-              ].map(({ color, label }) => (
-                <span key={label} className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
-                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
-                  {label}
-                </span>
-              ))}
-            </div>
-          </>
-        )}
+          </div>
+          <div className="space-y-3 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+            {hotspots.length === 0 ? (
+              <div className="flex h-48 items-center justify-center text-sm text-gray-400 italic bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                Không có dữ liệu hotspot tại thời điểm này
+              </div>
+            ) : hotspots.map((spot, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3.5 rounded-2xl bg-gray-50 border border-gray-100 hover:border-emerald-200 hover:bg-white transition-all duration-300 group">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs group-hover:scale-110 transition-transform">
+                    #{idx + 1}
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-gray-800">{spot.name}</div>
+                    <div className="text-[10px] text-gray-400 font-bold tracking-tight">Vị trí: {spot.lat.toFixed(4)}, {spot.lng.toFixed(4)}</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-base font-black text-emerald-600 leading-none">{spot.value} người</div>
+                  <div className="text-[10px] font-bold uppercase mt-1" style={{ color: getColor(spot.value) }}>
+                    {getStatusText(spot.value)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -476,7 +601,7 @@ const Analytics = () => {
           </div>
         )}
       </div>
-    </section>
+    </section >
   );
 };
 
