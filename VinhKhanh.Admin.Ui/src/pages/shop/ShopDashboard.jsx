@@ -35,11 +35,7 @@ export default function ShopDashboard() {
       <h1 className="text-2xl font-bold mb-6">Tổng quan quán</h1>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-white rounded-xl p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Lượt ghé thăm (30 ngày)</p>
-          <p className="text-3xl font-bold text-orange-500 mt-1">{analytics?.totalVisits ?? 0}</p>
-        </div>
+      <div className="grid grid-cols-1 gap-4 mb-6">
         <div className="bg-white rounded-xl p-5 shadow-sm">
           <p className="text-sm text-gray-500">Lượt nghe TTS (30 ngày)</p>
           <p className="text-3xl font-bold text-blue-500 mt-1">{analytics?.totalNarrations ?? 0}</p>
@@ -53,7 +49,7 @@ export default function ShopDashboard() {
           <div key={poi.poiId} className="bg-white rounded-xl p-4 shadow-sm flex items-center justify-between">
             <div>
               <p className="font-medium">{poi.poiName}</p>
-              <p className="text-sm text-gray-500">{poi.visits} lượt ghé · {poi.narrations} lượt nghe</p>
+              <p className="text-sm text-gray-500">{poi.narrations} lượt nghe</p>
             </div>
           </div>
         ))}

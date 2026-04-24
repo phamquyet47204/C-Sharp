@@ -69,7 +69,7 @@ const Dashboard = () => {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           icon={<MapPin />} 
           title="Tổng số POI" 
@@ -83,13 +83,6 @@ const Dashboard = () => {
           value={stats.totalShops} 
           trend="Đối tác đăng ký" 
           color="bg-purple-50 text-purple-600" 
-        />
-        <StatCard 
-          icon={<Users />} 
-          title="Lượt truy cập" 
-          value={stats.visits} 
-          trend={`Hôm nay: ${stats.visitsToday}`} 
-          color="bg-coral-50 text-coral-600" 
         />
         <StatCard 
           icon={<Headphones />} 
@@ -107,47 +100,7 @@ const Dashboard = () => {
         />
       </div>
 
-      {/* Charts */}
-      <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-gray-800">Biểu đồ mật độ khách tham quan</h3>
-          <span className="flex items-center gap-1 text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full font-medium">
-            <TrendingUp size={16} /> {isLoading ? 'Đang tải' : 'Live'}
-          </span>
-        </div>
-        <div className="h-[300px] w-full">
-          {activityData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={activityData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorKhach" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#FF7F50" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#FF7F50" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{fill: '#9ca3af'}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af'}} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="khách" 
-                  stroke="#FF7F50" 
-                  strokeWidth={3}
-                  fillOpacity={1} 
-                  fill="url(#colorKhach)" 
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500">
-              {isLoading ? 'Đang tải dữ liệu...' : 'Chưa có dữ liệu ghé thăm để hiển thị biểu đồ.'}
-            </div>
-          )}
-        </div>
-      </div>
+
     </div>
   );
 };

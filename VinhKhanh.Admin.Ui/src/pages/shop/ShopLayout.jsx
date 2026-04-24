@@ -18,11 +18,6 @@ export default function ShopLayout() {
           <p className="text-xs text-gray-500 mt-1">CỔNG CHỦ QUÁN</p>
         </div>
         <nav className="flex-1 px-4 mt-4 space-y-2">
-          <NavLink to="/shop/dashboard"
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-3 rounded-2xl font-medium transition-all ${isActive ? 'bg-orange-50 text-orange-600' : 'text-gray-600 hover:bg-gray-50'}`}>
-            <LayoutDashboard size={20} /><span>Tổng quan</span>
-          </NavLink>
           <NavLink to="/shop/pois"
             className={({ isActive }) =>
               `flex items-center gap-3 px-4 py-3 rounded-2xl font-medium transition-all ${isActive ? 'bg-orange-50 text-orange-600' : 'text-gray-600 hover:bg-gray-50'}`}>

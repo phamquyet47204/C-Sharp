@@ -25,7 +25,6 @@ const Sidebar = () => {
   }, []);
 
   const menuItems = [
-    { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/dashboard' },
     { icon: <MapPin size={20} />, label: 'Quản lý POI', path: '/pois' },
     {
       icon: <ClipboardCheck size={20} />,

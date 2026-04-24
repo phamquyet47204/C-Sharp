@@ -3,34 +3,57 @@ import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
 
-const HeatmapLayer = ({ points, maxDensity = 3, radius = 45, blur = 20 }) => {
+const HeatmapLayer = ({ points, maxDensity = 2.2 }) => {
   const map = useMap();
 
   useEffect(() => {
     if (!map || !points || points.length === 0) return undefined;
 
-    // Convert our points to the format [lat, lng, intensity] expected by leaflet.heat
-    // Here we use 'density' (people/100m2) as the intensity weight
-    const data = points.map(p => [p.lat, p.lng, p.density]);
+    // Kỹ thuật nhân bản điểm để tạo hiệu ứng "Bán kính tăng theo mật độ"
+    const expandedPoints = [];
+    
+    points.forEach(p => {
+      const density = p.density;
+      
+      // Luôn có điểm gốc
+      expandedPoints.push([p.lat, p.lng, density]);
 
-    const heatLayer = L.heatLayer(data, {
-      radius,
-      blur,
-      max: maxDensity, // Lowered this so sparse points (1-2 people) look brighter
-      minOpacity: 0.25,
+      // Nếu mật độ cao, thêm các điểm vệ tinh siêu gần để làm "nở" bán kính vùng nhiệt
+      if (density > 1.5) {
+        const offset = 0.00008; // Khoảng cách cực nhỏ (~8-10m)
+        expandedPoints.push([p.lat + offset, p.lng, density * 0.6]);
+        expandedPoints.push([p.lat - offset, p.lng, density * 0.6]);
+        expandedPoints.push([p.lat, p.lng + offset, density * 0.6]);
+        expandedPoints.push([p.lat, p.lng - offset, density * 0.6]);
+      }
+
+      if (density > 3.0) {
+        const offset2 = 0.00015; // Lớp thứ 2 cho vùng cực đông
+        expandedPoints.push([p.lat + offset2, p.lng + offset2, density * 0.4]);
+        expandedPoints.push([p.lat - offset2, p.lng - offset2, density * 0.4]);
+        expandedPoints.push([p.lat + offset2, p.lng - offset2, density * 0.4]);
+        expandedPoints.push([p.lat - offset2, p.lng + offset2, density * 0.4]);
+      }
+    });
+
+    const heatLayer = L.heatLayer(expandedPoints, {
+      radius: 24, // Cố định 10px trên màn hình bất kể zoom
+      blur: 8,
+      max: maxDensity,
+      minOpacity: 0.5,
       gradient: {
-        0.0: 'blue',
-        0.2: 'cyan',
-        0.4: 'lime',
-        0.6: 'yellow',
-        1.0: 'red'
+        0.1: 'blue',
+        0.25: 'lime',
+        0.4: 'yellow',
+        0.6: 'orange',
+        0.80: 'red'
       }
     }).addTo(map);
 
     return () => {
       map.removeLayer(heatLayer);
     };
-  }, [map, points, maxDensity, radius, blur]);
+  }, [map, points, maxDensity]);
 
   return null;
 };

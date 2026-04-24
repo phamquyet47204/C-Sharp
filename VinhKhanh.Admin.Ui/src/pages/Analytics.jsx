@@ -389,9 +389,9 @@ const Analytics = () => {
                 
                 <HeatmapLayer 
                   points={heatmapPoints} 
-                  maxDensity={5} 
-                  radius={50} 
-                  blur={25} 
+                  maxDensity={3.0} 
+                  radius={25} 
+                  blur={15} 
                 />
 
                 {heatmapPoints.map((point, idx) => (
@@ -409,7 +409,7 @@ const Analytics = () => {
                     <MapTooltip>
                       <span className="text-xs font-bold">Mật độ: {point.density} người/100m²</span>
                       <br />
-                      <span className="text-[10px] text-gray-400">Ước tính: {point.peopleCount} người tại đây</span>
+                      <span className="text-[10px] text-gray-500">Thực tế: {point.peopleCount} người | Quy đổi: {point.weightedPeople}</span>
                     </MapTooltip>
                   </CircleMarker>
                 ))}
@@ -456,9 +456,7 @@ const Analytics = () => {
                 <tr className="border-b border-gray-100">
                   <th className="pb-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide w-12">Xếp hạng</th>
                   <th className="pb-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Tên POI</th>
-                  <th className="pb-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                    <span className="flex items-center justify-end gap-1"><Users size={12} /> Lượt ghé thăm</span>
-                  </th>
+
                   <th className="pb-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wide">
                     <span className="flex items-center justify-end gap-1"><Headphones size={12} /> Lượt nghe TTS</span>
                   </th>
@@ -469,7 +467,7 @@ const Analytics = () => {
                   <tr key={item.poiId} className="hover:bg-gray-50 transition-colors">
                     <td className="py-3 pr-4"><RankBadge rank={item.rank} /></td>
                     <td className="py-3 font-medium text-gray-800">{item.poiName}</td>
-                    <td className="py-3 text-right text-gray-600">{item.totalVisits.toLocaleString('vi-VN')}</td>
+
                     <td className="py-3 text-right text-gray-600">{item.totalNarrations.toLocaleString('vi-VN')}</td>
                   </tr>
                 ))}

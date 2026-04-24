@@ -29,7 +29,7 @@ public class AnalyticsController(
 
     private const int HeatmapMaxPoints = 500;
     private static readonly TimeSpan OnlineThreshold = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan RealtimeWindow = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan RealtimeWindow = TimeSpan.FromSeconds(45);
 
     [HttpGet("online-count")]
     [Authorize(Roles = "Admin")]
@@ -247,11 +247,27 @@ public class AnalyticsController(
     {
         var now = DateTime.UtcNow;
         var from = now.Subtract(RealtimeWindow);
-        var events = await dbContext.AnalyticsEvents
+        var onlineThreshold = now.Subtract(OnlineThreshold);
+
+        // Lấy dữ liệu thô để lọc online
+        var eventsRaw = await dbContext.AnalyticsEvents
             .Where(e => e.Timestamp >= from)
-            .Where(e => e.PoiId == null || dbContext.Pois.Any(p => p.Id == e.PoiId)) // Filter deleted
-            .Select(e => new HeatmapEvent { DeviceId = e.DeviceId, Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
+            .OrderByDescending(e => e.Timestamp)
             .ToListAsync(cancellationToken);
+
+        // Xác định danh sách DeviceId đang thực sự online (trong ngưỡng threshold và không có app_offline mới nhất)
+        var onlineDeviceIds = eventsRaw
+            .GroupBy(e => e.DeviceId)
+            .Select(g => g.First())
+            .Where(e => e.Timestamp >= onlineThreshold && e.EventType != "app_offline")
+            .Select(e => e.DeviceId)
+            .ToHashSet();
+
+        // Chỉ giữ lại dữ liệu heatmap của những người đang online
+        var events = eventsRaw
+            .Where(e => onlineDeviceIds.Contains(e.DeviceId))
+            .Select(e => new HeatmapEvent { DeviceId = e.DeviceId, Latitude = e.Latitude, Longitude = e.Longitude, Timestamp = e.Timestamp })
+            .ToList();
 
         var points = BuildHeatmapPoints(events, now, useRecencyWeight: true);
         var onlineCount = await GetOnlineUserCountInternal(cancellationToken);
@@ -313,27 +329,32 @@ public class AnalyticsController(
         // We will calculate density as People / 100m2.
         const double areaPerCell = 121.0; 
 
-        return events
+        // Bước 1: Gom nhóm theo DeviceId để mỗi người chỉ là 1 điểm duy nhất (tránh chồng lấn do nhảy GPS)
+        var userPositions = events
             .Where(e => Math.Abs(e.Latitude) > 0.000001 && Math.Abs(e.Longitude) > 0.000001)
-            .GroupBy(e => (lat: Math.Round(e.Latitude, 4), lng: Math.Round(e.Longitude, 4)))
+            .GroupBy(e => e.DeviceId)
+            .Select(ug => new
+            {
+                DeviceId = ug.Key,
+                Lat = ug.Average(e => e.Latitude),
+                Lng = ug.Average(e => e.Longitude),
+                EventCount = ug.Count()
+            })
+            .ToList();
+
+        // Bước 2: Chia lưới và tính mật độ dựa trên danh sách người dùng đã được làm sạch
+        return userPositions
+            .GroupBy(u => (lat: Math.Round(u.Lat, 4), lng: Math.Round(u.Lng, 4)))
             .Select(g =>
             {
-                // For density, we want to know how many PEOPLE (unique devices) are in this cell.
-                // If it's historical data (long time window), we could average or sum.
-                // For realtime/daily, unique DeviceId count is a better representation of "density".
-                var uniqueDevices = g.Select(e => e.DeviceId).Distinct().Count();
+                // Áp dụng công thức: Density = Tổng (Trọng số của từng User)
+                var userWeights = g.Sum(u => Math.Min(1.1, 1.0 + (u.EventCount - 1) * 0.05));
 
-                // Intensity can still use recency weight for visual "fade" of older points in realtime mode.
-                var intensity = g.Sum(e =>
-                {
-                    if (!useRecencyWeight) return 1.0;
-                    var ageMinutes = Math.Max(0, (now - e.Timestamp).TotalMinutes);
-                    return Math.Max(0.15, 1.0 - (ageMinutes / RealtimeWindow.TotalMinutes));
-                });
+                // Intensity dùng cho visual: lấy số bản ghi thô để đảm bảo độ rực rỡ
+                var intensity = userWeights; 
 
-                // Correcting intensity to reflect unique people normalized by area
-                // Density = UniqueDevices / area (per 100m2)
-                var density = (uniqueDevices * 100.0) / areaPerCell;
+                // Density = Tổng trọng số / diện tích (quy đổi về 100m2)
+                var density = (userWeights * 100.0) / areaPerCell;
 
                 return new
                 {
@@ -341,7 +362,8 @@ public class AnalyticsController(
                     lng = g.Key.lng,
                     intensity = Math.Round(intensity, 2),
                     density = Math.Round(density, 2),
-                    peopleCount = uniqueDevices
+                    peopleCount = g.Count(),
+                    weightedPeople = Math.Round(userWeights, 1)
                 };
             })
             .OrderByDescending(p => p.density)

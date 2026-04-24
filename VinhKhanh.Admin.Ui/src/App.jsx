@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
-import Dashboard from './pages/Dashboard';
 import PoiManager from './pages/PoiManager';
 import PoiForm from './pages/PoiForm';
 import Login from './pages/Login';
@@ -10,7 +9,6 @@ import Settings from './pages/Settings';
 import Approvals from './pages/Approvals';
 import OwnerManager from './pages/OwnerManager';
 import ShopLayout from './pages/shop/ShopLayout';
-import ShopDashboard from './pages/shop/ShopDashboard';
 import ShopPoiList from './pages/shop/ShopPoiList';
 import ShopPoiForm from './pages/shop/ShopPoiForm';
 import QrPoiPublic from './pages/QrPoiPublic';
@@ -26,8 +24,7 @@ function App() {
         {/* Admin routes */}
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<Layout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<Dashboard />} />
+            <Route index element={<Navigate to="/analytics" replace />} />
             <Route path="pois" element={<PoiManager />} />
             <Route path="pois/new" element={<PoiForm />} />
             <Route path="pois/:id" element={<PoiForm />} />
@@ -35,15 +32,14 @@ function App() {
             <Route path="owners" element={<OwnerManager />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="settings" element={<Settings />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/analytics" replace />} />
           </Route>
         </Route>
 
         {/* ShopOwner routes */}
         <Route element={<ProtectedRoute />}>
           <Route path="/shop" element={<ShopLayout />}>
-            <Route index element={<Navigate to="/shop/dashboard" replace />} />
-            <Route path="dashboard" element={<ShopDashboard />} />
+            <Route index element={<Navigate to="/shop/pois" replace />} />
             <Route path="pois" element={<ShopPoiList />} />
             <Route path="pois/new" element={<ShopPoiForm />} />
             <Route path="pois/:id/edit" element={<ShopPoiForm />} />
