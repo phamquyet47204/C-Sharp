@@ -25,7 +25,7 @@ function App() {
         {/* Admin routes */}
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<Layout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route index element={<Navigate to="/analytics" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="pois" element={<PoiManager />} />
             <Route path="pois/new" element={<PoiForm />} />
@@ -34,7 +34,7 @@ function App() {
             <Route path="owners" element={<OwnerManager />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="settings" element={<Settings />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/analytics" replace />} />
           </Route>
         </Route>
 

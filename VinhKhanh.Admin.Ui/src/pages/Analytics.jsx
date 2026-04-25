@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Tooltip as MapTooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, Headphones, Users, Trophy, Activity, Play, Pause, BarChart2 as ChartIcon } from 'lucide-react';
+import { 
+  MapPin, Headphones, Users, Trophy, Activity, Play, Pause, 
+  BarChart2 as ChartIcon, TrendingUp, Store as ShopIcon, 
+  LayoutDashboard 
+} from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer, Cell
@@ -36,6 +40,18 @@ const Analytics = () => {
   const [perfTotal, setPerfTotal] = useState(0);
   const [perfLoading, setPerfLoading] = useState(false);
   const [perfError, setPerfError] = useState('');
+
+  const [stats, setStats] = useState({
+    pois: 0,
+    visits: 0,
+    audioPlays: 0,
+    audioPlaysToday: 0,
+    visitsToday: 0,
+    totalShops: 0,
+    pendingOwners: 0,
+    onlineCount: 0,
+  });
+  const [statsLoading, setStatsLoading] = useState(false);
 
   const timelineTimerRef = useRef(null);
 
@@ -94,6 +110,28 @@ const Analytics = () => {
     }
   }, [from, to]);
 
+  const fetchSummary = useCallback(async () => {
+    try {
+      setStatsLoading(true);
+      const res = await api.get('/admin/dashboard-summary');
+      const data = res.data;
+      setStats({
+        pois: data.poisCount ?? 0,
+        visits: data.visitCount ?? 0,
+        audioPlays: data.narrationCount ?? 0,
+        audioPlaysToday: data.narrationCountToday ?? 0,
+        visitsToday: data.visitsToday ?? 0,
+        totalShops: data.totalShopsCount ?? 0,
+        pendingOwners: data.pendingOwnersCount ?? 0,
+        onlineCount: data.onlineCount ?? 0,
+      });
+    } catch (err) {
+      console.error('Lỗi khi tải dashboard summary:', err);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
   const fetchContentPerf = useCallback(async () => {
     try {
       setPerfLoading(true);
@@ -115,9 +153,10 @@ const Analytics = () => {
   }, [from, to]);
 
   useEffect(() => {
+    fetchSummary();
     fetchContentPerf();
     fetchHistory();
-  }, [fetchContentPerf, fetchHistory]);
+  }, [fetchSummary, fetchContentPerf, fetchHistory]);
 
   useEffect(() => {
     if (!isRealtimeMode) return undefined;
@@ -180,8 +219,6 @@ const Analytics = () => {
     }
   };
 
-  const maxIntensity = heatmapPoints.length ? Math.max(...heatmapPoints.map((p) => p.intensity)) : 1;
-
   const getRadius = (intensity) => {
     return Math.min(30, 6 + (intensity || 0) * 1.5);
   };
@@ -233,11 +270,53 @@ const Analytics = () => {
   }, [heatmapPoints]);
 
   return (
-    <section className="space-y-6">
-      <header>
-        <h2 className="text-3xl font-bold text-gray-900">Heatmap tổng quan</h2>
-        <p className="text-sm text-gray-500 mt-2">Phân tích mật độ người dùng và hiệu suất nội dung theo thời gian thực.</p>
+    <section className="space-y-8">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Phân tích hệ thống</h2>
+          <p className="text-gray-500 mt-1">Dữ liệu tổng quan và chi tiết mật độ hoạt động thời gian thực.</p>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-2xl text-sm font-bold border border-indigo-100">
+          <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+          {stats.onlineCount} người đang hoạt động
+        </div>
       </header>
+
+      {/* Stats Grid - Moved from Dashboard */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          icon={<TrendingUp size={24} />}
+          title="Lượt truy cập"
+          value={stats.visitsToday}
+          trend={`Tổng: ${stats.visits} lượt`}
+          color="bg-indigo-50 text-indigo-600"
+          borderColor="border-indigo-100"
+        />
+        <StatCard
+          icon={<Headphones size={24} />}
+          title="Lượt nghe TTS"
+          value={stats.audioPlaysToday}
+          trend={`Tổng: ${stats.audioPlays} lượt`}
+          color="bg-emerald-50 text-emerald-600"
+          borderColor="border-emerald-100"
+        />
+        <StatCard
+          icon={<MapPin size={24} />}
+          title="Địa điểm POI"
+          value={stats.pois}
+          trend="Đã được khởi tạo"
+          color="bg-blue-50 text-blue-600"
+          borderColor="border-blue-100"
+        />
+        <StatCard
+          icon={<ShopIcon size={24} />}
+          title="Đối tác Shop"
+          value={stats.totalShops}
+          trend={stats.pendingOwners > 0 ? `${stats.pendingOwners} shop đang chờ duyệt` : 'Đã duyệt toàn bộ'}
+          color="bg-orange-50 text-orange-600"
+          borderColor="border-orange-100"
+        />
+      </div>
 
       <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -604,6 +683,21 @@ const Analytics = () => {
     </section >
   );
 };
+
+const StatCard = ({ icon, title, value, trend, color, borderColor }) => (
+  <div className={`bg-white p-6 rounded-[2rem] shadow-sm border ${borderColor || 'border-gray-100'} flex items-start gap-4 transition-all duration-300 hover:shadow-md hover:-translate-y-1`}>
+    <div className={`p-4 rounded-2xl ${color}`}>
+      {icon}
+    </div>
+    <div>
+      <p className="text-sm font-semibold text-gray-500 mb-1">{title}</p>
+      <h3 className="text-3xl font-black text-gray-900 leading-none">{value.toLocaleString('vi-VN')}</h3>
+      <p className="text-xs font-bold text-gray-400 mt-3 flex items-center gap-1 uppercase tracking-wider">
+        {trend}
+      </p>
+    </div>
+  </div>
+);
 
 const RankBadge = ({ rank }) => {
   if (rank === 1) return <span className="text-lg">🥇</span>;
