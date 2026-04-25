@@ -115,7 +115,8 @@ const Dashboard = () => {
         />
       </div>
 
-      {/* Activity Chart Section */}
+      {/* Activity Chart Section - Hidden by request */}
+      {/*
       <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-gray-100">
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -186,6 +187,7 @@ const Dashboard = () => {
           </div>
         )}
       </div>
+      */}
 
     </div>
   );
