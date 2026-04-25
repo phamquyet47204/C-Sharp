@@ -706,7 +706,6 @@ sequenceDiagram
   AnalyticsController->>AnalyticsController: PublishRealtimeUpdateAsync - throttle 1s
   AnalyticsController->>DB: SELECT AnalyticsEvents WHERE Timestamp >= now-45s
   AnalyticsController->>AnalyticsController: BuildHeatmapPoints - group by Round(lat,4) Round(lng,4)
-  Note over AnalyticsController: density = uniqueDevices * 100 / 121
   AnalyticsController->>SignalR: Clients.Group("AdminGroup").SendAsync("analytics:realtime", payload)
   SignalR-->>AdminUI: WebSocket push {onlineCount, points, measuredAt}
   AnalyticsController-->>Mobile: 200 {success: true}
