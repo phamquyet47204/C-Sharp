@@ -220,7 +220,7 @@ public class ShopController(
             .Where(e => e.PoiId.HasValue && poiIds.Contains(e.PoiId.Value) && e.Timestamp >= since).ToListAsync(ct);
         return Ok(new
         {
-            totalVisits = events.Count(e => e.EventType == "visit"),
+            totalVisits = events.Where(e => e.EventType == "visit").Select(e => e.DeviceId).Distinct().Count(),
             totalNarrations = events.Count(e => e.EventType == "narration"),
             pois = myPois.Select(p =>
             {
@@ -229,7 +229,7 @@ public class ShopController(
                 return new { 
                     poiId = p.Id, 
                     poiName = viName, 
-                    visits = pe.Count(e => e.EventType == "visit"), 
+                    visits = pe.Where(e => e.EventType == "visit").Select(e => e.DeviceId).Distinct().Count(), 
                     narrations = pe.Count(e => e.EventType == "narration")
                 };
             })

@@ -274,7 +274,13 @@ public class AdminController(
         var startHourUtc = DateTime.UtcNow.AddHours(-8);
 
         var poisCount = await dbContext.Pois.CountAsync(cancellationToken);
-        var visitCount = await dbContext.AnalyticsEvents.CountAsync(cancellationToken);
+        
+        // Đếm tổng lượt truy cập duy nhất (DeviceId + Ngày)
+        var visitCount = await dbContext.AnalyticsEvents
+            .Select(e => new { e.DeviceId, Date = e.Timestamp.Date })
+            .Distinct()
+            .CountAsync(cancellationToken);
+
         var narrationCount = await dbContext.AnalyticsEvents.CountAsync(e => e.EventType == "narration", cancellationToken);
 
         // Đếm số người online (active trong 5 phút qua)
@@ -291,7 +297,7 @@ public class AdminController(
             .Select(g => new
             {
                 hour = g.Key,
-                count = g.Count()
+                count = g.Select(e => e.DeviceId).Distinct().Count()
             })
             .ToListAsync(cancellationToken);
 
@@ -309,7 +315,12 @@ public class AdminController(
             })
             .ToList();
 
-        var visitsToday = await dbContext.AnalyticsEvents.CountAsync(e => e.Timestamp >= vnTodayStart, cancellationToken);
+        var visitsToday = await dbContext.AnalyticsEvents
+            .Where(e => e.Timestamp >= vnTodayStart)
+            .Select(e => e.DeviceId)
+            .Distinct()
+            .CountAsync(cancellationToken);
+            
         var narrationCountToday = await dbContext.AnalyticsEvents.CountAsync(e => e.EventType == "narration" && e.Timestamp >= vnTodayStart, cancellationToken);
         
         // Thống kê chủ quán
