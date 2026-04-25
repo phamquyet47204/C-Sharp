@@ -41,6 +41,7 @@ const PoiForm = () => {
   const [errorMsg, setErrorMsg] = useState(null);
   const [qrToken, setQrToken] = useState('');
   const [qrLink, setQrLink] = useState('');
+  const [totalNarrations, setTotalNarrations] = useState(0);
 
   const getBackendOrigin = () => {
     const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
@@ -109,6 +110,7 @@ const PoiForm = () => {
         setExistingImageUrl(resolveImageUrl(detail?.imageUrl));
         setQrToken(detail?.qrToken || '');
         setQrLink(detail?.qrLink || '');
+        setTotalNarrations(detail?.totalNarrations || 0);
       } catch (error) {
         showError('Không tải được dữ liệu POI để chỉnh sửa.');
       } finally {
@@ -287,7 +289,13 @@ const PoiForm = () => {
             <p className="text-gray-500 mt-1">Sử dụng AI để dịch thuật & tự động hóa nội dung đa ngôn ngữ.</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+          {isEditMode && (
+            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-2 flex flex-col items-center">
+              <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Tổng lượt nghe</span>
+              <span className="text-xl font-black text-indigo-700 leading-tight">🎧 {totalNarrations.toLocaleString()}</span>
+            </div>
+          )}
           {isEditMode && (
             <>
               <button

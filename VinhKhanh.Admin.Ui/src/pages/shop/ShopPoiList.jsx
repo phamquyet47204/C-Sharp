@@ -73,9 +73,14 @@ export default function ShopPoiList() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-semibold truncate">{poi.name}</h3>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[poi.status] || 'bg-gray-100'}`}>
-                      {statusLabels[poi.status] || poi.status}
-                    </span>
+                    <div className="flex items-center gap-4 mt-1">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[poi.status] || 'bg-gray-100'}`}>
+                        {statusLabels[poi.status] || poi.status}
+                      </span>
+                      <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                        🎧 {poi.totalNarrations?.toLocaleString() || 0} lượt nghe
+                      </span>
+                    </div>
                   </div>
                   {poi.status === 'Rejected' && poi.rejectionReason && (
                     <p className="text-sm text-red-500 mt-1">❌ Lý do từ chối: {poi.rejectionReason}</p>

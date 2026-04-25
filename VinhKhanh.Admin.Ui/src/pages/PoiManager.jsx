@@ -255,6 +255,7 @@ const PoiManager = () => {
                   <th className="px-6 py-4 font-medium border-b border-gray-100">Tọa độ</th>
                   <th className="px-6 py-4 font-medium border-b border-gray-100">Trạng thái</th>
                   <th className="px-6 py-4 font-medium border-b border-gray-100">Chủ quán</th>
+                  <th className="px-6 py-4 font-medium border-b border-gray-100 text-center">Lượt nghe</th>
                   <th className="px-6 py-4 font-medium border-b border-gray-100 text-right">Thao tác</th>
                 </tr>
               </thead>
@@ -296,6 +297,11 @@ const PoiManager = () => {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {poi.ownerName || <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-700 font-black text-sm border border-indigo-100">
+                        {poi.totalNarrations?.toLocaleString() || 0}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -438,7 +444,7 @@ const PoiManager = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
                       <div className="space-y-1">
                         <label className="text-[10px] uppercase font-bold tracking-widest text-gray-400 flex items-center gap-1">
                           <MapPin size={10} /> Tọa độ
@@ -450,6 +456,12 @@ const PoiManager = () => {
                           <Globe size={10} /> Danh mục
                         </label>
                         <p className="text-sm font-semibold text-gray-700">{toCategoryLabel(selectedPoi.categoryCode)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold tracking-widest text-indigo-400 flex items-center gap-1">
+                          <Eye size={10} /> Lượt nghe
+                        </label>
+                        <p className="text-sm font-black text-indigo-600">{selectedPoi.totalNarrations?.toLocaleString() || 0} lượt</p>
                       </div>
                     </div>
                   </div>

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import PoiManager from './pages/PoiManager';
+import Dashboard from './pages/Dashboard';
 import PoiForm from './pages/PoiForm';
 import Login from './pages/Login';
 import Analytics from './pages/Analytics';
@@ -24,7 +25,8 @@ function App() {
         {/* Admin routes */}
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<Layout />}>
-            <Route index element={<Navigate to="/analytics" replace />} />
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
             <Route path="pois" element={<PoiManager />} />
             <Route path="pois/new" element={<PoiForm />} />
             <Route path="pois/:id" element={<PoiForm />} />
@@ -32,7 +34,7 @@ function App() {
             <Route path="owners" element={<OwnerManager />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="settings" element={<Settings />} />
-            <Route path="*" element={<Navigate to="/analytics" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Route>
 

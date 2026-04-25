@@ -142,6 +142,7 @@ public class AdminController(
                     }
                 }
                 poi.UpdatedAt = DateTime.UtcNow;
+                int bonus = 0;
                 await dbContext.SaveChangesAsync();
             }
         }
@@ -196,9 +197,20 @@ public class AdminController(
             .OrderByDescending(p => p.Id)
             .ToListAsync(cancellationToken);
 
+        // Lấy thống kê lượt nghe (Số lượng thực tế)
+        var stats = await dbContext.AnalyticsEvents
+            .Where(e => e.PoiId.HasValue && e.EventType == "narration")
+            .GroupBy(e => e.PoiId!.Value)
+            .Select(g => new {
+                poiId = g.Key,
+                count = g.Count()
+            })
+            .ToDictionaryAsync(x => x.poiId, x => x.count, cancellationToken);
+
         var result = pois.Select(p =>
         {
             var viLocalization = p.Localizations.FirstOrDefault(l => l.LanguageCode == "vi");
+            stats.TryGetValue(p.Id, out var narrationCount);
 
             return new
             {
@@ -212,7 +224,8 @@ public class AdminController(
                 isApproved = p.IsApproved,
                 status = p.Status.ToString(),
                 isPremium = p.IsPremium,
-                ownerName = p.Owner?.FullName ?? string.Empty
+                ownerName = p.Owner?.FullName ?? string.Empty,
+                totalNarrations = narrationCount
             };
         });
 
@@ -254,16 +267,18 @@ public class AdminController(
     [HttpGet("dashboard-summary")]
     public async Task<IActionResult> GetDashboardSummary(CancellationToken cancellationToken)
     {
-        var nowUtc = DateTime.UtcNow;
-        var todayUtc = nowUtc.Date;
-        var startHourUtc = nowUtc.AddHours(-7).Date.AddHours(nowUtc.Hour - 7);
+        // Tính toán mốc "Hôm nay" theo giờ Việt Nam (+7)
+        var vnNow = DateTime.UtcNow.AddHours(7);
+        var vnTodayStart = new DateTime(vnNow.Year, vnNow.Month, vnNow.Day, 0, 0, 0, DateTimeKind.Unspecified).AddHours(-7);
+        // Biểu đồ 8 giờ qua
+        var startHourUtc = DateTime.UtcNow.AddHours(-8);
 
         var poisCount = await dbContext.Pois.CountAsync(cancellationToken);
         var visitCount = await dbContext.AnalyticsEvents.CountAsync(cancellationToken);
         var narrationCount = await dbContext.AnalyticsEvents.CountAsync(e => e.EventType == "narration", cancellationToken);
 
         // Đếm số người online (active trong 5 phút qua)
-        var onlineThreshold = nowUtc.Subtract(TimeSpan.FromMinutes(5));
+        var onlineThreshold = DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(5));
         var onlineCount = await dbContext.AnalyticsEvents
             .Where(e => e.Timestamp >= onlineThreshold)
             .Select(e => e.DeviceId)
@@ -279,21 +294,23 @@ public class AdminController(
                 count = g.Count()
             })
             .ToListAsync(cancellationToken);
-// ... existing logic to populate activityMap ...
+
         var activityMap = hourlyActivity.ToDictionary(item => item.hour, item => item.count);
         var activitySeries = Enumerable.Range(0, 8)
             .Select(offset =>
             {
-                var hour = startHourUtc.AddHours(offset).Hour;
+                var hourUtc = startHourUtc.AddHours(offset);
+                var hourLocal = hourUtc.AddHours(7).Hour;
                 return new
                 {
-                    time = $"{hour:00}:00",
-                    count = activityMap.TryGetValue(hour, out var count) ? count : 0
+                    time = $"{hourLocal:00}:00",
+                    count = activityMap.TryGetValue(hourUtc.Hour, out var count) ? count : 0
                 };
             })
             .ToList();
 
-        var visitsToday = await dbContext.AnalyticsEvents.CountAsync(e => e.Timestamp >= todayUtc, cancellationToken);
+        var visitsToday = await dbContext.AnalyticsEvents.CountAsync(e => e.Timestamp >= vnTodayStart, cancellationToken);
+        var narrationCountToday = await dbContext.AnalyticsEvents.CountAsync(e => e.EventType == "narration" && e.Timestamp >= vnTodayStart, cancellationToken);
         
         // Thống kê chủ quán
         var totalShops = await userManager.GetUsersInRoleAsync("ShopOwner");
@@ -304,6 +321,7 @@ public class AdminController(
             poisCount,
             visitCount,
             narrationCount,
+            narrationCountToday,
             visitsToday,
             onlineCount,
             totalShopsCount = totalShops.Count,
@@ -501,6 +519,10 @@ public class AdminController(
             return NotFound("Không tìm thấy POI.");
         }
 
+        var narrationCount = await dbContext.AnalyticsEvents
+            .Where(e => e.PoiId == poiId && e.EventType == "narration")
+            .CountAsync(cancellationToken);
+
         string GetName(string languageCode) => poi.Localizations
             .FirstOrDefault(l => l.LanguageCode == languageCode)?.Name ?? string.Empty;
 
@@ -517,6 +539,7 @@ public class AdminController(
             imageUrl = poi.ImageUrl,
             qrToken = poi.QrToken,
             qrLink = BuildQrLink(poi.QrToken),
+            totalNarrations = narrationCount,
             vi = new { name = GetName("vi"), description = GetDescription("vi") },
             en = new { name = GetName("en"), description = GetDescription("en") },
             ja = new { name = GetName("ja"), description = GetDescription("ja") }

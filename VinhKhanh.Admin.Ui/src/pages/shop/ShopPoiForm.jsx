@@ -31,6 +31,7 @@ export default function ShopPoiForm() {
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [totalNarrations, setTotalNarrations] = useState(0);
 
   const showError = (msg) => { setErrorMsg(msg); setTimeout(() => setErrorMsg(null), 4000); };
 
@@ -46,6 +47,7 @@ export default function ShopPoiForm() {
         radius: d.radius ?? 50, categoryCode: d.categoryCode || 'FOOD_STREET',
       });
       if (d.imageUrl) setExistingImageUrl(d.imageUrl.startsWith('http') ? d.imageUrl : `http://localhost:5000${d.imageUrl}`);
+      setTotalNarrations(d.totalNarrations || 0);
     }).catch(() => showError('Không tải được dữ liệu POI.'));
   }, [id, isEdit]);
 
@@ -131,12 +133,20 @@ export default function ShopPoiForm() {
             <p className="text-gray-500 mt-1">Dùng AI để tự động dịch nội dung sang Anh & Nhật.</p>
           </div>
         </div>
-        <button onClick={handleSave} disabled={isSaving}
+        <div className="flex items-center gap-4">
+          {isEdit && (
+            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-2 flex flex-col items-center">
+              <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Tổng lượt nghe</span>
+              <span className="text-xl font-black text-indigo-700 leading-tight">🎧 {totalNarrations.toLocaleString()}</span>
+            </div>
+          )}
+          <button onClick={handleSave} disabled={isSaving}
           className={`${isSaving ? 'bg-gray-400' : 'bg-orange-500 hover:bg-orange-600'} text-white px-8 py-3 rounded-2xl font-semibold flex items-center justify-center gap-2 transition-all shadow-sm w-full md:w-auto`}>
           <Save size={20} />
           {isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
         </button>
       </div>
+    </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Language tabs */}

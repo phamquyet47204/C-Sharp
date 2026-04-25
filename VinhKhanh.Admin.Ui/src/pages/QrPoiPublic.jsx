@@ -106,12 +106,26 @@ const QrPoiPublic = () => {
     utterance.rate = 0.95;
     utterance.pitch = 1.0;
     
-    utterance.onstart = () => setSpeaking(true);
+    utterance.onstart = () => {
+      setSpeaking(true);
+      if (payload?.poiId) {
+        const webDeviceId = localStorage.getItem('vk_web_device_id') || `web-${Math.random().toString(36).substring(2, 15)}`;
+        localStorage.setItem('vk_web_device_id', webDeviceId);
+        
+        api.post('/analytics/visit', {
+          eventType: 'narration',
+          poiId: payload.poiId,
+          lat: payload.lat,
+          lng: payload.lng,
+          deviceId: webDeviceId
+        }).catch(err => console.error("Failed to log TTS listen", err));
+      }
+    };
     utterance.onend = () => setSpeaking(false);
     utterance.onerror = () => setSpeaking(false);
     
     window.speechSynthesis.speak(utterance);
-  }, [lang]);
+  }, [lang, payload]);
 
   // Handle Autoplay issues: Wait for first interaction
   const handleStartExperience = () => {

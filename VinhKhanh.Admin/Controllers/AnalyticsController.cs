@@ -194,7 +194,7 @@ public class AnalyticsController(
 
             // Chỉ lấy dữ liệu của các POI hiện còn tồn tại
             eventsQuery = eventsQuery.Where(e => dbContext.Pois.Any(p => p.Id == e.PoiId));
-
+            // Lượt nghe TTS 
             var grouped = await eventsQuery
                 .GroupBy(e => e.PoiId!.Value)
                 .Select(g => new
@@ -283,6 +283,8 @@ public class AnalyticsController(
         var poiRefs = await GetPoiReferencesAsync(cancellationToken);
         var points = BuildHeatmapPoints(events, now, useRecencyWeight: true, poiRefs);
         var onlineCount = await GetOnlineUserCountInternal(cancellationToken);
+
+        // onlineCount = onlineCount * 2;
 
         return new
         {

@@ -63,10 +63,15 @@ public class ShopController(
         string Get(string lang, string field) => poi.Localizations
             .FirstOrDefault(l => l.LanguageCode == lang) is { } loc
             ? (field == "name" ? loc.Name : loc.Description) : string.Empty;
+        var narrationCount = await dbContext.AnalyticsEvents
+            .Where(e => e.PoiId == id && e.EventType == "narration")
+            .CountAsync(ct);
+
         return Ok(new {
             id = poi.Id, imageUrl = poi.ImageUrl,
             lat = poi.Latitude, lng = poi.Longitude, radius = poi.Radius,
             categoryCode = poi.CategoryCode,
+            totalNarrations = narrationCount,
             vi = new { name = Get("vi","name"), description = Get("vi","desc") },
             en = new { name = Get("en","name"), description = Get("en","desc") },
             ja = new { name = Get("ja","name"), description = Get("ja","desc") },
@@ -84,10 +89,31 @@ public class ShopController(
         var userId = CurrentUserId;
         var pois = await dbContext.Pois.Include(p => p.Localizations)
             .Where(p => p.OwnerId == userId).OrderByDescending(p => p.Id).ToListAsync(ct);
+        
+        var stats = await dbContext.AnalyticsEvents
+            .Where(e => e.PoiId.HasValue && e.EventType == "narration")
+            .GroupBy(e => e.PoiId!.Value)
+            .Select(g => new {
+                poiId = g.Key,
+                count = g.Count()
+            })
+            .ToDictionaryAsync(x => x.poiId, x => x.count, ct);
+
         return Ok(pois.Select(p =>
         {
             var vi = p.Localizations.FirstOrDefault(l => l.LanguageCode == "vi");
-            return new { id = p.Id, name = vi?.Name ?? string.Empty, status = p.Status.ToString(), isPremium = p.IsPremium, imageUrl = p.ImageUrl, lat = p.Latitude, lng = p.Longitude, rejectionReason = p.RejectionReason };
+            stats.TryGetValue(p.Id, out var narrationCount);
+            return new { 
+                id = p.Id, 
+                name = vi?.Name ?? string.Empty, 
+                status = p.Status.ToString(), 
+                isPremium = p.IsPremium, 
+                imageUrl = p.ImageUrl, 
+                lat = p.Latitude, 
+                lng = p.Longitude, 
+                rejectionReason = p.RejectionReason,
+                totalNarrations = narrationCount
+            };
         }));
     }
 
@@ -183,7 +209,8 @@ public class ShopController(
     }
 
     [HttpGet("analytics")]
-    public async Task<IActionResult> GetAnalytics(CancellationToken ct)    {
+    public async Task<IActionResult> GetAnalytics(CancellationToken ct)
+    {
         if (!await IsApprovedAsync(ct)) return StatusCode(403, "Tài khoản chưa được duyệt.");
         var userId = CurrentUserId;
         var since = DateTime.UtcNow.AddDays(-30);
@@ -199,7 +226,12 @@ public class ShopController(
             {
                 var viName = p.Localizations.FirstOrDefault(l => l.LanguageCode == "vi")?.Name ?? string.Empty;
                 var pe = events.Where(e => e.PoiId == p.Id).ToList();
-                return new { poiId = p.Id, poiName = viName, visits = pe.Count(e => e.EventType == "visit"), narrations = pe.Count(e => e.EventType == "narration") };
+                return new { 
+                    poiId = p.Id, 
+                    poiName = viName, 
+                    visits = pe.Count(e => e.EventType == "visit"), 
+                    narrations = pe.Count(e => e.EventType == "narration")
+                };
             })
         });
     }

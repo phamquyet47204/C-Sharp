@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     port: 3000,
     strictPort: true,
-    host: "127.0.0.1",
+    host: true,
     cors: true,
     open: true,
     proxy: {
@@ -26,7 +26,7 @@ export default defineConfig({
     preview: {
       port: 3000,
       strictPort: true,
-      host: "127.0.0.1",
+      host: true,
     }
   }
 })
