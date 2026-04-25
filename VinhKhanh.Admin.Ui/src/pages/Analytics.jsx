@@ -283,7 +283,8 @@ const Analytics = () => {
       </header>
 
       {/* Stats Grid - Moved from Dashboard */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Ẩn theo yêu cầu của USER
         <StatCard
           icon={<TrendingUp size={24} />}
           title="Lượt truy cập"
@@ -292,6 +293,7 @@ const Analytics = () => {
           color="bg-indigo-50 text-indigo-600"
           borderColor="border-indigo-100"
         />
+        */}
         <StatCard
           icon={<Headphones size={24} />}
           title="Lượt nghe TTS"
