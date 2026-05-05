@@ -274,7 +274,7 @@ public class AdminController(
         var startHourUtc = DateTime.UtcNow.AddHours(-8);
 
         var poisCount = await dbContext.Pois.CountAsync(cancellationToken);
-        
+        // poisCount = poisCount*2;
         // Đếm tổng lượt truy cập duy nhất (DeviceId + Ngày)
         var visitCount = await dbContext.AnalyticsEvents
             .Select(e => new { e.DeviceId, Date = e.Timestamp.Date })

@@ -1,862 +1,877 @@
-# VinhKhanh — Product Requirements Document (PRD)
+# Product Requirements Document (PRD) - Vinh Khanh Food Street
 
-> **Phiên bản:** 2.0 | **Ngày:** 24/04/2026
-> **Nền tảng:** ASP.NET Core 10 · React + Vite · .NET MAUI Android
-> **Tài liệu chi tiết từng nhóm:** xem thư mục [`docs/`](./docs/)
+Tài liệu này cung cấp thiết kế kiến trúc chi tiết, sơ đồ UML và phân tích End-to-End (E2E) trực tiếp tới các Class/Method trong mã nguồn. 
 
 ---
 
-## Mục lục
+## 1. Danh Sách Chức Năng Hệ Thống (Features)
 
-1. [Tổng quan sản phẩm](#1-tổng-quan-sản-phẩm)
-2. [Actors & Phân quyền](#2-actors--phân-quyền)
-3. [Danh sách Feature](#3-danh-sách-feature)
-4. [Use Case Diagram tổng quan](#4-use-case-diagram-tổng-quan)
-5. [Class Diagram tổng quan](#5-class-diagram-tổng-quan)
-6. [ERD tổng quan](#6-erd-tổng-quan)
-7. [Sequence Diagrams](#7-sequence-diagrams)
-8. [Activity Diagrams](#8-activity-diagrams)
+### 1.1. Hệ sinh thái Mobile App (Visitor / Khách du lịch)
+- **Quét QR Code POI**: Khám phá thông tin quán ăn qua mã QR.
+- **Thuyết minh Tự động (Audio Narration / TTS)**: Nghe giới thiệu POI, hỗ trợ đa ngôn ngữ (VI, EN, JA).
+- **Tracking Vị trí**: Tự động bắt vị trí GPS, kiểm tra vùng Geofence để kích hoạt TTS.
+- **Đánh giá POI**: Rating 1-5 sao cho quán ăn.
+- **Mua Access Pass**: Thanh toán In-App Purchase để mở khóa toàn bộ nội dung.
 
----
+### 1.2. Hệ sinh thái Web Admin (Shop Owner / Chủ quán)
+- **Đăng ký Tài khoản**: Gửi yêu cầu làm đối tác (chờ duyệt).
+- **Đăng nhập**: Phân quyền truy cập `ShopOwner`.
+- **Quản lý POI Của Tôi**: Thêm/Sửa thông tin quán ăn, lấy file mã QR.
 
-## 1. Tổng quan sản phẩm
-
-**VinhKhanh** là nền tảng du lịch ẩm thực thông minh. Khi du khách đi bộ qua một quán ăn đã đăng ký, điện thoại tự động phát thuyết minh giới thiệu quán bằng ngôn ngữ của họ — không cần mở app, không cần thao tác.
-
-### Kiến trúc hệ thống
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│  Presentation   │ Admin Web UI (React)  │ Mobile (.NET MAUI) │
-├──────────────────────────────────────────────────────────────┤
-│  Application    │ AdminApproveUseCase · AnalyticsVisitUseCase · PoiSyncUseCase │
-├──────────────────────────────────────────────────────────────┤
-│  Domain         │ Poi · ApplicationUser · Payment · AnalyticsEvent · ...       │
-├──────────────────────────────────────────────────────────────┤
-│  Infrastructure │ AppDbContext (EF Core) · GeminiAiService · EncryptionUtility │
-└──────────────────────────────────────────────────────────────┘
-```
+### 1.3. Hệ sinh thái Web Admin (Super Admin)
+- **Quản lý Phê duyệt Đối tác**: Duyệt yêu cầu tài khoản ShopOwner.
+- **Quản lý Toàn bộ POI**: CRUD mọi điểm nhấn, gán "Premium" và "Bán kính quét (Radius)".
+- **Dashboard Heatmap Realtime**: Quan sát mật độ đám đông di chuyển theo thời gian thực.
+- **Thống kê Nội dung (Content Performance)**: Xem số lượt truy cập và lượt nghe TTS của từng quán.
+- **Quản lý User Online**: Thống kê số lượng thiết bị đang trực tuyến.
 
 ---
 
-## 2. Actors & Phân quyền
+## 2. Sơ Đồ Tổng Quan Hệ Thống
 
-| Actor | Mô tả | Điều kiện truy cập |
-|---|---|---|
-| **Admin** | Quản trị viên hệ thống | JWT với role `Admin` |
-| **ShopOwner** | Chủ quán đăng ký trên hệ thống | JWT với role `ShopOwner` + `IsApproved=true` |
-| **Visitor** | Du khách dùng app mobile | Không cần đăng nhập (hoặc JWT role `Visitor`) |
-
-**Luồng phân quyền quan trọng:**
-- `ShopOwner` đăng ký → `IsApproved=false` → Admin duyệt → `IsApproved=true` → mới đăng nhập được
-- `Visitor` đăng ký → `IsApproved=true` ngay lập tức, `ActivationDate=UtcNow`
-- Mọi request của `ShopOwner` đều gọi `IsApprovedAsync()` kiểm tra DB thực tế (không chỉ dựa vào JWT)
-
----
-
-## 3. Danh sách Feature
-
-Hệ thống có **18 feature** chia thành 6 nhóm:
-
-### Nhóm A — Xác thực & Tài khoản (3 feature)
-
-| # | Feature | Actor | Mô tả |
-|---|---|---|---|
-| F01 | **Đăng nhập** | Tất cả | Xác thực email/password, nhận JWT 24h. Chặn ShopOwner chưa được duyệt (403). |
-| F02 | **Đăng ký tài khoản ShopOwner** | ShopOwner | Tạo tài khoản chờ Admin duyệt. `IsApproved=false`, role `ShopOwner`. |
-| F03 | **Đăng ký tài khoản Visitor** | Visitor | Tạo tài khoản tự động kích hoạt. `IsApproved=true`, `ActivationDate=now`. |
-
-### Nhóm B — Quản lý POI (5 feature)
-
-| # | Feature | Actor | Mô tả |
-|---|---|---|---|
-| F04 | **Admin quản lý POI toàn hệ thống** | Admin | Xem, tạo, sửa, xóa bất kỳ POI nào. Admin tạo POI → `Status=Approved` ngay. Sinh `QrToken` tự động. |
-| F05 | **Duyệt / Từ chối / Ẩn POI** | Admin | Chuyển trạng thái POI: `Pending_Approval → Approved/Rejected/Hidden`. Từ chối phải có lý do ≥ 10 ký tự. |
-| F06 | **ShopOwner quản lý POI của mình** | ShopOwner | Tạo POI ở `Status=Draft`. Chỉ sửa/xóa khi `Draft` hoặc `Rejected`. Không xóa khi `Pending_Approval`. |
-| F07 | **Gửi POI để Admin duyệt** | ShopOwner | Chuyển `Draft → Pending_Approval`. Chỉ được gửi khi đang ở `Draft`. |
-| F08 | **AI dịch thuật nội dung POI** | Admin, ShopOwner | Nhập tên + mô tả tiếng Việt → Gemini API dịch sang tiếng Anh và tiếng Nhật. Fallback qua 4 model: `gemini-2.5-flash → gemini-1.5-flash → gemini-2.0-flash → gemini-2.5-flash-lite`. |
-
-### Nhóm C — Trải nghiệm Mobile (4 feature)
-
-| # | Feature | Actor | Mô tả |
-|---|---|---|---|
-| F09 | **Đồng bộ POI offline** | Visitor | Delta sync: chỉ tải POI thay đổi sau `lastSync`. Lưu SQLite local. Hoạt động offline khi mất mạng. Pruning tự động xóa POI đã bị xóa trên server. |
-| F10 | **Thuyết minh tự động khi đến gần quán** | Visitor | GPS → Haversine distance → Debounce 2 lần → Cooldown 10 phút → chọn POI Priority cao nhất → phát MP3 hoặc TTS. Audio ducking giảm nhạc nền khi phát. |
-| F11 | **Quét QR code để xem thông tin quán** | Visitor | Quét QR → resolve token → lấy thông tin POI + deep link `vinhkhanh://poi/{id}`. Redirect sang web nếu chưa cài app. |
-| F12 | **Đánh giá POI bằng sao** | Visitor | Upsert rating 1–5 sao theo `DeviceId`. Mỗi thiết bị chỉ có 1 rating/POI. Hiển thị điểm trung bình và số lượt đánh giá. |
-
-### Nhóm D — Kiểm soát truy cập & Thanh toán (3 feature)
-
-| # | Feature | Actor | Mô tả |
-|---|---|---|---|
-| F13 | **Dùng thử miễn phí 3 POI** | Visitor | 3 POI đầu tiên nghe miễn phí. Ghi `FreeTrialRecord` sau mỗi lần nghe. Unique index `(DeviceId, PoiId)`. |
-| F14 | **Dùng thử thiết bị 7 ngày** | Visitor | Thiết bị mới tự động kích hoạt `DeviceTrial` 7 ngày. Nghe không giới hạn trong thời gian thử. |
-| F15 | **Mua Access Pass** | Visitor | Thanh toán → `Payment(Status=Pending)` → callback → `Status=Completed, ExpiryDate=+7 ngày`. Nghe không giới hạn. |
-
-### Nhóm E — Analytics & Dashboard (2 feature)
-
-| # | Feature | Actor | Mô tả |
-|---|---|---|---|
-| F16 | **Dashboard tổng quan Admin** | Admin | Số POI, lượt visit, lượt narration, người online (5 phút), biểu đồ hoạt động 8 giờ, số ShopOwner chờ duyệt. |
-| F17 | **Heatmap & Content Performance** | Admin | Heatmap tọa độ theo ngày/khoảng ngày. Top POI theo lượt nghe. Realtime dashboard qua SignalR (throttle 1s). Mật độ = `uniqueDevices × 100 / 121m²`. |
-
-### Nhóm F — Quản trị hệ thống (1 feature)
-
-| # | Feature | Actor | Mô tả |
-|---|---|---|---|
-| F18 | **Cài đặt hệ thống** | Admin | Quản lý key-value config: URL frontend, link tải app Android/iOS. Dùng cho QR redirect và deep link. |
-
----
-## 4. Use Case Diagram tổng quan
+### 2.1. Use Case Diagram
+Mô tả các quyền hạn và hành động của 3 nhóm người dùng.
 
 ```mermaid
-flowchart LR
-  Admin["👤 Admin"]
-  Shop["👤 ShopOwner"]
-  Visitor["👤 Visitor"]
+usecaseDiagram
+    actor "Visitor" as visitor
+    actor "Shop Owner" as owner
+    actor "Admin" as admin
 
-  subgraph Auth["A — Xác thực & Tài khoản"]
-    F01["F01 Đăng nhập"]
-    F02["F02 Đăng ký ShopOwner"]
-    F03["F03 Đăng ký Visitor"]
-  end
+    usecase "Listen to TTS Narration" as uc1
+    usecase "Scan QR Code" as uc2
+    usecase "Purchase Access Pass" as uc3
+    
+    usecase "Register as Partner" as uc4
+    usecase "Manage Own POI" as uc5
+    
+    usecase "Approve Shop Owner" as uc6
+    usecase "Manage All POIs" as uc7
+    usecase "View Heatmap" as uc8
+    usecase "View Analytics" as uc9
 
-  subgraph POIMgmt["B — Quản lý POI"]
-    F04["F04 Admin quản lý POI toàn hệ thống"]
-    F05["F05 Duyệt / Từ chối / Ẩn POI"]
-    F06["F06 ShopOwner quản lý POI của mình"]
-    F07["F07 Gửi POI để Admin duyệt"]
-    F08["F08 AI dịch thuật nội dung POI"]
-  end
+    visitor --> uc1
+    visitor --> uc2
+    visitor --> uc3
 
-  subgraph Mobile["C — Trải nghiệm Mobile"]
-    F09["F09 Đồng bộ POI offline"]
-    F10["F10 Thuyết minh tự động khi đến gần quán"]
-    F11["F11 Quét QR code"]
-    F12["F12 Đánh giá POI bằng sao"]
-  end
+    owner --> uc4
+    owner --> uc5
 
-  subgraph Access["D — Kiểm soát truy cập & Thanh toán"]
-    F13["F13 Dùng thử miễn phí 3 POI"]
-    F14["F14 Dùng thử thiết bị 7 ngày"]
-    F15["F15 Mua Access Pass"]
-  end
-
-  subgraph Analytics["E — Analytics & Dashboard"]
-    F16["F16 Dashboard tổng quan Admin"]
-    F17["F17 Heatmap & Content Performance"]
-  end
-
-  subgraph System["F — Quản trị hệ thống"]
-    F18["F18 Cài đặt hệ thống"]
-  end
-
-  Admin --> F01
-  Admin --> F04
-  Admin --> F05
-  Admin --> F08
-  Admin --> F16
-  Admin --> F17
-  Admin --> F18
-
-  Shop --> F01
-  Shop --> F02
-  Shop --> F06
-  Shop --> F07
-  Shop --> F08
-
-  Visitor --> F01
-  Visitor --> F03
-  Visitor --> F09
-  Visitor --> F10
-  Visitor --> F11
-  Visitor --> F12
-  Visitor --> F13
-  Visitor --> F14
-  Visitor --> F15
+    admin --> uc6
+    admin --> uc7
+    admin --> uc8
+    admin --> uc9
 ```
 
----
-
-## 5. Class Diagram tổng quan
-
-```mermaid
-classDiagram
-  class Poi {
-    +int Id
-    +string BasePoiId
-    +string CategoryCode
-    +double Latitude
-    +double Longitude
-    +double Radius
-    +string QrToken
-    +int Priority
-    +bool IsApproved
-    +PoiStatus Status
-    +bool IsPremium
-    +string OwnerId
-    +string RejectionReason
-    +DateTime UpdatedAt
-  }
-  class PoiLocalization {
-    +int PoiId
-    +string LanguageCode
-    +string Name
-    +string Description
-    +string AudioUrl
-  }
-  class PoiRating {
-    +int PoiId
-    +string DeviceId
-    +int Stars
-    +DateTime RatedAt
-  }
-  class ApplicationUser {
-    +string Id
-    +string FullName
-    +bool IsApproved
-    +DateTime ActivationDate
-  }
-  class AnalyticsEvent {
-    +int Id
-    +string DeviceId
-    +int PoiId
-    +string EventType
-    +double Latitude
-    +double Longitude
-    +DateTime Timestamp
-  }
-  class Payment {
-    +string TransactionId
-    +string UserId
-    +PaymentType Type
-    +PaymentStatus Status
-    +DateTime ExpiryDate
-  }
-  class FreeTrialRecord {
-    +string DeviceId
-    +int PoiId
-    +DateTime FirstHeardAt
-  }
-  class DeviceTrial {
-    +string DeviceId
-    +DateTime ExpiryDate
-    +DateTime LastCheckedAt
-  }
-  class SystemSetting {
-    +string Key
-    +string Value
-  }
-  class IPoiRepository {
-    <<interface>>
-    +GetSyncPoisAsync(lastSyncAt, ct)
-    +ApprovePoiAsync(id, ct)
-    +GetAllActiveBaseIdsAsync(ct)
-  }
-  class IAnalyticsRepository {
-    <<interface>>
-    +AddVisitEventAsync(evt, ct)
-  }
-  class PoiSyncUseCase {
-    +ExecuteAsync(SyncRequest, ct) SyncResponse
-    -NormalizeCategoryCode()
-    -InferCategory()
-  }
-  class AnalyticsVisitUseCase {
-    +ExecuteAsync(AnalyticsVisitCommand, ct)
-    -BuildAnonymousDeviceId() string
-  }
-  class AdminApproveUseCase {
-    +ExecuteAsync(poiId, ct) bool
-  }
-  class GeminiAiService {
-    +GenerateTranslationsAsync(name, desc, ct)
-    -ExtractJsonPayload()
-  }
-  class GeofenceEngine {
-    -EnterDebounceThreshold = 2
-    -DefaultCooldown = 10min
-    +StartAsync(languageCode)
-    +MarkPoiAsPlayed(poiId, cooldown)
-    -ProcessLocationAsync(location)
-    -HandleInsidePoisWithPriorityAndDebounce()
-    -CalculateDistance() double
-  }
-  class NarrationService {
-    +PlayAudioAsync(filePath)
-    +SpeakAsync(text, lang)
-    +StopAll()
-    -RunExclusiveNarrationAsync()
-    -BeginAudioDuckingAsync()
-    -SanitizeTtsText()
-  }
-  class DatabaseService {
-    +SyncPoisFromServerAsync(ct) bool
-    +GetLocalizedPoisAsync(langCode)
-    -ApplyServerChangesAsync()
-    -SelectByFallback()
-    -NormalizeLanguageCode()
-  }
-  class AccessService {
-    +DeviceId string
-    +HasActivePass() bool
-    +SyncTrialStatusAsync()
-    -GetPersistentDeviceId()
-  }
-
-  Poi "1" --> "*" PoiLocalization : Cascade
-  Poi "1" --> "*" PoiRating : Cascade
-  Poi "1" --> "*" AnalyticsEvent
-  Poi "1" --> "*" FreeTrialRecord
-  ApplicationUser "1" --> "*" Poi : OwnerId
-  ApplicationUser "1" --> "*" Payment : UserId
-
-  PoiSyncUseCase --> IPoiRepository
-  AdminApproveUseCase --> IPoiRepository
-  AnalyticsVisitUseCase --> IAnalyticsRepository
-
-  GeofenceEngine --> DatabaseService
-  GeofenceEngine --> NarrationService : OnPoiEntered
-  NarrationService --> AccessService
-```
-
----
-
-## 6. ERD tổng quan
+### 2.2. Entity Relationship Diagram (ERD)
+Ánh xạ trực tiếp từ các entity trong `VinhKhanh.Domain.Entities`.
 
 ```mermaid
 erDiagram
-  ApplicationUser {
-    string Id PK
-    string UserName
-    string Email
-    string FullName
-    int PoiId "nullable FK"
-    bool IsApproved
-    datetime ActivationDate
-  }
-  Poi {
-    int Id PK
-    string BasePoiId
-    string CategoryCode
-    double Latitude
-    double Longitude
-    double Radius
-    string ImageUrl "nullable"
-    string QrToken "nullable"
-    int Priority
-    bool IsApproved
-    int Status "enum PoiStatus"
-    bool IsPremium
-    datetime PremiumExpiryDate "nullable"
-    string OwnerId "nullable FK"
-    string RejectionReason "nullable"
-    datetime CreatedAt
-    datetime UpdatedAt
-  }
-  PoiLocalization {
-    int Id PK
-    int PoiId FK
-    string LanguageCode
-    string Name
-    string Description
-    string AudioUrl "nullable"
-  }
-  PoiRating {
-    int Id PK
-    int PoiId FK
-    string DeviceId
-    int Stars
-    datetime RatedAt
-    double Latitude "nullable"
-    double Longitude "nullable"
-  }
-  AnalyticsEvent {
-    int Id PK
-    double Latitude
-    double Longitude
-    datetime Timestamp
-    string DeviceId
-    int PoiId "nullable FK"
-    string EventType "nullable"
-  }
-  Payment {
-    int Id PK
-    string TransactionId "unique"
-    string UserId FK
-    decimal Amount
-    int Type "enum PaymentType"
-    int PoiId "nullable FK"
-    int Status "enum PaymentStatus"
-    datetime ExpiryDate "nullable"
-    datetime CreatedAt
-  }
-  FreeTrialRecord {
-    int Id PK
-    string UserId "nullable"
-    string DeviceId "nullable"
-    int PoiId FK
-    datetime FirstHeardAt
-  }
-  DeviceTrial {
-    string DeviceId PK
-    datetime TrialStartDate
-    datetime ExpiryDate
-    datetime LastCheckedAt "nullable"
-  }
-  SystemSetting {
-    string Key PK
-    string Value
-  }
+    ApplicationUser {
+        string Id PK
+        string FullName
+        string Email
+        bool IsApproved
+    }
+    Poi {
+        int Id PK
+        string BasePoiId
+        float Latitude
+        float Longitude
+        float Radius
+        bool IsPremium
+    }
+    PoiLocalization {
+        int Id PK
+        int PoiId FK
+        string LanguageCode
+        string Name
+        string Description
+    }
+    PoiRating {
+        int Id PK
+        int PoiId FK
+        string DeviceId
+        int Stars
+    }
+    AnalyticsEvent {
+        int Id PK
+        string DeviceId
+        int PoiId FK
+        string EventType "visit, narration, location_update, app_online"
+        float Latitude
+        float Longitude
+        datetime Timestamp
+    }
+    FreeTrialRecord {
+        int Id PK
+        string DeviceId
+        int PoiId FK
+        datetime FirstHeardAt
+    }
 
-  ApplicationUser ||--o{ Poi : "OwnerId NoAction"
-  ApplicationUser ||--o{ Payment : "UserId Cascade"
-  Poi ||--|{ PoiLocalization : "PoiId Cascade"
-  Poi ||--o{ PoiRating : "PoiId Cascade"
-  Poi ||--o{ AnalyticsEvent : "PoiId nullable"
-  Poi ||--o{ FreeTrialRecord : "PoiId"
+    ApplicationUser ||--o{ Poi : "Owns (Optional)"
+    Poi ||--|{ PoiLocalization : "Has"
+    Poi ||--o{ PoiRating : "Received"
+    Poi ||--o{ AnalyticsEvent : "Tracks"
+    Poi ||--o{ FreeTrialRecord : "Trial"
 ```
 
-**Ràng buộc DB:**
-- `PoiRating`: Unique `(DeviceId, PoiId)` · Check `Stars BETWEEN 1 AND 5`
-- `FreeTrialRecord`: Unique `(UserId, PoiId)` khi `UserId IS NOT NULL` · Unique `(DeviceId, PoiId)` khi `DeviceId IS NOT NULL`
-- `Payment.TransactionId`: Unique index
-- `PoiStatus`: `Draft=0, Pending_Approval=1, Approved=2, Rejected=3, Hidden=4`
-- `PaymentType`: `AccessPass=0, PremiumUpgrade=1`
-- `PaymentStatus`: `Pending=0, Completed=1, Failed=2, Refunded=3`
-
----
-## 7. Sequence Diagrams
-
-### F01 — Đăng nhập
-
-**Logic:** `FindByEmailAsync` → `CheckPasswordAsync` → kiểm tra `IsApproved` → tạo JWT 24h với claims `NameIdentifier`, `Role`, `ActivationDate`.
+### 2.3. Class Diagram (Clean Architecture)
+Sự tương tác giữa các tầng kiến trúc chính trong mã nguồn.
 
 ```mermaid
-sequenceDiagram
-  actor User
-  participant AuthController
-  participant UserManager
-  participant DB
+classDiagram
+    class Domain_Entities {
+        +AnalyticsEvent
+        +ApplicationUser
+        +Poi
+    }
+    
+    class Infrastructure_Data {
+        +AppDbContext
+    }
+    
+    class Application_UseCases {
+        +AnalyticsVisitUseCase
+        +PoiSyncUseCase
+        +AdminApproveUseCase
+    }
 
-  User->>AuthController: POST /api/auth/login {email, password}
-  AuthController->>UserManager: FindByEmailAsync(email)
-  UserManager->>DB: SELECT AspNetUsers WHERE Email=email
-  DB-->>AuthController: user hoặc null
+    class WebAPI_Controllers {
+        +AnalyticsController
+        +PoiController
+        +AuthController
+    }
+    
+    class WebAPI_Hubs {
+        +AnalyticsHub
+    }
 
-  alt user null hoặc password sai
-    AuthController-->>User: 401 Tài khoản hoặc mật khẩu không chính xác
-  else IsApproved == false
-    AuthController-->>User: 403 Tài khoản đang chờ Admin duyệt
-  else
-    AuthController->>UserManager: GetRolesAsync(user)
-    DB-->>AuthController: roles
-    AuthController->>AuthController: Tạo JWT 24h - Claims: NameIdentifier, Role, ActivationDate
-    AuthController-->>User: 200 {token, expiration, roles}
-  end
+    Infrastructure_Data ..> Domain_Entities : DbSet
+    Application_UseCases ..> Infrastructure_Data : DI injected
+    WebAPI_Controllers ..> Application_UseCases : Execute
+    WebAPI_Controllers ..> WebAPI_Hubs : Push Update
 ```
 
 ---
 
-### F04 + F05 — Admin tạo POI và duyệt POI của ShopOwner
+## 3. Phân Tích Chuyên Sâu End-to-End (E2E Tracing)
 
-**Logic tạo (Admin):** `Status=Approved` ngay, sinh `BasePoiId=Guid[..10]`, `QrToken=poi-Guid[..20]`, upload ảnh vào `wwwroot/media/`, tạo 3 `PoiLocalization` (vi/en/ja).
+### 3.1. Chức Năng Thống Kê Lượt Nghe TTS (Audio Narration)
 
-**Logic duyệt:** set `Status=Approved, IsApproved=true, UpdatedAt=UtcNow` → Mobile sẽ nhận POI này trong lần sync tiếp theo.
+**Bài toán:** Khi khách du lịch quét QR hoặc đi vào vùng kích hoạt (Geofence), điện thoại phát Audio TTS. Hành động này được biểu diễn bằng "Lượt Nghe" trên Admin Dashboard như thế nào?
 
-**Logic từ chối:** validate `reason.Length >= 10` → set `Status=Rejected, RejectionReason=reason`.
+**Luồng dữ liệu (Data Flow):**
+1. **Mobile App (Triggers)**: 
+    *   **Manual**: Người dùng nhấn Play trên danh sách/bản đồ.
+    *   **QR Scan**: Người dùng quét mã tại quán, OS mở Deep Link `vinhkhanh://poi/{id}`, App nhận ID và tự động phát.
+    *   **Geofence**: `LocationService` phát hiện tọa độ nằm trong vùng POI.
+2. **Execution**: `NarrationService.PlayAudioAsync()` được gọi. Ngay lập tức, `AnalyticsService.TrackActivityAsync(eventType: "narration")` gửi lệnh POST `/api/analytics/visit`.
+3. **API Backend**: `AnalyticsController.LogVisit(AnalyticsVisitCommand)` tiếp nhận.
+4. **Use Case & DB**: `AnalyticsVisitUseCase.ExecuteAsync()` ghi lại sự kiện vào bảng `AnalyticsEvents`.
+5. **Realtime & Admin**: `AnalyticsHub` (SignalR) push dữ liệu về client Admin. Dashboard cập nhật biểu đồ lượt nghe.
 
+**Activity Diagram:**
 ```mermaid
-sequenceDiagram
-  actor Admin
-  participant AdminController
-  participant DB
-  participant FileSystem
-
-  Admin->>AdminController: POST /api/admin/pois (multipart/form-data)
-  AdminController->>AdminController: NormalizeCategoryCode - kiểm tra set hợp lệ hoặc InferCategory từ text
-  AdminController->>DB: INSERT Poi (Status=Approved, IsApproved=true, QrToken=poi-Guid20)
-  DB-->>AdminController: poiId
-  AdminController->>FileSystem: UploadFileAsync(image, "img") - lưu wwwroot/media/img_{guid}.ext
-  FileSystem-->>AdminController: imageUrl
-  AdminController->>DB: INSERT PoiLocalization x3 (vi, en, ja)
-  AdminController-->>Admin: 200 {poiId, qrToken, qrLink}
-
-  Admin->>AdminController: GET /api/admin/pois/pending
-  AdminController->>DB: SELECT Poi WHERE Status=Pending_Approval ORDER BY CreatedAt ASC
-  DB-->>AdminController: List POI
-  AdminController-->>Admin: Danh sách chờ duyệt
-
-  alt Duyệt
-    Admin->>AdminController: POST /api/admin/pois/{id}/approve
-    AdminController->>DB: UPDATE Poi SET Status=Approved, IsApproved=true, UpdatedAt=now
-    AdminController-->>Admin: 200 success
-  else Từ chối
-    Admin->>AdminController: POST /api/admin/pois/{id}/reject {reason}
-    AdminController->>AdminController: Validate reason.Length >= 10
-    AdminController->>DB: UPDATE Poi SET Status=Rejected, RejectionReason=reason
-    AdminController-->>Admin: 200 success
-  end
+stateDiagram-v2
+    [*] --> Trigger
+    state Trigger {
+        [*] --> ScanQR: User scans QR code
+        [*] --> Geofence: Enter POI zone (LocationService)
+    }
+    
+    Trigger --> CheckQueue
+    CheckQueue: AudioQueueManager checks priority
+    
+    state if_queue <<choice>>
+    CheckQueue --> if_queue
+    if_queue --> CancelOld: Lower priority audio is playing
+    if_queue --> PlayNew: No conflict
+    
+    CancelOld --> PlayNew: Call CancellationToken.Cancel()
+    PlayNew: NarrationService.PlayNarrationAsync()
+    
+    PlayNew --> AnalyticsCall
+    AnalyticsCall: AnalyticsService.TrackActivityAsync("narration", poiId)
+    
+    AnalyticsCall --> BackendReceive
+    BackendReceive: POST /api/analytics/visit
+    
+    state if_valid <<choice>>
+    BackendReceive --> if_valid
+    if_valid --> SaveAnalytics: Valid Data
+    if_valid --> ErrorLog: Invalid Parameters (BadRequest)
+    
+    SaveAnalytics: AnalyticsVisitUseCase.ExecuteAsync() (INSERT AnalyticsEvents)
+    
+    SaveAnalytics --> CheckFreeTrial
+    CheckFreeTrial: Check FreeTrialRecords
+    
+    state if_freetrial <<choice>>
+    CheckFreeTrial --> if_freetrial
+    if_freetrial --> InsertTrial: First time hearing this POI
+    if_freetrial --> SkipTrial: Heard before
+    
+    InsertTrial --> SignalRPublish
+    SkipTrial --> SignalRPublish
+    
+    SignalRPublish: PublishRealtimeUpdateAsync() (Debounce 1s)
+    
+    SignalRPublish --> AdminDashboard
+    AdminDashboard: Update Dashboard/Charts via SignalR
+    AdminDashboard --> [*]
 ```
 
----
-
-### F06 + F07 — ShopOwner tạo và gửi duyệt POI
-
-**Logic tạo:** `IsApprovedAsync()` kiểm tra DB thực tế → `Status=Draft, IsApproved=false, OwnerId=CurrentUserId`.
-
-**Logic sửa:** chỉ cho phép khi `Status == Draft || Status == Rejected`. Chặn khi `Pending_Approval` hoặc `Approved`.
-
-**Logic gửi duyệt:** chỉ cho phép khi `Status == Draft` → chuyển sang `Pending_Approval`.
-
+**Sequence Diagram (Detailed Method Tracing):**
 ```mermaid
 sequenceDiagram
-  actor ShopOwner
-  participant ShopController
-  participant DB
+    participant OS as User / OS / GPS
+    participant UI as MainPage.xaml.cs
+    participant AS as AnalyticsService.cs
+    participant API as AnalyticsController.cs
+    participant UC as AnalyticsVisitUseCase.cs
+    participant NS as NarrationService.cs
 
-  ShopOwner->>ShopController: POST /api/shop/pois (multipart/form-data)
-  ShopController->>ShopController: IsApprovedAsync() - query DB kiểm tra user.IsApproved
-  alt IsApproved == false
-    ShopController-->>ShopOwner: 403 Tài khoản chưa được duyệt
-  else
-    ShopController->>DB: INSERT Poi (Status=Draft, OwnerId=CurrentUserId, IsApproved=false)
-    ShopController->>DB: INSERT PoiLocalization x3 (vi, en, ja)
-    ShopController-->>ShopOwner: 200 {poiId}
-  end
-
-  ShopOwner->>ShopController: POST /api/shop/pois/{id}/submit
-  ShopController->>DB: SELECT Poi WHERE Id=id
-  DB-->>ShopController: poi
-  ShopController->>ShopController: Kiểm tra OwnerId == CurrentUserId
-  ShopController->>ShopController: Kiểm tra Status == Draft
-  ShopController->>DB: UPDATE Poi SET Status=Pending_Approval, UpdatedAt=now
-  ShopController-->>ShopOwner: 200 success
-```
-
----
-
-### F08 — AI dịch thuật
-
-**Logic:** Thử lần lượt 4 model Gemini. Mỗi model retry tối đa 2 lần với delay tăng dần (2s → 4s). Parse JSON từ `candidates[0].content.parts[0].text`, loại bỏ markdown wrapper bằng `ExtractJsonPayload`.
-
-```mermaid
-sequenceDiagram
-  actor User as Admin hoặc ShopOwner
-  participant Controller
-  participant GeminiAiService
-  participant GeminiAPI
-
-  User->>Controller: POST /api/admin/ai/generate {name, description}
-  Controller->>GeminiAiService: GenerateTranslationsAsync(name, description, ct)
-
-  loop Fallback: gemini-2.5-flash → gemini-1.5-flash → gemini-2.0-flash → gemini-2.5-flash-lite
-    loop Retry tối đa 2 lần
-      GeminiAiService->>GeminiAPI: POST generateContent?key={apiKey} - temperature=0.4
-      alt HTTP 200
-        GeminiAPI-->>GeminiAiService: JSON response
-        GeminiAiService->>GeminiAiService: ExtractJsonPayload - loại bỏ markdown wrapper
-        GeminiAiService-->>Controller: GeminiTranslationResult {En, Ja}
-        Controller-->>User: 200 {en:{name,desc}, ja:{name,desc}}
-      else HTTP 503 hoặc 429 - còn retry
-        GeminiAiService->>GeminiAiService: Task.Delay(2000ms * 2^attempt)
-      else HTTP 503 hoặc 429 - hết retry
-        GeminiAiService->>GeminiAiService: Break - chuyển model tiếp theo
-      end
+    alt Các phương thức kích hoạt (Triggers)
+        OS->>UI: Nhấn tay -> OnPinCardPlay(sender, e)
+    else QR Scan
+        OS->>UI: Deep Link -> OnApplinkReceived()
+    else Geofence
+        OS->>UI: LocationEvent -> OnPoiEntered(poi)
     end
-  end
+    
+    par Luồng Analytics
+        UI->>AS: TrackActivityAsync(lat, lng, "narration", poi.Id)
+        AS->>AS: SendAnalyticsEventAsync(lat, lng, eventType, poiId)
+        AS->>API: _httpClient.PostAsJsonAsync("api/analytics/visit", command)
+        API->>API: LogVisit([FromBody] AnalyticsVisitCommand command)
+        API->>UC: ExecuteAsync(command)
+        UC-->>API: Task Completed (Lưu DB)
+        API-->>AS: return Ok()
+    and Luồng Âm thanh
+        UI->>NS: PlayAudioAsync(poi.AudioPath) / SpeakAsync()
+        NS->>NS: RunExclusiveNarrationAsync(workFunc)
+        Note over NS: Chuyển qua AudioQueueManager
+    end
 ```
 
 ---
 
-### F09 — Đồng bộ POI offline
+### 3.2. Chức Năng Tracking Vị Trí & Bản Đồ Heatmap
 
-**Logic:** `GetLastSyncTime()` từ `Preferences` → GET `/api/pois/updates?lastSync={ISO8601}` → `PoiSyncUseCase.ExecuteAsync` query `WHERE UpdatedAt > lastSyncAt AND Status=Approved` → `ApplyServerChangesAsync`: upsert theo `(BasePoiId, LanguageCode)` → Pruning xóa POI không trong `ActiveBasePoiIds` → lưu `ServerTime` làm mốc mới.
+**Bài toán:** Quản lý xem được mật độ tụ tập của khách di chuyển thực tế trên phố Vĩnh Khánh.
 
+**Luồng dữ liệu (Data Flow):**
+1. **Mobile App**: Hàm `OnLocationChanged` trong `LocationService` định kỳ bắt tọa độ GPS. Truyền sang `AnalyticsService.TrackActivityAsync(eventType: "location_update")`.
+2. **Backend**: Nhận tọa độ, lưu vào bảng `UserLocations`.
+3. **Realtime Engine**: SignalR Hub (`AnalyticsHub`) phát tín hiệu về Admin Dashboard.
+4. **Admin UI**: Sử dụng thư viện `Leaflet.heat` hoặc Google Maps Heatmap Layer để vẽ mật độ dựa trên dữ liệu tọa độ trong 30 phút gần nhất.
+
+**Sequence Diagram (Real-time Data Flow Method Tracing):**
 ```mermaid
 sequenceDiagram
-  participant Mobile as Mobile App
-  participant DatabaseService
-  participant PoisController
-  participant PoiSyncUseCase
-  participant DB as SQL Server
-  participant SQLite
+    participant LS as LocationService.cs
+    participant AS as AnalyticsService.cs
+    participant API as AnalyticsController.cs
+    participant Hub as AnalyticsHub.cs
+    participant Dash as Dashboard.jsx
 
-  Mobile->>DatabaseService: SyncPoisFromServerAsync()
-  DatabaseService->>DatabaseService: GetLastSyncTime() - Preferences.Get("root_last_sync_utc")
-  DatabaseService->>PoisController: GET /api/pois/updates?lastSync={lastSync:O}
-  PoisController->>PoiSyncUseCase: ExecuteAsync(SyncRequest)
-  PoiSyncUseCase->>DB: SELECT Poi WHERE UpdatedAt > lastSyncAt AND Status=Approved INCLUDE Localizations
-  DB-->>PoiSyncUseCase: entities
-  PoiSyncUseCase->>PoiSyncUseCase: Map → Shared.Models.Poi - NormalizeCategoryCode
-  PoiSyncUseCase->>DB: SELECT DISTINCT BasePoiId WHERE Status=Approved
-  DB-->>PoiSyncUseCase: activeBasePoiIds
-  PoiSyncUseCase-->>DatabaseService: SyncResponse {UpdatedPois, ActiveBasePoiIds, ServerTime}
-
-  DatabaseService->>SQLite: ApplyServerChangesAsync
-  Note over DatabaseService,SQLite: Upsert theo (BasePoiId, LanguageCode)
-  DatabaseService->>SQLite: Pruning - DELETE WHERE BasePoiId NOT IN ActiveBasePoiIds
-  DatabaseService->>DatabaseService: SaveLastSyncTime(ServerTime)
-  DatabaseService-->>Mobile: true
+    loop Khi GPS cập nhật
+        LS->>LS: OnLocationChanged(Location location)
+        LS->>AS: TrackActivityAsync(..., "location_update", null)
+        AS->>AS: SendAnalyticsEventAsync(lat, lng, eventType, poiId)
+        AS->>API: _httpClient.PostAsJsonAsync("api/analytics/visit", command)
+        API->>API: LogVisit([FromBody] AnalyticsVisitCommand command)
+        API->>Hub: PublishRealtimeUpdateAsync(command)
+        Hub-->>Dash: Context.Clients.All.SendAsync("analytics:realtime")
+        Dash->>Dash: fetchOverviewData() -> reRenderHeatmap()
+    end
 ```
 
 ---
 
-### F10 — Thuyết minh tự động khi đến gần quán
+### 3.3. Thuật toán Xử lý Geofence & Nhường Ưu tiên (Preemption)
 
-**Logic GPS:** `ListenLoopAsync` → `GetLocationAsync(Best, 15s)` → `ShouldEmitLocationChanged` (distance ≥ 1m hoặc heartbeat 15s) → `LocationChanged.Invoke`.
+**Bài toán:** Xử lý trường hợp người dùng đứng ở vùng giao thoa của nhiều quán (POI) hoặc GPS nhảy nhiễu.
 
-**Logic Geofence:** `ProcessLocationAsync` → `CalculateDistance(Haversine)` → phân loại inside/outside → `HandleInsidePoisWithPriorityAndDebounce`: tăng counter, lọc `counter >= 2 && !active && !cooldown` → chọn `OrderByDescending(Priority).ThenBy(Id).First()` → `OnPoiEntered.Invoke`.
+**Quy trình xử lý (Logic Flow):**
+1. **Debounce (Chống nhiễu)**: Tọa độ phải nằm trong vùng POI ít nhất 2 lần liên tiếp mới xác nhận "Vào vùng".
+2. **Cooldown (Chống lặp)**: Sau khi phát xong, POI rơi vào trạng thái chờ 10 phút để tránh đọc đi đọc lại.
+3. **Priority (Ưu tiên)**: Nếu đứng giữa 2 vùng, chọn POI có `Priority` cao nhất (thường là quán Premium).
+4. **Preemption (Nhường quyền)**: Nếu đang phát quán thường mà người dùng bước vào vùng quán Premium, hệ thống lập tức ngắt âm thanh cũ để phát quán Premium.
 
-**Logic Narration:** `RunExclusiveNarrationAsync` → `BeginAudioDuckingAsync(AudioFocusRequest.MayDuck)` → nếu có `AudioPath`: `PlayWithMediaElementAsync(timeout=12s)`, nếu không: `SanitizeTtsText` → `TextToSpeech.SpeakAsync(Rate=0.92)` → `EndAudioDucking` → ghi `AnalyticsEvent(narration)` → `MarkPoiAsPlayed(cooldown=10min)`.
+**Activity Diagram:**
+```mermaid
+stateDiagram-v2
+    [*] --> GPS_Update: Nhận tọa độ mới
+    GPS_Update --> CalculateDistance: Tính khoảng cách (Haversine)
+    
+    state Filter {
+        [*] --> Debounce: Check liên tiếp 2 lần?
+        Debounce --> Cooldown: Check 10p hồi chiêu?
+        Cooldown --> Priority: Check Priority cao nhất?
+    }
+    
+    CalculateDistance --> Filter
+    
+    state if_overlap <<choice>>
+    Filter --> if_overlap
+    
+    if_overlap --> PlayNew: Thỏa mãn mọi điều kiện
+    if_overlap --> Skip: Không đủ điều kiện
+    
+    state PlayNew {
+        [*] --> CheckCurrentActive: Có quán nào đang phát?
+        CheckCurrentActive --> StopOld: Quán mới có Priority cao hơn
+        CheckCurrentActive --> StartAudio: Không có quán nào khác
+        StopOld --> StartAudio: Ngắt quán cũ
+    }
+    
+    StartAudio --> [*]
+```
 
+**Sequence Diagram (Preemption Method Tracing):**
 ```mermaid
 sequenceDiagram
-  participant GPS
-  participant LocationService
-  participant GeofenceEngine
-  participant NarrationService
-  participant Backend
+    participant LS as LocationService.cs
+    participant GE as GeofenceEngine.cs
+    participant QM as AudioQueueManager.cs
+    participant NS as NarrationService.cs
 
-  GPS->>LocationService: Tọa độ mới
-  LocationService->>LocationService: ShouldEmitLocationChanged - distance >= 1m hoặc heartbeat 15s
-  LocationService->>GeofenceEngine: LocationChanged.Invoke(location)
+    LS->>GE: OnLocationChanged(Location location)
+    GE->>GE: ProcessLocationAsync(currentLocation)
+    GE->>GE: HandleInsidePoisWithPriorityAndDebounce()
+    
+    Note over GE: Chọn selectedPoi (Dựa trên Priority)
+    
+    GE->>NS: OnPoiEntered?.Invoke(selectedPoi)
+    NS->>QM: RunExclusiveAsync(Func<CancellationToken, Task> work)
+    QM->>QM: CancelCurrent() -> _cts?.Cancel()
+    
+    rect rgb(255, 240, 240)
+        Note right of QM: Task cũ bị ngắt bởi CancellationToken
+        QM-->>NS: Ném ngoại lệ OperationCanceledException
+        NS->>NS: Bắt exception -> EndAudioDucking() & Stop()
+    end
 
-  GeofenceEngine->>GeofenceEngine: ProcessLocationAsync - _processLock.WaitAsync
-  GeofenceEngine->>GeofenceEngine: CalculateDistance Haversine cho từng POI trong _cachedPois
-  GeofenceEngine->>GeofenceEngine: HandleExitedPois - reset _insideStableCounters
-  GeofenceEngine->>GeofenceEngine: HandleInsidePoisWithPriorityAndDebounce
-  Note over GeofenceEngine: counter++ - lọc counter>=2, !active, !cooldown
-  Note over GeofenceEngine: selectedPoi = OrderByDescending(Priority).ThenBy(Id).First()
-  GeofenceEngine->>NarrationService: OnPoiEntered.Invoke(selectedPoi)
-
-  NarrationService->>NarrationService: RunExclusiveNarrationAsync - AudioQueueManager.CancelCurrent
-  NarrationService->>NarrationService: BeginAudioDuckingAsync - AudioFocusRequest.MayDuck
-  alt poi.AudioPath != null
-    NarrationService->>NarrationService: PlayWithMediaElementAsync - timeout 12s
-  else
-    NarrationService->>NarrationService: SanitizeTtsText - loại emoji
-    NarrationService->>NarrationService: TextToSpeech.SpeakAsync - Rate=0.92
-  end
-  NarrationService->>NarrationService: EndAudioDucking
-  NarrationService->>Backend: POST /api/analytics/visit {eventType: narration, poiId}
-  GeofenceEngine->>GeofenceEngine: MarkPoiAsPlayed - _cooldownUntilUtc[poiId] = now + 10min
+    QM->>QM: Await _semaphore.WaitAsync()
+    QM->>NS: Gọi callback `work(newCts.Token)`
+    NS->>NS: PlayWithMediaElementAsync() / TextToSpeech.SpeakAsync()
 ```
 
 ---
 
-### F13 + F14 + F15 — Kiểm soát truy cập
+### 3.4. Quy trình Đăng ký & Phê duyệt Shop (Onboarding)
 
-**Logic check:** đếm `FreeTrialRecord` distinct PoiId theo `DeviceId` → kiểm tra `DeviceTrial.ExpiryDate` → kiểm tra `Payment(Status=Completed, ExpiryDate > now)`.
+**Bài toán:** Quản lý vòng đời của một địa điểm ẩm thực trên hệ thống.
 
-**Logic auto-trial:** `SyncTrialStatusAsync` → nếu `!HasActivePass && TrialRemainingDays==0 && FreeTrialUsed==0` → `StartTrialAsync` → `DeviceTrial(ExpiryDate=now+7days)`.
+**Vòng đời dữ liệu (State Diagram):**
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: Shop Owner gửi form đăng ký
+    Pending --> Approved: Admin kiểm tra & duyệt
+    Pending --> Rejected: Thông tin không hợp lệ
+    
+    Approved --> Active: Admin gán mã QR & Vị trí
+    Active --> Suspended: Vi phạm chính sách
+    Suspended --> Active: Khôi phục hoạt động
+    
+    Active --> [*]: Xóa khỏi hệ thống
+```
 
+**Sequence Diagram (Shop Onboarding Method Tracing):**
 ```mermaid
 sequenceDiagram
-  participant Mobile
-  participant AccessService
-  participant AccessController
-  participant DB
+    participant UI as RegisterShopPage.xaml.cs
+    participant API as AuthController.cs
+    participant DB as AppDbContext.cs
+    participant Hub as AnalyticsHub.cs
+    participant Admin as AdminController.cs
 
-  Mobile->>AccessService: SyncTrialStatusAsync()
-  AccessService->>AccessController: GET /api/access/check?deviceId={id}
-  AccessController->>DB: COUNT DISTINCT PoiId FROM FreeTrialRecord WHERE DeviceId=id
-  AccessController->>DB: SELECT DeviceTrial WHERE DeviceId=id
-  AccessController->>DB: SELECT Payment WHERE UserId=userId AND Status=Completed AND ExpiryDate > now
-  AccessController-->>AccessService: {freeTrialUsed, hasActivePass, passExpiryDate, isTrial, trialRemainingDays}
-
-  alt Thiết bị mới - freeTrialUsed==0 AND trialRemainingDays==0 AND !hasActivePass
-    AccessService->>AccessController: POST /api/access/start-trial?deviceId={id}
-    AccessController->>DB: INSERT DeviceTrial (ExpiryDate=now+7days)
-    AccessController-->>AccessService: {expiryDate, remainingDays: 7}
-    AccessService->>AccessService: Preferences.Set("access_pass_expiry", expiryDate)
-  end
-
-  alt Mua Access Pass
-    Mobile->>AccessController: POST /api/payments/initiate {transactionId, type: AccessPass}
-    AccessController->>DB: INSERT Payment (Status=Pending)
-    Mobile->>AccessController: POST /api/payments/callback {transactionId}
-    AccessController->>DB: UPDATE Payment SET Status=Completed, ExpiryDate=CreatedAt+7days
-    AccessController-->>Mobile: 200 {expiryDate}
-  end
+    UI->>UI: OnSubmitClicked(sender, e)
+    UI->>API: _httpClient.PostAsJsonAsync("api/auth/register-shop", data)
+    API->>API: RegisterShop([FromBody] RegisterShopRequest request)
+    API->>API: userManager.CreateAsync(user, request.Password)
+    API->>DB: AddToRoleAsync(user, "ShopOwner")
+    API->>Hub: Context.Clients.All.SendAsync("new_registration", payload)
+    API-->>UI: return Ok()
+    
+    Note over Admin: Admin duyệt tại màn hình quản lý
+    Admin->>Admin: UpdateOwner(string userId, [FromBody] UpdateOwnerRequest request)
+    Admin->>DB: dbContext.Pois.FirstOrDefaultAsync(p => p.OwnerId == userId)
+    Admin->>DB: poi.IsPremium = true (Dựa vào PremiumOption)
+    Admin->>DB: await dbContext.SaveChangesAsync()
+    Admin-->>Admin: return Ok(user)
 ```
 
 ---
 
-### F17 — Heatmap & Realtime Dashboard
+### 3.5. Kiến trúc Tổng thể Hệ thống (System Architecture)
 
-**Logic ghi sự kiện:** `AnalyticsVisitUseCase.ExecuteAsync` → `BuildAnonymousDeviceId(SHA256)` → `INSERT AnalyticsEvent` → nếu `narration`: upsert `FreeTrialRecord` → `PublishRealtimeUpdateAsync` (throttle 1s) → `analyticsHub.Clients.Group("AdminGroup").SendAsync("analytics:realtime")`.
+```mermaid
+graph TD
+    subgraph "Client Layer"
+        Mobile[Vĩnh Khánh Mobile - MAUI]
+        Admin[Admin Dashboard - React/Vite]
+    end
 
-**Logic heatmap:** group by `(Math.Round(lat,4), Math.Round(lng,4))` → mỗi ô ≈ 11×11m = 121m² → `density = uniqueDevices × 100 / 121` → `Take(500)`.
+    subgraph "API Gateway & Services"
+        API[ASP.NET Core Web API]
+        SignalR[SignalR Real-time Hub]
+    end
 
+    subgraph "Data Layer"
+        SQL[(SQL Server / Entity Framework)]
+        SQLite[(SQLite - Offline Mobile)]
+    end
+
+    Mobile <--> API
+    Admin <--> API
+    API <--> SQL
+    Mobile <--> SQLite
+    API -- Push --> SignalR
+    SignalR -- Realtime Update --> Admin
+```
+2. **API Backend**: `AnalyticsController.LogVisit()` lưu tọa độ vào `AnalyticsEvents`.
+3. **Logic Heatmap**: Khi Admin mở trang chủ, `Dashboard.jsx` gọi `api.get('/analytics/realtime-overview')`.
+4. **Backend Calculation**: Hàm `BuildHeatmapPoints()` phân tích các `AnalyticsEvent` mới nhất. Nó chạy thuật toán "Lực hút POI" (hút tọa độ user về trung tâm quán nếu user ở trong bán kính Radius) và cộng điểm `Weight/Intensity`.
+5. **Admin UI**: Dữ liệu `points` được gán vào `leaflet.heat` plugin, render ra mảng màu gradient đỏ/vàng trên bản đồ Leaflet.
+
+**Activity Diagram:**
+```mermaid
+stateDiagram-v2
+    [*] --> LocationChanged
+    LocationChanged: LocationService receives coordinates (Lat, Lng)
+    
+    LocationChanged --> ThrottleCheck
+    ThrottleCheck: Check distance / time interval
+    
+    state if_throttle <<choice>>
+    ThrottleCheck --> if_throttle
+    if_throttle --> Ignore: Threshold not met
+    if_throttle --> SendAPI: Condition met to send
+    
+    SendAPI: POST /api/analytics/visit ("location_update")
+    SendAPI --> DBInsert
+    DBInsert: Save to AnalyticsEvents
+    
+    state Admin_Side {
+        [*] --> FetchRealtime
+        FetchRealtime: Dashboard fetches last 45s data
+        
+        FetchRealtime --> FilterOnline
+        FilterOnline: Filter Online devices (exclude "app_offline")
+        
+        FilterOnline --> AssignPOI
+        AssignPOI: CalculateDistance() matches User to POI
+        
+        state if_poi <<choice>>
+        AssignPOI --> if_poi
+        if_poi --> SnapToPOI: Inside POI radius (Snap to center)
+        if_poi --> SnapToGrid: Outside POI (Group by 44m grid)
+        
+        SnapToPOI --> CalcWeight
+        SnapToGrid --> CalcWeight
+        
+        CalcWeight: Calculate Intensity & Density
+        CalcWeight --> RenderHeatmap
+        RenderHeatmap: leaflet.heat renders Gradient layer
+    }
+    
+    DBInsert --> FetchRealtime: Data available
+```
+
+**Sequence Diagram:**
 ```mermaid
 sequenceDiagram
-  participant Mobile
-  participant AnalyticsController
-  participant AnalyticsVisitUseCase
-  participant DB
-  participant SignalR as AnalyticsHub
-  participant AdminUI
+    participant Mobile as LocationService
+    participant API as AnalyticsController
+    participant DB as AppDbContext
+    participant Web as Dashboard.jsx (Admin)
 
-  Mobile->>AnalyticsController: POST /api/analytics/visit {eventType, poiId, lat, lng, deviceId}
-  AnalyticsController->>AnalyticsVisitUseCase: ExecuteAsync(command)
-  AnalyticsVisitUseCase->>AnalyticsVisitUseCase: BuildAnonymousDeviceId - SHA256 hash - prefix anon-
-  AnalyticsVisitUseCase->>DB: INSERT AnalyticsEvent
-  AnalyticsController->>DB: Upsert FreeTrialRecord nếu eventType=narration
-  AnalyticsController->>AnalyticsController: PublishRealtimeUpdateAsync - throttle 1s
-  AnalyticsController->>DB: SELECT AnalyticsEvents WHERE Timestamp >= now-45s
-  AnalyticsController->>AnalyticsController: BuildHeatmapPoints - group by Round(lat,4) Round(lng,4)
-  AnalyticsController->>SignalR: Clients.Group("AdminGroup").SendAsync("analytics:realtime", payload)
-  SignalR-->>AdminUI: WebSocket push {onlineCount, points, measuredAt}
-  AnalyticsController-->>Mobile: 200 {success: true}
+    Mobile->>API: POST /api/analytics/visit (Lat, Lng)
+    API->>DB: Log location event
+    loop Every 30s
+        Web->>API: GET /analytics/realtime-overview
+        API->>DB: Fetch Online Users & Coordinates
+        API->>API: BuildHeatmapPoints(apply radius)
+        API-->>Web: Return Array {lat, lng, intensity}
+        Web->>Web: Update Leaflet Heatmap layer
+    end
 ```
 
 ---
-## 8. Activity Diagrams
 
-### F05 — Vòng đời POI
+### 3.3. Chức Năng Đăng Ký và Phê Duyệt Chủ Quán (Shop Owner)
 
+**Bài toán:** Ai đó muốn mở quán trên App phải đăng ký. Admin phải duyệt thì mới đăng nhập được.
+
+**Luồng dữ liệu (Data Flow):**
+1. **Đăng Ký (Web/Mobile)**: Nhập Email, Pass trên trang `Register.jsx` hoặc Mobile App. Gọi API POST `/api/auth/register-shop`.
+2. **Lưu DB (Chờ Duyệt)**: `AuthController.RegisterShop()` sử dụng `UserManager.CreateAsync(user)`. Gán `IsApproved = false` và Roles = `ShopOwner`.
+3. **Kiểm Tra Đăng Nhập**: Nếu cố tình đăng nhập, `AuthController.Login` chặn lại ở đoạn `if (!user.IsApproved) return Unauthorized("Đang chờ duyệt")`.
+4. **Admin Phê Duyệt**: Admin vào trang `OwnerManager.jsx`, bấm nút **Approve**. Gọi API PUT `/api/approvals/{id}/approve`.
+5. **Xử lý Phê duyệt**: `AdminApproveUseCase.ApproveOwnerAsync()` được chạy, đổi cờ `IsApproved = true` trong database. Lúc này tài khoản mới chính thức hoạt động.
+
+**Activity Diagram:**
 ```mermaid
-flowchart TD
-  Start([Bắt đầu]) --> Draft["Status = Draft\nShopController.CreatePoi\nIsApproved=false"]
-  Draft --> EditDraft{ShopOwner chỉnh sửa?}
-  EditDraft -->|UpdatePoi - Draft hoặc Rejected| Draft
-  EditDraft -->|SubmitPoi - chỉ khi Draft| Pending["Status = Pending_Approval\nShopController.SubmitPoi"]
-  Pending --> AdminReview{Admin xem xét}
-  AdminReview --> ReviewNote["GET /api/admin/pois/pending\nOrderBy CreatedAt ASC"]
-  ReviewNote --> Decision{Quyết định?}
-  Decision -->|Approve - IsApproved=true| Approved["Status = Approved\nHiển thị trên Mobile\nMobile sync nhận được"]
-  Decision -->|RejectPoi - reason >= 10 ký tự| Rejected["Status = Rejected\nRejectionReason lưu DB"]
-  Rejected --> CanEdit{ShopOwner sửa lại?}
-  CanEdit -->|UpdatePoi - cho phép khi Rejected| Draft
-  CanEdit -->|Không| End1([Kết thúc])
-  Approved --> HideCheck{Admin ẩn POI?}
-  HideCheck -->|HidePoi - IsApproved=false| Hidden["Status = Hidden\nKhông hiển thị Mobile"]
-  HideCheck -->|Không| Active["POI hoạt động\nGetSyncPoisAsync trả về cho Mobile"]
-  Hidden --> End2([Kết thúc])
-  Active --> End3([POI hoạt động])
+stateDiagram-v2
+    [*] --> SubmitForm
+    SubmitForm: Fill Form (Email, Pass, FullName)
+    SubmitForm --> API_Register
+    API_Register: POST /auth/register-shop
+    
+    state check_email <<choice>>
+    API_Register --> check_email
+    check_email --> Return400: Email exists / Weak Password
+    check_email --> CreateUser: Valid
+    
+    CreateUser: UserManager.CreateAsync()
+    CreateUser --> SetFlags
+    SetFlags: Set Role="ShopOwner", IsApproved=false
+    
+    state LoginProcess {
+        LoginAttempt: POST /auth/login
+        state check_approve <<choice>>
+        LoginAttempt --> check_approve
+        check_approve --> Reject: IsApproved == false (403)
+        check_approve --> Success: IsApproved == true (200 OK)
+    }
+    
+    SetFlags --> LoginAttempt: Shop Owner attempts login
+    
+    state AdminProcess {
+        LoadPending: OwnerManager loads list
+        LoadPending --> ApproveClick
+        ApproveClick: Admin clicks "Approve"
+        ApproveClick --> AdminApproveUseCase
+        AdminApproveUseCase: Update IsApproved = true
+    }
+    
+    Reject --> AdminProcess: Waiting for Admin approval
+    AdminApproveUseCase --> LoginAttempt: Allow login
 ```
 
-**Ràng buộc trạng thái:**
-- `UpdatePoi`: chặn khi `Pending_Approval` hoặc `Approved` → 403
-- `DeletePoi`: chặn khi `Pending_Approval` → 403
-- `SubmitPoi`: chặn khi không phải `Draft` → 400
-
----
-
-### F10 — GeofenceEngine xử lý GPS
-
+**Sequence Diagram:**
 ```mermaid
-flowchart TD
-  Start([GPS cập nhật vị trí]) --> LS["LocationService.ListenLoopAsync\nGetLocationAsync - GeolocationAccuracy.Best, timeout 15s"]
-  LS --> ShouldEmit{ShouldEmitLocationChanged?}
-  ShouldEmit --> EmitNote["distance >= 1m hoặc silent >= 15s heartbeat"]
-  EmitNote --> EmitDecision{Đủ điều kiện?}
-  EmitDecision -->|Không| Delay["Task.Delay - _currentInterval\nActiveInterval=15s hoặc IdleInterval=15s"]
-  Delay --> LS
-  EmitDecision -->|Có| Emit["LocationChanged.Invoke\nTrackActivityAsync - location_update"]
-  Emit --> Process["GeofenceEngine.ProcessLocationAsync\n_processLock.WaitAsync - tuần tự"]
-  Process --> Clean["CleanupExpiredCooldown\nXóa _cooldownUntilUtc hết hạn"]
-  Clean --> Calc["Loop _cachedPois\nCalculateDistance Haversine\nearthRadius=6371000m"]
-  Calc --> Classify{distanceMeters <= poi.Radius?}
-  Classify -->|Không| Outside["outsidePois.Add\nHandleExitedPois\n_insideStableCounters[id]=0\nOnPoiExited.Invoke"]
-  Classify -->|Có| Inside["insideCandidates.Add\nHandleInsidePoisWithPriorityAndDebounce"]
-  Inside --> Counter["_insideStableCounters[poi.Id]++"]
-  Counter --> Debounce{counter >= 2?}
-  Debounce -->|Không| End1([Chờ GPS tiếp theo])
-  Debounce -->|Có| ActiveCheck{poi.Id trong _activePoiIds?}
-  ActiveCheck -->|Đã active| End2([Bỏ qua])
-  ActiveCheck -->|Chưa| CooldownCheck{_cooldownUntilUtc còn hạn?}
-  CooldownCheck -->|Còn| End3([Bỏ qua - cooldown])
-  CooldownCheck -->|Hết| Select["selectedPoi = OrderByDescending(Priority).ThenBy(Id).First\nPreemption: xóa POI active Priority thấp hơn"]
-  Select --> Fire["_activePoiIds.Add(selectedPoi.Id)\nOnPoiEntered.Invoke(selectedPoi)"]
-  Fire --> End4([NarrationService xử lý])
-  Outside --> End5([Chờ GPS tiếp theo])
+sequenceDiagram
+    participant UI as Web/Mobile UI
+    participant Auth as AuthController
+    participant DB as AspNetUsers (DB)
+    participant AdminUI as OwnerManager.jsx
+    participant ApproveUC as AdminApproveUseCase
+
+    UI->>Auth: POST /register-shop {email, password}
+    Auth->>DB: CreateAsync (IsApproved = false, Role = ShopOwner)
+    UI->>Auth: POST /login {email, password}
+    Auth-->>UI: 403 Forbidden (Pending Approval)
+    
+    AdminUI->>ApproveUC: PUT /api/approvals/{id}/approve
+    ApproveUC->>DB: SET IsApproved = true
+    ApproveUC-->>AdminUI: Success
+    
+    UI->>Auth: POST /login {email, password}
+    Auth-->>UI: 200 OK + JWT Token
 ```
 
 ---
 
-### F10 — NarrationService phát thuyết minh
+### 3.4. Quản Lý và Đồng Bộ POI (Points of Interest)
 
+**Bài toán:** Khi Admin thêm/sửa một quán ăn trên Web, làm sao để Data đó hiện xuống điện thoại cực nhanh và có thể quét QR?
+
+**Luồng dữ liệu (Data Flow):**
+1. **Tạo/Sửa POI (Admin/ShopOwner)**: Trang `PoiForm.jsx` submit data lên API POST/PUT `/api/poi`. `PoiController` tiếp nhận.
+2. **Database Update**: Dữ liệu lưu vào bảng `Pois` và `PoiLocalizations` trong SQL Server.
+3. **Xóa Cache Mobile**: Mỗi lần có POI update, hệ thống tăng cờ `LastSyncAt`.
+4. **Mobile Sync**: Khi App Mobile khởi động, `PoiSyncService` bắn GET `/api/poi/sync` kèm theo thời gian sync cuối.
+5. **Backend Sync**: `PoiSyncUseCase.ExecuteAsync()` truy vấn DB trả về danh sách các POI mới hoặc đã bị thay đổi (`UpdatedPois`), và các POI đã bị xóa (`DeletedIds`).
+6. **Local Storage**: App Mobile lưu dữ liệu này vào SQLite cục bộ (offline cache), đảm bảo việc hiển thị danh sách trên màn hình Home (`MainPage.xaml`) cực kỳ mượt mà.
+
+**Activity Diagram:**
 ```mermaid
-flowchart TD
-  Start([Nhận POI từ OnPoiEntered]) --> AccessCheck{Có quyền truy cập?}
-  AccessCheck --> AccessNote["AccessService.HasActivePass\nhoặc FreeTrialRecord < 3"]
-  AccessNote --> AccessDecision{Kết quả?}
-  AccessDecision -->|Không có quyền| Paywall["Hiển thị Paywall\nPOST /api/payments/initiate"]
-  Paywall --> End1([Kết thúc])
-  AccessDecision -->|Có quyền| Exclusive["RunExclusiveNarrationAsync\nAudioQueueManager.CancelCurrent - hủy narration cũ\n_queueLock.WaitAsync"]
-  Exclusive --> Duck["BeginAudioDuckingAsync\nAndroid AudioFocusRequest.MayDuck\nTask.Delay 120ms"]
-  Duck --> LangResolve["GetEffectiveLanguage\nResolveBestLocaleAsync - fallback chain"]
-  LangResolve --> AudioCheck{poi.AudioPath != null?}
-  AudioCheck -->|Có MP3| NormPath["NormalizeAudioPath - loại Resources/Raw/ prefix\nEnsureAudioAssetExistsAsync - kiểm tra file tồn tại"]
-  NormPath --> PlayMP3["PlayWithMediaElementAsync\nmediaElement.Source = MediaSource.FromFile\nmediaElement.Play - timeout 12s"]
-  AudioCheck -->|Không có| TTS["SanitizeTtsText - loại emoji\nTextToSpeech.SpeakAsync\nPitch=1.0, Rate=0.92, Volume=1.0"]
-  PlayMP3 --> Wait["Chờ MediaEnded hoặc timeout 12s"]
-  TTS --> Wait
-  Wait --> EndDuck["EndAudioDucking\nAbandonAudioFocus"]
-  EndDuck --> Log["TrackActivityAsync - narration, poiId\nPOST /api/analytics/visit"]
-  Log --> Cooldown["MarkPoiAsPlayed\n_cooldownUntilUtc[poiId] = now + 10min"]
-  Cooldown --> End2([Hoàn thành])
+stateDiagram-v2
+    [*] --> AdminEdit
+    AdminEdit: PoiForm.jsx saves POI
+    AdminEdit --> API_Save
+    API_Save: PoiController.Create/Update
+    API_Save --> DB_Save
+    DB_Save: Save to SQL Server (Pois)
+    
+    state MobileAppSync {
+        [*] --> AppStart
+        AppStart: Open Mobile App
+        AppStart --> SyncService
+        SyncService: PoiSyncService.SyncAsync()
+        SyncService --> API_GetSync
+        API_GetSync: GET /api/poi/sync?lastSync={time}
+        
+        API_GetSync --> DB_Query
+        DB_Query: Fetch updated & deleted POIs
+        DB_Query --> ReturnData
+        ReturnData: Return {UpdatedPois, DeletedIds}
+        
+        ReturnData --> LocalSQLite
+        LocalSQLite: Insert/Update/Delete Offline DB
+        LocalSQLite --> ReloadUI
+        ReloadUI: Redraw Map Markers
+        ReloadUI --> [*]
+    }
+    
+    DB_Save --> MobileAppSync: Data ready signal
 ```
 
----
-
-### F13 + F14 + F15 — Kiểm soát truy cập Visitor
-
+**Sequence Diagram:**
 ```mermaid
-flowchart TD
-  Start([Visitor muốn nghe thuyết minh]) --> LocalCheck{HasActivePass local?}
-  LocalCheck --> LocalNote["Preferences.Get - access_pass_expiry > UtcNow"]
-  LocalNote --> LocalDecision{Còn hạn?}
-  LocalDecision -->|Có| Allow1["Cho phép nghe\nPlayAudioAsync hoặc SpeakAsync"]
-  Allow1 --> End1([Phát thuyết minh])
-  LocalDecision -->|Không| Sync["SyncTrialStatusAsync\nGET /api/access/check?deviceId=..."]
-  Sync --> ServerPass{data.HasActivePass?}
-  ServerPass -->|Có| SavePass["Preferences.Set - access_pass_expiry\nAllow nghe"]
-  SavePass --> End2([Phát thuyết minh])
-  ServerPass -->|Không| NewDevice{Thiết bị mới?}
-  NewDevice --> NewNote["freeTrialUsed==0 AND trialRemainingDays==0"]
-  NewNote --> NewDecision{Kết quả?}
-  NewDecision -->|Mới| AutoTrial["StartTrialAsync\nPOST /api/access/start-trial\nDeviceTrial ExpiryDate=now+7days"]
-  AutoTrial --> SaveTrial["Preferences.Set - access_pass_expiry"]
-  SaveTrial --> End3([Phát thuyết minh - Trial 7 ngày])
-  NewDecision -->|Không mới| FreeCheck{freeTrialUsed < 3?}
-  FreeCheck -->|Có| Allow3["Cho phép nghe\nLogVisit upsert FreeTrialRecord"]
-  Allow3 --> End4([Phát thuyết minh - Free Trial])
-  FreeCheck -->|Không - hết 3 POI| Paywall["Hiển thị màn hình mua Access Pass"]
-  Paywall --> UserDecide{Người dùng?}
-  UserDecide -->|Mua Pass| Buy["POST /api/payments/initiate\nPOST /api/payments/callback\nExpiryDate=CreatedAt+7days"]
-  Buy --> End5([Phát thuyết minh - Access Pass])
-  UserDecide -->|Bỏ qua| End6([Không phát])
+sequenceDiagram
+    participant Web as PoiForm.jsx
+    participant API as PoiController
+    participant DB as SQL Server
+    participant Mobile as PoiSyncService
+    participant SQLite as Local SQLite App
+
+    Web->>API: POST /api/poi (POI Data)
+    API->>DB: Save to Pois table
+    API-->>Web: OK
+    
+    Mobile->>API: GET /api/poi/sync?lastSync=2026-01-01
+    API->>DB: Fetch changes since 2026-01-01
+    API-->>Mobile: {UpdatedPois, DeletedIds}
+    Mobile->>SQLite: Update Offline DB
+    Mobile->>Mobile: Reload MainPage UI
 ```
 
 ---
 
-### F09 — Khởi động Mobile và đồng bộ dữ liệu
+### 3.5. Chức Năng Thống Kê Tổng Quan (Dashboard Summary)
 
+**Bài toán:** Hiển thị cho Admin các con số tổng quát về hệ thống bao gồm: Tổng số POI, Tổng số ShopOwner (và số lượng đang chờ duyệt), Lượt truy cập hôm nay, Lượt nghe TTS hôm nay, và số người đang Online.
+
+**Luồng dữ liệu (Data Flow):**
+1. **Truy cập Dashboard**: Admin mở trang `Analytics.jsx` hoặc `Dashboard.jsx`. Giao diện Frontend gọi API GET `/api/admin/dashboard-summary`.
+2. **Xử lý Backend**: Hàm `AdminController.GetDashboardSummary()` được thực thi.
+3. **Tính toán Thống kê**:
+   - `poisCount`: Lấy số lượng từ bảng `Pois`.
+   - `totalShops` & `pendingOwnersCount`: Dùng `UserManager.GetUsersInRoleAsync("ShopOwner")` để lấy tổng số và lọc ra những user có `IsApproved == false`.
+   - `visitsToday` & `narrationCountToday`: Lọc bảng `AnalyticsEvents` theo mốc thời gian từ đầu ngày hiện tại (múi giờ +7).
+   - `onlineCount`: Gom nhóm các thiết bị gửi event trong 5 phút gần nhất.
+4. **Trả dữ liệu về UI**: Dữ liệu JSON trả về được cập nhật vào State `stats`, truyền xuống các component `<StatCard>` để hiển thị số lớn (ví dụ: "Đối tác Shop", "Địa điểm POI").
+
+**Activity Diagram:**
 ```mermaid
-flowchart TD
-  Start([Khởi động ứng dụng]) --> Init["DatabaseService.InitializeAsync\nSQLiteAsyncConnection - _databasePath\nCreateTableAsync POI"]
-  Init --> LegacyCheck{BasePoiId là số nguyên?}
-  LegacyCheck -->|Có - dữ liệu cũ| Wipe["DeleteAllAsync POI\nPreferences.Remove - root_last_sync_utc"]
-  Wipe --> Schema["EnsureSchemaCompatibilityAsync\nALTER TABLE POI ADD COLUMN BasePoiId"]
-  LegacyCheck -->|Không| Schema
-  Schema --> Normalize["NormalizeBasePoiIdsAsync\nGroup by Category+Lat+Lng → gán BasePoiId"]
-  Normalize --> NetCheck{Có Internet?}
-  NetCheck -->|Không| Cache["Dùng SQLite cũ\nGetLocalizedPoisAsync - langCode"]
-  Cache --> GeoStart1["GeofenceEngine.StartAsync\nRefreshPoisCoreAsync - load vào RAM"]
-  GeoStart1 --> End1([Offline mode])
-  NetCheck -->|Có| LastSync["GetLastSyncTime\nPreferences.Get - root_last_sync_utc"]
-  LastSync --> API["GET /api/pois/updates?lastSync={ISO8601}"]
-  API --> APICheck{Thành công?}
-  APICheck -->|Không| Cache
-  APICheck -->|Có| Apply["ApplyServerChangesAsync\nUpsert theo BasePoiId+LanguageCode\nPruning - xóa ngoài ActiveBasePoiIds"]
-  Apply --> SaveSync["SaveLastSyncTime - payload.ServerTime\nPreferences.Set - root_last_sync_utc"]
-  SaveSync --> GeoStart2["GeofenceEngine.StartAsync\nGetLocalizedPoisAsync - SelectByFallback"]
-  GeoStart2 --> End2([Online mode - dữ liệu mới nhất])
+stateDiagram-v2
+    [*] --> Admin_Dashboard
+    Admin_Dashboard: Admin opens Analytics/Dashboard
+    Admin_Dashboard --> Fetch_Summary
+    Fetch_Summary: Call GET /api/admin/dashboard-summary
+    
+    state Backend_Query {
+        [*] --> Count_POI
+        Count_POI: dbContext.Pois.CountAsync()
+        
+        Count_POI --> Count_Events
+        Count_Events: Query AnalyticsEvents (Visits, TTS, Online)
+        
+        Count_Events --> Fetch_Owners
+        Fetch_Owners: UserManager.GetUsersInRoleAsync("ShopOwner")
+        
+        Fetch_Owners --> Filter_Pending
+        Filter_Pending: Filter pending owners (!IsApproved)
+    }
+    
+    Fetch_Summary --> Backend_Query
+    Backend_Query --> Return_JSON
+    Return_JSON: Return Summary Object
+    Return_JSON --> Update_State
+    Update_State: React setState(stats)
+    Update_State --> Render_Cards
+    Render_Cards: Display on StatCards (POI, Shop)
+    Render_Cards --> [*]
+```
+
+**Sequence Diagram:**
+```mermaid
+sequenceDiagram
+    participant UI as Analytics.jsx (Admin)
+    participant API as AdminController
+    participant DB_Pois as AppDbContext (Pois)
+    participant DB_Events as AppDbContext (AnalyticsEvents)
+    participant UM as UserManager (AspNetUsers)
+
+    UI->>API: GET /api/admin/dashboard-summary
+    
+    API->>DB_Pois: CountAsync()
+    DB_Pois-->>API: poisCount
+    
+    API->>DB_Events: CountAsync(Distinct DeviceId / Today)
+    DB_Events-->>API: visitsToday, onlineCount, narrationCount
+    
+    API->>UM: GetUsersInRoleAsync("ShopOwner")
+    UM-->>API: List<ApplicationUser> (ShopOwners)
+    API->>API: Calculate pendingOwnersCount (!IsApproved)
+    
+    API-->>UI: { poisCount, totalShops, pendingOwners, visits... }
+    
+    UI->>UI: setStats(data)
+    UI->>UI: Render <StatCard title="Total POIs" />
+    UI->>UI: Render <StatCard title="Shop Partners" />
 ```
 
 ---
 
-*Tài liệu chi tiết từng feature: xem thư mục [`docs/`](./docs/)*
+### 3.6. Chức Năng Quản Lý Quyền Truy Cập (Access Pass & Free Trial)
+
+**Bài toán:** Khách du lịch tải App Mobile lần đầu sẽ được dùng thử miễn phí 7 ngày mà không cần tạo tài khoản đăng nhập. Khi hết hạn, hệ thống tự động khóa tính năng Thuyết minh.
+
+**Luồng dữ liệu (Data Flow):**
+1. **Khởi tạo Device ID**: `AccessService` trên Mobile ưu tiên đọc `AndroidId` (hoặc tạo ra một GUID lưu ngầm vào `Preferences` của thiết bị) để định danh duy nhất (Device Identification).
+2. **Đồng bộ trạng thái**: App gọi GET `/api/access/check?deviceId=...` để kiểm tra gói cước trên Server.
+3. **Tự động Start Trial**: Nếu Backend trả về là "Chưa từng dùng thử", Mobile tự động gọi POST `/api/access/start-trial`. Backend kích hoạt gói 7 ngày và trả về `ExpiryDate`.
+4. **Lưu trữ Offline**: Thời hạn dùng thử được lưu vào bộ nhớ cục bộ `Preferences` (khóa `access_pass_expiry`).
+5. **Cổng chặn Tính năng**: Mỗi lần khách quét QR hoặc bước vào vùng Geofence, hàm `AccessService.HasActivePass()` sẽ kiểm tra thời hạn Local. Nếu hết hạn, chặn phát âm thanh và hiện thông báo yêu cầu mua gói VIP.
+
+**Activity Diagram:**
+```mermaid
+stateDiagram-v2
+    [*] --> AppStart
+    AppStart: App Starts
+    AppStart --> GetDeviceID
+    GetDeviceID: AccessService gets Android_ID / Generates GUID
+    
+    GetDeviceID --> API_Check
+    API_Check: GET /api/access/check
+    
+    state if_new_device <<choice>>
+    API_Check --> if_new_device
+    if_new_device --> HasPass: Has history (Save ExpiryDate)
+    if_new_device --> NoPass: Completely new device
+    
+    NoPass --> API_StartTrial
+    API_StartTrial: POST /api/access/start-trial
+    API_StartTrial --> SaveLocal
+    SaveLocal: Save ExpiryDate (Now + 7 days) to Preferences
+    
+    HasPass --> SaveLocal
+    
+    state PlayAudioRequest {
+        RequestTTS: Narration Request (Scan QR/Geofence)
+        RequestTTS --> CheckPass
+        CheckPass: AccessService.HasActivePass()
+        
+        state if_expired <<choice>>
+        CheckPass --> if_expired
+        if_expired --> PlayOK: Valid (Allow Audio)
+        if_expired --> ShowPaywall: Expired (Block & Require VIP)
+    }
+    
+    SaveLocal --> PlayAudioRequest
+```
+
+**Sequence Diagram:**
+```mermaid
+sequenceDiagram
+    participant App as Mobile App
+    participant AccessService
+    participant Prefs as Local Preferences
+    participant API as AccessController (Backend)
+    participant DB as SQL Server
+
+    App->>AccessService: Start (Get DeviceId)
+    AccessService->>API: GET /api/access/check?deviceId=...
+    API->>DB: Query FreeTrial / Payment
+    DB-->>API: Result (Never used trial)
+    API-->>AccessService: { HasActivePass: false }
+    
+    AccessService->>API: POST /api/access/start-trial
+    API->>DB: Activate 7-day trial
+    API-->>AccessService: { ExpiryDate: "2026-05-12T..." }
+    AccessService->>Prefs: Save 'access_pass_expiry'
+    
+    Note over App, Prefs: User scans QR or enters Geofence
+    App->>AccessService: Call HasActivePass()
+    AccessService->>Prefs: Check Local expiry
+    Prefs-->>AccessService: Still valid
+    AccessService-->>App: Return TRUE (Allow audio)
+```
+
+---
+
+### 3.7. Kích Hoạt Thuyết Minh Bằng Geofence & Khóa Luồng (Priority Preemption)
+
+**Bài toán:** Khách đang nghe giới thiệu về "Quán A" (Bình thường). Đột nhiên khách bước vào vùng của "Quán B" (Premium - Trả tiền chạy QC). App phải lập tức ngắt tiếng "Quán A" để ưu tiên phát "Quán B". Đồng thời, App phải chống hiện tượng nhiễu sóng GPS (Debounce) và chống việc phát đi phát lại một bài liên tục (Cooldown).
+
+**Luồng dữ liệu (Data Flow):**
+1. **Lắng nghe Tọa độ**: `LocationService` nhận GPS đưa vào `GeofenceEngine.ProcessLocationAsync()`.
+2. **So khớp Bán kính**: Dùng công thức lượng giác *Haversine* tính khoảng cách. Nếu khoảng cách <= `Radius` -> Khách đang ở trong ranh giới POI.
+3. **Chống nhiễu (Debounce)**: Tọa độ phải nằm trong vùng POI >= 2 lần liên tiếp (`EnterDebounceThreshold`) mới xác nhận là thực sự vào quán.
+4. **Xử lý Ưu tiên (Priority Preemption)**: 
+   - Lọc các POI hợp lệ. Chọn POI có `Priority` lớn nhất (Premium).
+   - Nếu đang phát bài cũ có Priority thấp hơn, gọi hủy (`OnPoiExited`) bài cũ lập tức để nhường luồng.
+5. **Khóa Cooldown**: Sau khi phát sự kiện `OnPoiEntered` (đọc tiếng), gọi hàm `MarkPoiAsPlayed()` khóa POI đó trong 10 phút. Ngăn chặn việc khách đứng yên một chỗ mà App cứ lặp đi lặp lại một bài duy nhất.
+
+**Activity Diagram:**
+```mermaid
+stateDiagram-v2
+    [*] --> OnLocationChanged
+    OnLocationChanged: Receive new GPS signal
+    OnLocationChanged --> Haversine
+    Haversine: Calculate distance to all Cached POIs
+    
+    Haversine --> FilterRadius
+    FilterRadius: Distance <= Radius
+    
+    FilterRadius --> DebounceCheck
+    DebounceCheck: Count stable hits >= 2 (Debounce)
+    
+    state if_debounce <<choice>>
+    DebounceCheck --> if_debounce
+    if_debounce --> Drop: GPS noise or Cooldown active (10m)
+    if_debounce --> CheckPriority: Filter passed
+    
+    CheckPriority: Compare Priority (New POI vs Playing POI)
+    
+    state if_priority <<choice>>
+    CheckPriority --> if_priority
+    if_priority --> CancelOld: New POI has Higher Priority (Preemption)
+    if_priority --> PlayNew: Channel is idle
+    if_priority --> Drop: New POI has Lower Priority -> Ignore
+    
+    CancelOld --> EmitExit
+    EmitExit: Emit OnPoiExited (Stop old Audio)
+    EmitExit --> PlayNew
+    
+    PlayNew --> EmitEnter
+    EmitEnter: Emit OnPoiEntered (Play new Audio)
+    EmitEnter --> MarkCooldown
+    MarkCooldown: Lock POI in Cooldown for 10 mins
+    MarkCooldown --> [*]
+```
+
+**Sequence Diagram:**
+```mermaid
+sequenceDiagram
+    participant GPS as LocationService
+    participant Engine as GeofenceEngine
+    participant RAM as POI Cache (RAM)
+    participant Audio as NarrationService
+    
+    GPS->>Engine: OnLocationChanged(lat, lng)
+    Engine->>RAM: Scan distance (Haversine)
+    RAM-->>Engine: Detect [Shop A (Pri 0), Shop B (Pri 100)]
+    
+    Engine->>Engine: Increase Debounce counter >= 2
+    
+    Note over Engine, Audio: Priority Preemption
+    Engine->>Engine: Notice Shop B is Premium (Higher Priority)
+    
+    Engine->>Audio: Emit OnPoiExited(Shop A)
+    Audio->>Audio: CancellationToken.Cancel() to interrupt
+    
+    Engine->>Audio: Emit OnPoiEntered(Shop B)
+    Audio->>Audio: PlayNarrationAsync(Shop B Audio)
+    
+    Engine->>Engine: MarkPoiAsPlayed(Shop B)
+    Note over Engine: Freeze (Cooldown) Shop B for 10 mins
+```

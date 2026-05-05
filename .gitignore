@@ -64,3 +64,6 @@ deploy/
 .kiro/
 
 docs.md
+docs/
+env/
+*.ps1

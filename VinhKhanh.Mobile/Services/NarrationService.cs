@@ -80,18 +80,46 @@ public partial class NarrationService : INarrationService
                 Debug.WriteLine("[NarrationService] Dang o che do offline, su dung TTS noi bo cua thiet bi");
             }
 
-            Debug.WriteLine($"[NarrationService] Bat dau TTS ({locale?.Language}:{locale?.Country})");
+            int retryCount = 0;
+            const int maxRetries = 2;
+            bool success = false;
 
-            // Gọi API native của hệ điều hành thông qua MAUI Essentials
-            await TextToSpeech.Default.SpeakAsync(sanitizedText, new SpeechOptions
+            while (!success && retryCount <= maxRetries)
             {
-                Locale = locale,
-                Pitch = 1.0f,
-                Rate = 0.92f, // Giảm tốc độ đọc một chút để nghe tự nhiên và rõ ràng hơn
-                Volume = 1.0f
-            }, ct);
+                try
+                {
+                    Debug.WriteLine($"[NarrationService] Bat dau TTS (Attempt {retryCount + 1}): {locale?.Language ?? "default"}-{locale?.Country ?? "default"}");
+                    Debug.WriteLine($"[NarrationService] Text: {sanitizedText.Substring(0, Math.Min(30, sanitizedText.Length))}...");
 
-            Debug.WriteLine("[NarrationService] TTS hoan tat");
+                    // Gọi API native của hệ điều hành thông qua MAUI Essentials
+                    await TextToSpeech.Default.SpeakAsync(sanitizedText, new SpeechOptions
+                    {
+                        Locale = locale,
+                        Pitch = 1.0f,
+                        Rate = 0.92f, // Giảm tốc độ đọc một chút để nghe tự nhiên và rõ ràng hơn
+                        Volume = 1.0f
+                    }, ct);
+
+                    success = true;
+                    Debug.WriteLine("[NarrationService] TTS hoan tat");
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    retryCount++;
+                    Debug.WriteLine($"[NarrationService] Loi TTS (Attempt {retryCount}): {ex.Message}");
+                    
+                    if (retryCount <= maxRetries)
+                    {
+                        // Đợi một chút để engine TTS reset trước khi thử lại
+                        await Task.Delay(250, ct);
+                    }
+                    else
+                    {
+                        Debug.WriteLine("[NarrationService] TTS that bai sau khi retry.");
+                        throw; // Throw để UI bắt được và hiển thị thông báo nếu cần
+                    }
+                }
+            }
         });
     }
 

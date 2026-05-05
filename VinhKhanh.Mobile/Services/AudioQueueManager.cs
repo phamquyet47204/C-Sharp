@@ -12,7 +12,12 @@ public class AudioQueueManager : IAudioQueueManager
 
     public async Task RunExclusiveAsync(Func<CancellationToken, Task> work)
     {
-        _currentCts?.Cancel();
+        if (_currentCts != null)
+        {
+            _currentCts.Cancel();
+            // Small grace period to allow the previous task to stop and OS resources to reset
+            await Task.Delay(150);
+        }
 
         var localCts = new CancellationTokenSource();
         _currentCts = localCts;

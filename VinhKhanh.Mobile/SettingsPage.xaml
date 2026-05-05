@@ -80,6 +80,24 @@
                 </Border>
             </VerticalStackLayout>
 
+            <!-- Section: Partner -->
+            <VerticalStackLayout Spacing="10">
+                <Label x:Name="PartnerSectionLabel" 
+                       Text="Đối tác"
+                       FontSize="16" 
+                       FontAttributes="Bold" 
+                       TextColor="#374151" />
+                
+                <Button x:Name="RegisterShopButton"
+                        Text="Đăng ký Chủ quán"
+                        BackgroundColor="#FF6B6B"
+                        TextColor="White"
+                        FontAttributes="Bold"
+                        CornerRadius="12"
+                        HeightRequest="50"
+                        Clicked="OnRegisterShopClicked"/>
+            </VerticalStackLayout>
+
             <!-- Copyright -->
             <Label Text="© 2026 VinhKhanhFoodStreet. All rights reserved."
                    FontSize="12"

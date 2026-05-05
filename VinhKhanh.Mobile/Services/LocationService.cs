@@ -37,6 +37,10 @@ public class LocationService : ILocationService
     // Ngưỡng thời gian để xác nhận trạng thái đứng yên (1 phút).
     private static readonly TimeSpan StationaryDurationThreshold = TimeSpan.FromMinutes(1);
 
+    // Chu kỳ gửi Heartbeat dự phòng khi mất GPS (20 giây). 
+    // Thấp hơn ngưỡng Online của Backend (30s) để đảm bảo Admin luôn thấy user.
+    private static readonly TimeSpan HeartbeatFallbackInterval = TimeSpan.FromSeconds(20);
+
     private readonly IGeolocation _geolocation;
     private readonly AnalyticsService _analyticsService;
     
@@ -60,6 +64,9 @@ public class LocationService : ILocationService
     
     // Khoảng thời gian nghỉ hiện tại giữa các lần lấy mẫu
     private TimeSpan _currentInterval = ActiveInterval;
+
+    // Lưu trữ thời điểm cuối cùng gửi tín hiệu về Server (bất kể là vị trí hay heartbeat)
+    private DateTimeOffset? _lastActivityReportedAtUtc;
 
     public event Action<Location>? LocationChanged;
 
@@ -98,6 +105,7 @@ public class LocationService : ILocationService
             _isListening = true;
             _currentInterval = ActiveInterval;
             _stationaryDuration = TimeSpan.Zero;
+            _lastActivityReportedAtUtc = DateTimeOffset.UtcNow;
 
             // Chạy vòng lặp lấy mẫu trên một Task riêng biệt
             _listeningTask = ListenLoopAsync(_cts.Token);
@@ -138,6 +146,7 @@ public class LocationService : ILocationService
             _lastEmittedAtUtc = null;
             _stationaryDuration = TimeSpan.Zero;
             _currentInterval = ActiveInterval;
+            _lastActivityReportedAtUtc = null;
         }
         finally
         {
@@ -196,17 +205,32 @@ public class LocationService : ILocationService
                         // Thông báo cho các thành phần nội bộ (Geofence, UI)
                         LocationChanged?.Invoke(location);
                         
-                        // Chỉ gửi về Backend nếu loop chưa bị hủy (tránh race condition khi đóng app)
+                        // Chỉ gửi về Backend nếu loop chưa bị hủy
                         if (!cancellationToken.IsCancellationRequested)
                         {
-                            // Đồng bộ trạng thái Online và vị trí về Backend cho Admin theo dõi
+                            // Đồng bộ trạng thái Online và vị trí về Backend
                             _ = _analyticsService.TrackActivityAsync(location.Latitude, location.Longitude, "location_update");
+                            _lastActivityReportedAtUtc = DateTimeOffset.UtcNow;
                         }
                     }
                 }
                 else
                 {
                     Debug.WriteLine("[LocationService] Mất tín hiệu GPS: dữ liệu vị trí null");
+
+                    // FALLBACK: Nếu mất GPS quá lâu (20s), gửi một Heartbeat không tọa độ để giữ trạng thái Online
+                    if (_lastActivityReportedAtUtc.HasValue && 
+                        DateTimeOffset.UtcNow - _lastActivityReportedAtUtc.Value >= HeartbeatFallbackInterval)
+                    {
+                        Debug.WriteLine("[LocationService] Gửi Heartbeat dự phòng do mất tín hiệu GPS quá lâu");
+                        
+                        if (!cancellationToken.IsCancellationRequested)
+                        {
+                            // Gửi sự kiện heartbeat (tọa độ 0,0)
+                            _ = _analyticsService.TrackActivityAsync(0, 0, "heartbeat");
+                            _lastActivityReportedAtUtc = DateTimeOffset.UtcNow;
+                        }
+                    }
                 }
             }
             catch (FeatureNotSupportedException ex)

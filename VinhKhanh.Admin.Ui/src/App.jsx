@@ -5,6 +5,7 @@ import PoiManager from './pages/PoiManager';
 import Dashboard from './pages/Dashboard';
 import PoiForm from './pages/PoiForm';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import Approvals from './pages/Approvals';
@@ -19,6 +20,7 @@ function App() {
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route path="/poi/qr/:token" element={<QrPoiPublic />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
 
