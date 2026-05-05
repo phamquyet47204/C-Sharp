@@ -33,34 +33,68 @@ Tài liệu này cung cấp thiết kế kiến trúc chi tiết, sơ đồ UML 
 Mô tả các quyền hạn và hành động của 3 nhóm người dùng.
 
 ```mermaid
-usecaseDiagram
-    actor "Visitor" as visitor
-    actor "Shop Owner" as owner
-    actor "Admin" as admin
+flowchart LR
+    %% Actors
+    visitor(["🧑 Visitor"])
+    owner(["🏪 Shop Owner"])
+    admin(["🛡️ Admin"])
 
-    usecase "Listen to TTS Narration" as uc1
-    usecase "Scan QR Code" as uc2
-    usecase "Purchase Access Pass" as uc3
-    
-    usecase "Register as Partner" as uc4
-    usecase "Manage Own POI" as uc5
-    
-    usecase "Approve Shop Owner" as uc6
-    usecase "Manage All POIs" as uc7
-    usecase "View Heatmap" as uc8
-    usecase "View Analytics" as uc9
+    subgraph MobileApp [Hệ sinh thái Mobile App]
+        direction TB
+        uc_scan(("Quét QR Code"))
+        uc_geo(("Kích hoạt Geofence"))
+        uc_listen(("Nghe Thuyết minh (TTS)"))
+        uc_rate(("Đánh giá POI (Rating)"))
+        uc_buy(("Mua Access Pass"))
+        
+        uc_scan -. "«extend»" .-> uc_listen
+        uc_geo -. "«extend»" .-> uc_listen
+    end
 
-    visitor --> uc1
-    visitor --> uc2
-    visitor --> uc3
+    subgraph WebAdmin [Hệ sinh thái Web Admin]
+        direction TB
+        uc_reg(("Đăng ký Đối tác"))
+        uc_login(("Đăng nhập Hệ thống"))
+        
+        uc_manage_own(("Quản lý POI Của Mình"))
+        uc_get_qr(("Tải mã QR Code"))
+        
+        uc_approve(("Duyệt Yêu cầu Đối tác"))
+        uc_manage_all(("Quản lý Toàn bộ POI"))
+        uc_premium(("Cấu hình Premium & Bán kính"))
+        
+        uc_heat(("Xem Bản đồ nhiệt (Heatmap)"))
+        uc_stats(("Xem Thống kê Lượt nghe"))
+        uc_online(("Xem Lượng User Online"))
+        
+        uc_manage_own -. "«include»" .-> uc_login
+        uc_get_qr -. "«extend»" .-> uc_manage_own
+        uc_premium -. "«extend»" .-> uc_manage_all
+        
+        uc_approve -. "«include»" .-> uc_login
+        uc_manage_all -. "«include»" .-> uc_login
+        uc_heat -. "«include»" .-> uc_login
+    end
 
-    owner --> uc4
-    owner --> uc5
+    %% Visitor Links
+    visitor --> uc_scan
+    visitor --> uc_geo
+    visitor --> uc_listen
+    visitor --> uc_rate
+    visitor --> uc_buy
 
-    admin --> uc6
-    admin --> uc7
-    admin --> uc8
-    admin --> uc9
+    %% Owner Links
+    owner --> uc_reg
+    owner --> uc_login
+    owner --> uc_manage_own
+
+    %% Admin Links
+    admin --> uc_login
+    admin --> uc_approve
+    admin --> uc_manage_all
+    admin --> uc_heat
+    admin --> uc_stats
+    admin --> uc_online
 ```
 
 ### 2.2. Entity Relationship Diagram (ERD)
